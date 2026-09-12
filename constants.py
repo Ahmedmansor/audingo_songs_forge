@@ -2,23 +2,21 @@
 constants.py — Fixed lists and configurations for Audingo Songs Forge.
 """
 
-# Fixed list of music genres (closed list for Gemini recommendation and Master Prompt)
+# Fixed list of music genres — curated for educational songwriting where
+# vocal clarity is paramount. Every genre here guarantees upfront, clear vocals.
 GENRES = [
     "Pop",
+    "K-Pop Style (Clear English Vocals)",
     "Synth-Pop / 80s Retro",
-    "Indie Pop / Dream Pop",
-    "Rock",
-    "Alternative Rock",
+    "Indie Pop",
     "Acoustic / Folk",
     "R&B / Contemporary Soul",
-    "Hip-Hop / Chillhop",
-    "Electronic / EDM / Dance",
     "Country / Americana",
     "Funk / Disco Groove",
     "Reggae / Tropical Pop",
     "Jazz / Bossa Nova",
     "Cinematic / Ballad",
-    "Lo-Fi Bedroom Pop"
+    "Lo-Fi / Chillhop"
 ]
 
 # Fixed list of song structures

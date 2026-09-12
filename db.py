@@ -2,6 +2,7 @@
 db.py — SQLite database interface for Audingo Songs Forge.
 """
 
+import json
 import sqlite3
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
@@ -55,7 +56,34 @@ def init_db(db_path: Path = DB_PATH) -> None:
                 title TEXT NOT NULL,
                 lyrics TEXT NOT NULL,
                 target_words TEXT NOT NULL,
+                bonus_words TEXT,
+                extra_words TEXT,
+                mood_breakdown TEXT,
+                genre TEXT,
+                creative_concept TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Migration: ensure new columns exist in existing songs table
+        cursor.execute("PRAGMA table_info(songs)")
+        existing_cols = {row["name"] for row in cursor.fetchall()}
+        if "bonus_words" not in existing_cols:
+            cursor.execute("ALTER TABLE songs ADD COLUMN bonus_words TEXT")
+        if "extra_words" not in existing_cols:
+            cursor.execute("ALTER TABLE songs ADD COLUMN extra_words TEXT")
+        if "mood_breakdown" not in existing_cols:
+            cursor.execute("ALTER TABLE songs ADD COLUMN mood_breakdown TEXT")
+        if "genre" not in existing_cols:
+            cursor.execute("ALTER TABLE songs ADD COLUMN genre TEXT")
+        if "creative_concept" not in existing_cols:
+            cursor.execute("ALTER TABLE songs ADD COLUMN creative_concept TEXT")
+
+        # 4. app_state table (persists active batch across browser refreshes)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS app_state (
+                key TEXT PRIMARY KEY,
+                value TEXT
             )
         """)
         conn.commit()
@@ -241,30 +269,50 @@ def approve_and_save_song(
     title: str,
     lyrics: str,
     target_words: List[str],
-    checked_ngsl_words: List[str],  # Green and Blue words checked
-    checked_extra_words: List[str], # Yellow words checked
+    checked_bonus_words: List[str],  # Blue words checked
+    checked_extra_words: List[str],  # Yellow words checked
+    checked_target_words: Optional[List[str]] = None, # Green words checked
+    mood_breakdown: Optional[Dict[str, Any]] = None,
+    genre: str = "",
+    creative_concept: str = "",
     db_path: Path = DB_PATH
 ) -> Tuple[int, int, int]:
     """
     Approve and save song:
-    1. Insert into songs table.
-    2. Increment usage_count for checked Green/Blue NGSL words.
+    1. Insert into songs table (target_words, bonus_words, extra_words, mood_breakdown, genre, creative_concept).
+    2. Increment usage_count for checked Green + Blue NGSL words.
     3. Insert or increment occurrence_count for checked Yellow extra_words.
     Returns (song_id, approved_ngsl_count, approved_extra_count).
     """
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
         
-        # 1. Insert song
+        # Determine actual NGSL words approved
+        actual_target_words = checked_target_words if checked_target_words is not None else target_words
         target_words_str = ", ".join(target_words)
+        bonus_words_str = ", ".join(checked_bonus_words)
+        extra_words_str = ", ".join(checked_extra_words)
+        mood_json = json.dumps(mood_breakdown) if isinstance(mood_breakdown, dict) else (mood_breakdown or "")
+
+        # 1. Insert song
         cursor.execute(
-            "INSERT INTO songs (title, lyrics, target_words) VALUES (?, ?, ?)",
-            (title, lyrics, target_words_str)
+            """
+            INSERT INTO songs (
+                title, lyrics, target_words, bonus_words, extra_words,
+                mood_breakdown, genre, creative_concept
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                title, lyrics, target_words_str, bonus_words_str, extra_words_str,
+                mood_json, genre, creative_concept
+            )
         )
         song_id = cursor.lastrowid
         
-        # 2. Increment usage_count in ngsl_words
-        unique_ngsl = list(set([w.lower().strip() for w in checked_ngsl_words if w.strip()]))
+        # 2. Increment usage_count in ngsl_words for approved target + bonus words
+        all_ngsl_to_increment = actual_target_words + checked_bonus_words
+        unique_ngsl = list(set([w.lower().strip() for w in all_ngsl_to_increment if w.strip()]))
         if unique_ngsl:
             placeholders = ",".join("?" * len(unique_ngsl))
             cursor.execute(
@@ -286,3 +334,195 @@ def approve_and_save_song(
             
         conn.commit()
         return song_id, len(unique_ngsl), len(unique_extra)
+
+
+def get_all_songs(db_path: Path = DB_PATH) -> pd.DataFrame:
+    """Retrieve all saved songs from the database, sorted newest first."""
+    with get_connection(db_path) as conn:
+        df = pd.read_sql_query(
+            "SELECT id, title, lyrics, target_words, bonus_words, extra_words, mood_breakdown, genre, creative_concept, created_at FROM songs ORDER BY id DESC",
+            conn
+        )
+        return df
+
+
+def update_song(
+    song_id: int,
+    title: str,
+    lyrics: str,
+    target_words: str,
+    bonus_words: Optional[str] = None,
+    extra_words: Optional[str] = None,
+    mood_breakdown: Optional[Dict[str, Any]] = None,
+    genre: Optional[str] = None,
+    creative_concept: Optional[str] = None,
+    sync_ngsl_usage: bool = True,
+    db_path: Path = DB_PATH
+) -> bool:
+    """
+    Update an existing song's details and metadata in SQLite.
+    If sync_ngsl_usage is True, checks target_words against ngsl_words and ensures
+    their usage_count is incremented if newly added.
+    """
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        
+        # 1. Fetch current song row to compare target words
+        cursor.execute("SELECT target_words, bonus_words, extra_words, title FROM songs WHERE id = ?", (song_id,))
+        row = cursor.fetchone()
+        if not row:
+            return False
+            
+        old_targets = set(w.strip().lower() for w in (row["target_words"] or "").split(",") if w.strip())
+        new_targets_list = [w.strip() for w in target_words.split(",") if w.strip()]
+        new_targets_set = set(w.lower() for w in new_targets_list)
+        
+        # 2. Update song table
+        updates = [
+            ("title", title),
+            ("lyrics", lyrics),
+            ("target_words", ", ".join(new_targets_list))
+        ]
+        if bonus_words is not None:
+            new_bonuses = [w.strip() for w in bonus_words.split(",") if w.strip()]
+            updates.append(("bonus_words", ", ".join(new_bonuses)))
+        if extra_words is not None:
+            new_extras = [w.strip() for w in extra_words.split(",") if w.strip()]
+            updates.append(("extra_words", ", ".join(new_extras)))
+        if mood_breakdown is not None:
+            mood_val = json.dumps(mood_breakdown) if isinstance(mood_breakdown, dict) else str(mood_breakdown)
+            updates.append(("mood_breakdown", mood_val))
+        if genre is not None:
+            updates.append(("genre", genre))
+        if creative_concept is not None:
+            updates.append(("creative_concept", creative_concept))
+            
+        set_clause = ", ".join(f"{col} = ?" for col, _ in updates)
+        params = [val for _, val in updates] + [song_id]
+        cursor.execute(f"UPDATE songs SET {set_clause} WHERE id = ?", params)
+        
+        # 3. If sync_ngsl_usage is requested, increment usage_count for newly added target words
+        if sync_ngsl_usage:
+            added_targets = new_targets_set - old_targets
+            if added_targets:
+                placeholders = ",".join("?" * len(added_targets))
+                cursor.execute(
+                    f"UPDATE ngsl_words SET usage_count = usage_count + 1 WHERE LOWER(word) IN ({placeholders})",
+                    list(added_targets)
+                )
+                
+        conn.commit()
+        return True
+
+
+def delete_song(song_id: int, rollback_words: bool = True, db_path: Path = DB_PATH) -> bool:
+    """
+    Delete a song by ID from the songs table.
+    If rollback_words is True, executes an atomic rollback:
+    - Decrements usage_count (-1) in ngsl_words for all target and bonus words associated with this song.
+    - Decrements occurrence_count (-1) in extra_words for all extra words, and deletes any that reach 0.
+    """
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        
+        # 1. Fetch song row before deleting
+        cursor.execute(
+            "SELECT target_words, bonus_words, extra_words FROM songs WHERE id = ?",
+            (song_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return False
+            
+        if rollback_words:
+            target_raw = row["target_words"] or ""
+            bonus_raw = row["bonus_words"] or ""
+            extra_raw = row["extra_words"] or ""
+            
+            # Decrement NGSL words (Target + Bonus)
+            ngsl_words = set()
+            for w in target_raw.split(","):
+                if w.strip():
+                    ngsl_words.add(w.strip().lower())
+            for w in bonus_raw.split(","):
+                if w.strip():
+                    ngsl_words.add(w.strip().lower())
+                    
+            if ngsl_words:
+                placeholders = ",".join("?" * len(ngsl_words))
+                cursor.execute(
+                    f"UPDATE ngsl_words SET usage_count = MAX(0, usage_count - 1) WHERE LOWER(word) IN ({placeholders})",
+                    list(ngsl_words)
+                )
+                
+            # Decrement Extra words
+            extra_words = set()
+            for w in extra_raw.split(","):
+                if w.strip():
+                    extra_words.add(w.strip().lower())
+                    
+            for extra in extra_words:
+                cursor.execute(
+                    "UPDATE extra_words SET occurrence_count = occurrence_count - 1 WHERE LOWER(word) = ?",
+                    (extra,)
+                )
+                
+            # Clean up extra words whose occurrence reached <= 0
+            cursor.execute("DELETE FROM extra_words WHERE occurrence_count <= 0")
+            
+        # 2. Delete the song row
+        cursor.execute("DELETE FROM songs WHERE id = ?", (song_id,))
+        conn.commit()
+        return True
+
+
+def save_active_batch_state(
+    batch: List[Dict[str, Any]],
+    concept: str = "",
+    genre: str = "",
+    song_structure: str = "",
+    mood_analysis: Optional[Dict[str, Any]] = None,
+    master_prompt: str = "",
+    db_path: Path = DB_PATH
+) -> None:
+    """Save active studio batch state to app_state table in SQLite for persistence across browser refreshes."""
+    payload = {
+        "target_batch": batch,
+        "custom_concept": concept,
+        "selected_genre": genre,
+        "selected_structure": song_structure,
+        "mood_analysis": mood_analysis,
+        "master_prompt": master_prompt
+    }
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO app_state (key, value) VALUES ('active_session', ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            """,
+            (json.dumps(payload),)
+        )
+        conn.commit()
+
+
+def load_active_batch_state(db_path: Path = DB_PATH) -> Dict[str, Any]:
+    """Load active studio batch state from SQLite, returning empty dict if not found."""
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM app_state WHERE key = 'active_session'")
+        row = cursor.fetchone()
+        if row and row["value"]:
+            try:
+                return json.loads(row["value"])
+            except Exception:
+                return {}
+    return {}
+
+
+def clear_active_batch_state(db_path: Path = DB_PATH) -> None:
+    """Clear active studio batch state from SQLite."""
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM app_state WHERE key = 'active_session'")
+        conn.commit()

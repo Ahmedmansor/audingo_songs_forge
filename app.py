@@ -4,6 +4,7 @@ Full NGSL Vocabulary Tracking & Song Production Pipeline.
 """
 
 import os
+import json
 import streamlit as st
 import pandas as pd
 from pathlib import Path
@@ -126,6 +127,51 @@ st.markdown("""
     .report-card-yellow h4, .report-card-yellow p, .report-card-yellow small, .report-card-yellow code {
         color: #713F12 !important;
     }
+    .lyrics-box {
+        background-color: #1E293B !important;
+        color: #F8FAFC !important;
+        border: 1px solid #334155 !important;
+        border-radius: 8px !important;
+        padding: 16px 20px !important;
+        font-family: monospace !important;
+        font-size: 0.95rem !important;
+        line-height: 1.6 !important;
+        white-space: pre-wrap !important;
+        margin-top: 10px !important;
+        margin-bottom: 12px !important;
+    }
+    .target-pill {
+        display: inline-block !important;
+        background-color: #EDE9FE !important;
+        color: #4C1D95 !important;
+        padding: 3px 10px !important;
+        border-radius: 12px !important;
+        font-size: 0.82rem !important;
+        font-weight: 600 !important;
+        margin: 2px 4px !important;
+    }
+    .bonus-pill {
+        display: inline-block !important;
+        background-color: #EFF6FF !important;
+        color: #1E3A8A !important;
+        border: 1px solid #BFDBFE !important;
+        padding: 3px 10px !important;
+        border-radius: 12px !important;
+        font-size: 0.82rem !important;
+        font-weight: 600 !important;
+        margin: 2px 4px !important;
+    }
+    .extra-pill {
+        display: inline-block !important;
+        background-color: #FEFCE8 !important;
+        color: #713F12 !important;
+        border: 1px solid #FEF08A !important;
+        padding: 3px 10px !important;
+        border-radius: 12px !important;
+        font-size: 0.82rem !important;
+        font-weight: 600 !important;
+        margin: 2px 4px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -148,21 +194,24 @@ def load_nlp():
 
 nlp = load_nlp()
 
+# Load active studio session state from SQLite (persists across F5 browser refreshes)
+persisted_session = db.load_active_batch_state()
+
 # Session State Initialization
 if "target_batch" not in st.session_state:
-    st.session_state.target_batch = []
+    st.session_state.target_batch = persisted_session.get("target_batch", [])
 
 if "mood_analysis" not in st.session_state:
-    st.session_state.mood_analysis = None
+    st.session_state.mood_analysis = persisted_session.get("mood_analysis", None)
 
 if "master_prompt" not in st.session_state:
-    st.session_state.master_prompt = ""
+    st.session_state.master_prompt = persisted_session.get("master_prompt", "")
 
 if "selected_genre" not in st.session_state:
-    st.session_state.selected_genre = GENRES[0]
+    st.session_state.selected_genre = persisted_session.get("selected_genre", GENRES[0])
 
 if "selected_structure" not in st.session_state:
-    st.session_state.selected_structure = SONG_STRUCTURES[0]
+    st.session_state.selected_structure = persisted_session.get("selected_structure", SONG_STRUCTURES[0])
 
 if "analysis_results" not in st.session_state:
     st.session_state.analysis_results = None
@@ -172,6 +221,27 @@ if "raw_lyrics_input" not in st.session_state:
 
 if "song_title_input" not in st.session_state:
     st.session_state.song_title_input = ""
+
+if "custom_concept" not in st.session_state:
+    st.session_state.custom_concept = persisted_session.get("custom_concept", "")
+
+if "commit_success_message" not in st.session_state:
+    st.session_state.commit_success_message = None
+
+
+def sync_active_session():
+    """Sync current studio batch and musical direction to SQLite for F5 persistence."""
+    if st.session_state.target_batch:
+        db.save_active_batch_state(
+            batch=st.session_state.target_batch,
+            concept=st.session_state.get("custom_concept", ""),
+            genre=st.session_state.get("selected_genre", GENRES[0]),
+            song_structure=st.session_state.get("selected_structure", SONG_STRUCTURES[0]),
+            mood_analysis=st.session_state.get("mood_analysis", None),
+            master_prompt=st.session_state.get("master_prompt", "")
+        )
+    else:
+        db.clear_active_batch_state()
 
 
 # Sidebar info
@@ -197,11 +267,12 @@ with st.sidebar:
 st.markdown('<div class="main-header">Audingo Songs Forge</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">NGSL Vocabulary Targeting, AI Prompt Crafting, and Lyric Review Pipeline</div>', unsafe_allow_html=True)
 
-# 3 Primary Tabs
-tab1, tab2, tab3 = st.tabs([
+# 4 Primary Tabs
+tab1, tab2, tab3, tab4 = st.tabs([
     "📊 Dictionary & Analytics",
     "🎧 Studio (Word Selection & Prompt)",
-    "🧪 Commit Lab (Review & Approval)"
+    "🧪 Commit Lab (Review & Approval)",
+    "🎵 Songs Library"
 ])
 
 
@@ -307,10 +378,14 @@ with tab2:
                     st.session_state.target_batch = new_batch
                     st.session_state.mood_analysis = None
                     st.session_state.master_prompt = ""
+                    st.session_state.custom_concept = ""
+                    sync_active_session()
                     st.success("Pulled 20 unused words (10 Nouns, 6 Verbs, 4 Adjectives)!")
                     st.rerun()
                 elif len(new_batch) > 0:
                     st.session_state.target_batch = new_batch
+                    st.session_state.custom_concept = ""
+                    sync_active_session()
                     st.warning(f"Only {len(new_batch)} unused words available in database.")
                     st.rerun()
                 else:
@@ -322,6 +397,8 @@ with tab2:
                 st.session_state.target_batch = new_batch
                 st.session_state.mood_analysis = None
                 st.session_state.master_prompt = ""
+                st.session_state.custom_concept = ""
+                sync_active_session()
                 st.info("Batch redrawn.")
                 st.rerun()
 
@@ -330,6 +407,8 @@ with tab2:
                 st.session_state.target_batch = []
                 st.session_state.mood_analysis = None
                 st.session_state.master_prompt = ""
+                st.session_state.custom_concept = ""
+                db.clear_active_batch_state()
                 st.rerun()
 
     # Display Active Batch
@@ -370,6 +449,7 @@ with tab2:
                         if swapped:
                             st.session_state.target_batch[idx] = swapped
                             st.session_state.master_prompt = ""  # prompt needs regen
+                            sync_active_session()
                             st.success(f"Swapped '{word_item['word']}' → '{swapped['word']}'")
                             st.rerun()
                         else:
@@ -391,14 +471,14 @@ with tab2:
                         st.session_state.selected_genre = res["genre"]
                     if res.get("song_structure"):
                         st.session_state.selected_structure = res["song_structure"]
+                    if res.get("creative_concept"):
+                        st.session_state.custom_concept = res["creative_concept"]
+                    sync_active_session()
                     st.rerun()
 
             if st.session_state.mood_analysis:
                 analysis = st.session_state.mood_analysis
                 st.success(f"Analyzed using: `{analysis.get('model_used', 'Gemini')}`")
-                
-                if analysis.get("creative_concept"):
-                    st.info(f"💡 **Concept:** {analysis['creative_concept']}")
 
         with col_gem2:
             if st.session_state.mood_analysis:
@@ -410,7 +490,7 @@ with tab2:
                     st.bar_chart(mood_df.set_index("Mood"), color="#4F46E5", height=220)
 
         # Style & Structure Selector (Initialized by Gemini, user can tweak)
-        st.markdown("#### 🎛️ Tune Musical Direction")
+        st.markdown("#### 🎛️ Tune Musical Direction & Story Concept")
         tune_col1, tune_col2 = st.columns(2)
         with tune_col1:
             default_genre_idx = GENRES.index(st.session_state.selected_genre) if st.session_state.selected_genre in GENRES else 0
@@ -420,13 +500,22 @@ with tab2:
             default_struct_idx = SONG_STRUCTURES.index(st.session_state.selected_structure) if st.session_state.selected_structure in SONG_STRUCTURES else 0
             st.session_state.selected_structure = st.selectbox("Song Structure (Closed List)", SONG_STRUCTURES, index=default_struct_idx)
 
+        st.session_state.custom_concept = st.text_area(
+            "💡 Story / Creative Concept (Generated by Gemini, fully editable by you):",
+            value=st.session_state.custom_concept,
+            height=75,
+            help="Tweak Gemini's concept or write your own practical everyday life scenario before generating the prompt."
+        )
+
         # Generate Master Prompt
         st.markdown("---")
         st.subheader("📋 Step 3: Master Prompt Output")
         
         if st.button("🚀 Generate Final Prompt", type="primary", use_container_width=True):
             mood_dict = st.session_state.mood_analysis.get("mood_breakdown", {}) if st.session_state.mood_analysis else {}
-            concept = st.session_state.mood_analysis.get("creative_concept", "") if st.session_state.mood_analysis else ""
+            concept = st.session_state.custom_concept.strip() or (
+                st.session_state.mood_analysis.get("creative_concept", "") if st.session_state.mood_analysis else ""
+            )
             
             prompt_text = prompt_builder.generate_master_prompt(
                 target_words=current_words,
@@ -436,6 +525,7 @@ with tab2:
                 creative_concept=concept
             )
             st.session_state.master_prompt = prompt_text
+            sync_active_session()
 
         if st.session_state.master_prompt:
             st.markdown("Copy the master prompt below and paste into Claude / GPT-4o to write lyrics and Suno style tags:")
@@ -450,13 +540,25 @@ with tab2:
 with tab3:
     st.subheader("🧪 Song Review, Text Pipeline & Word Approval")
     
+    # Show commit success banner if a song was just saved
+    if st.session_state.get("commit_success_message"):
+        msg = st.session_state.commit_success_message
+        st.balloons()
+        st.success(
+            f"🎉 **Song '{msg['title']}' Saved Successfully!** (Song ID #{msg['song_id']})\n\n"
+            f"- Approved **{msg['approved_ngsl_count']}** words in the main NGSL dictionary.\n"
+            f"- Approved **{msg['approved_extra_count']}** words in Extra Words.\n"
+            f"- **{msg['unused_remaining']:,}** words remain unused in the NGSL dictionary."
+        )
+        st.session_state.commit_success_message = None
+
     # Show active target words reminder
     if st.session_state.target_batch:
         current_target_words = [w["word"] for w in st.session_state.target_batch]
         target_display = ", ".join(f"`{w}`" for w in current_target_words)
         st.markdown(f"**Current 20 Target Words from Studio:** {target_display}")
     else:
-        st.warning("⚠️ No active target batch loaded from Studio. You can still analyze a song, but target hits will be empty.")
+        st.warning("⚠️ No active target batch loaded from Studio. If you analyze a song now, all detected NGSL words will be classified as Bonus hits (Blue), not Target hits (Green).")
         current_target_words = []
 
     st.markdown("Paste the final song lyrics generated by Suno AI / external LLM:")
@@ -544,10 +646,12 @@ with tab3:
                     """,
                     unsafe_allow_html=True
                 )
-                if red_list:
+                if not current_target_words:
+                    st.caption("No target batch was active during analysis.")
+                elif red_list:
                     st.markdown(", ".join(f"`{w}`" for w in red_list))
                 else:
-                    st.success("🎉 Perfect! All 20 target words were used in the song!")
+                    st.success(f"🎉 Perfect! All {len(current_target_words)} target words were used in the song!")
 
             # 🔵 Blue & 🟡 Yellow
             with rep_col2:
@@ -597,28 +701,281 @@ with tab3:
 
                 all_ngsl_to_increment = checked_green + checked_blue
                 
+                # Fetch metadata to persist with song
+                mood_dict = st.session_state.mood_analysis.get("mood_breakdown", {}) if st.session_state.mood_analysis else {}
+                current_genre = st.session_state.selected_genre
+                current_concept = st.session_state.custom_concept.strip() or (
+                    st.session_state.mood_analysis.get("creative_concept", "") if st.session_state.mood_analysis else ""
+                )
+
                 song_id, approved_ngsl_count, approved_extra_count = db.approve_and_save_song(
                     title=title,
                     lyrics=st.session_state.raw_lyrics_input.strip(),
                     target_words=current_target_words,
-                    checked_ngsl_words=all_ngsl_to_increment,
-                    checked_extra_words=checked_yellow
+                    checked_bonus_words=checked_blue,
+                    checked_extra_words=checked_yellow,
+                    checked_target_words=checked_green,
+                    mood_breakdown=mood_dict,
+                    genre=current_genre,
+                    creative_concept=current_concept
                 )
 
                 new_stats = db.get_progress_stats()
-                
-                st.balloons()
-                st.success(
-                    f"🎉 **Song '{title}' Saved Successfully!** (Song ID #{song_id})\n\n"
-                    f"- Approved **{approved_ngsl_count}** words in the main NGSL dictionary.\n"
-                    f"- Approved **{approved_extra_count}** words in Extra Words.\n"
-                    f"- **{new_stats['unused']:,}** words remain unused in the NGSL dictionary."
-                )
 
                 # Reset batch & form
                 st.session_state.target_batch = []
                 st.session_state.mood_analysis = None
                 st.session_state.master_prompt = ""
+                st.session_state.custom_concept = ""
                 st.session_state.analysis_results = None
                 st.session_state.raw_lyrics_input = ""
                 st.session_state.song_title_input = ""
+                db.clear_active_batch_state()
+
+                # Store success message and trigger instant rerun so sidebar & tabs update reactively
+                st.session_state.commit_success_message = {
+                    "title": title,
+                    "song_id": song_id,
+                    "approved_ngsl_count": approved_ngsl_count,
+                    "approved_extra_count": approved_extra_count,
+                    "unused_remaining": new_stats["unused"]
+                }
+                st.rerun()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 4: SONGS LIBRARY & ARCHIVES
+# ══════════════════════════════════════════════════════════════════════════════
+with tab4:
+    st.subheader("🎵 Saved Songs Library & Archives")
+    st.markdown("Browse and manage all approved songs, review target vocabulary, inspect Gemini mood percentages, and edit song details.")
+
+    songs_df = db.get_all_songs()
+
+    if songs_df.empty:
+        st.info("No songs saved yet. Head to the **Commit Lab** to analyze and approve songs to build your library!")
+    else:
+        # Assign 1-based sequential row number
+        songs_df = songs_df.reset_index(drop=True)
+        songs_df["row_num"] = range(1, len(songs_df) + 1)
+
+        # Metrics summary
+        lib_c1, lib_c2 = st.columns([1, 2])
+        with lib_c1:
+            st.metric("Total Songs Saved", len(songs_df))
+        with lib_c2:
+            search_query = st.text_input("🔍 Search Songs", placeholder="Filter by title, lyrics, or target words...")
+
+        filtered_df = songs_df
+        if search_query.strip():
+            q = search_query.strip().lower()
+            filtered_df = songs_df[
+                songs_df["title"].str.lower().str.contains(q, na=False) |
+                songs_df["lyrics"].str.lower().str.contains(q, na=False) |
+                songs_df["target_words"].str.lower().str.contains(q, na=False) |
+                songs_df["bonus_words"].str.lower().str.contains(q, na=False) |
+                songs_df["extra_words"].str.lower().str.contains(q, na=False)
+            ]
+
+        st.caption(f"Showing **{len(filtered_df)}** of **{len(songs_df)}** saved songs:")
+
+        for _, row in filtered_df.iterrows():
+            song_id = int(row["id"])
+            row_num = int(row["row_num"])
+            song_title = row["title"]
+            created_at = row["created_at"]
+            target_words_raw = row["target_words"] or ""
+            bonus_words_raw = row.get("bonus_words") or ""
+            extra_words_raw = row.get("extra_words") or ""
+            lyrics_text = row["lyrics"] or ""
+            genre_val = row.get("genre") or ""
+            concept_val = row.get("creative_concept") or ""
+            mood_raw = row.get("mood_breakdown") or ""
+
+            target_list = [w.strip() for w in target_words_raw.split(",") if w.strip()]
+            bonus_list = [w.strip() for w in bonus_words_raw.split(",") if w.strip()]
+            extra_list = [w.strip() for w in extra_words_raw.split(",") if w.strip()]
+
+            # Parse mood breakdown
+            mood_dict = {}
+            if mood_raw:
+                try:
+                    mood_dict = json.loads(mood_raw) if isinstance(mood_raw, str) else mood_raw
+                except Exception:
+                    mood_dict = {}
+
+            with st.expander(
+                f"🎵 #{row_num} — **{song_title}** ({len(target_list)} Targets • {len(bonus_list)} Bonus • {len(extra_list)} Extra) • 📅 {created_at}",
+                expanded=(row_num == 1)
+            ):
+                # Overview columns
+                info_col1, info_col2 = st.columns([3, 1])
+                with info_col1:
+                    # 1. Target Words
+                    st.markdown(f"**🎯 Target Vocabulary ({len(target_list)}):**")
+                    if target_list:
+                        pills_html = " ".join(f'<span class="target-pill">{w}</span>' for w in target_list)
+                        st.markdown(pills_html, unsafe_allow_html=True)
+                    else:
+                        st.error("⚠️ Target words are empty! Click '✏️ Edit Song Details & Target Words' below to add them by hand.")
+
+                    # 2. Bonus NGSL Hits
+                    if bonus_list:
+                        st.markdown(f"<div style='margin-top: 8px;'><b>🔵 Bonus NGSL Hits ({len(bonus_list)}):</b></div>", unsafe_allow_html=True)
+                        bonus_html = " ".join(f'<span class="bonus-pill">{w}</span>' for w in bonus_list)
+                        st.markdown(bonus_html, unsafe_allow_html=True)
+
+                    # 3. Extra Non-NGSL Words
+                    if extra_list:
+                        st.markdown(f"<div style='margin-top: 8px;'><b>🟡 Extra Words ({len(extra_list)}):</b></div>", unsafe_allow_html=True)
+                        extra_html = " ".join(f'<span class="extra-pill">{w}</span>' for w in extra_list)
+                        st.markdown(extra_html, unsafe_allow_html=True)
+
+                    # Genre & Concept
+                    if genre_val or concept_val:
+                        st.markdown(
+                            f"<div style='margin-top: 10px; font-size: 0.88rem; color: #94A3B8;'>🎶 <b>Genre:</b> {genre_val or 'Not recorded'} &nbsp;|&nbsp; 💡 <b>Concept:</b> <i>{concept_val or 'Not recorded'}</i></div>",
+                            unsafe_allow_html=True
+                        )
+
+                with info_col2:
+                    words_in_lyrics = len(lyrics_text.split())
+                    lines_in_lyrics = len([l for l in lyrics_text.splitlines() if l.strip()])
+                    st.metric("Song Length", f"{words_in_lyrics} words", help=f"{lines_in_lyrics} lines")
+
+                # Gemini Mood Profile (Percentages at time of generation)
+                if mood_dict and isinstance(mood_dict, dict):
+                    st.markdown("##### 📊 Emotional Mood Profile (Gemini Analysis):")
+                    sorted_moods = sorted(
+                        mood_dict.items(),
+                        key=lambda x: x[1] if isinstance(x[1], (int, float)) else 0,
+                        reverse=True
+                    )
+                    m_cols = st.columns(min(len(sorted_moods), 5))
+                    for m_idx, (m_name, m_pct) in enumerate(sorted_moods[:5]):
+                        col_idx = m_idx % len(m_cols)
+                        with m_cols[col_idx]:
+                            st.metric(label=m_name, value=f"{m_pct}%")
+
+                st.markdown("---")
+                st.markdown(f'<div class="lyrics-box">{lyrics_text}</div>', unsafe_allow_html=True)
+
+                # Action buttons row
+                act_c1, act_c2, _ = st.columns([1.5, 2, 2.5])
+                with act_c1:
+                    clean_filename = "".join(c for c in song_title if c.isalnum() or c in (" ", "_", "-")).strip().replace(" ", "_")
+                    st.download_button(
+                        label="📥 Download Lyrics",
+                        data=lyrics_text,
+                        file_name=f"{clean_filename or 'song'}.txt",
+                        mime="text/plain",
+                        key=f"dl_song_{song_id}"
+                    )
+                with act_c2:
+                    if st.button("🗑️ Delete Song (Safe Rollback)", key=f"del_song_{song_id}", help=f"Delete '{song_title}' and automatically roll back (-1) all its target, bonus, and extra words from dictionary counters"):
+                        if db.delete_song(song_id, rollback_words=True):
+                            st.success(f"Song #{row_num} ('{song_title}') deleted and dictionary counters rolled back.")
+                            st.rerun()
+
+                # In-Place Song & Target Words Editor
+                with st.expander("✏️ Edit Song Details, Words & Metadata", expanded=(len(target_list) == 0)):
+                    with st.form(key=f"edit_form_{song_id}"):
+                        st.markdown(f"#### ✏️ Editing Song #{row_num} — {song_title}")
+                        st.caption(f"Database Record ID: #{song_id}")
+                        
+                        e_col1, e_col2 = st.columns(2)
+                        with e_col1:
+                            new_title = st.text_input("Song Title", value=song_title, key=f"edit_title_{song_id}")
+                        with e_col2:
+                            default_g_idx = GENRES.index(genre_val) if genre_val in GENRES else 0
+                            new_genre = st.selectbox("Genre", GENRES, index=default_g_idx, key=f"edit_genre_{song_id}")
+
+                        new_targets = st.text_area(
+                            "🎯 Target Words (comma-separated):",
+                            value=target_words_raw,
+                            placeholder="e.g. coffee, application, negotiate, salary, employer, client...",
+                            help="Primary target vocabulary for this song.",
+                            key=f"edit_targets_{song_id}"
+                        )
+
+                        e_w_col1, e_w_col2 = st.columns(2)
+                        with e_w_col1:
+                            new_bonuses = st.text_area(
+                                "🔵 Bonus NGSL Words (comma-separated):",
+                                value=bonus_words_raw,
+                                placeholder="Incidental NGSL words found in song...",
+                                help="Incidental words from the NGSL that appeared in the song lyrics.",
+                                key=f"edit_bonuses_{song_id}"
+                            )
+                        with e_w_col2:
+                            new_extras = st.text_area(
+                                "🟡 Extra Words (comma-separated):",
+                                value=extra_words_raw,
+                                placeholder="Non-NGSL words tracked...",
+                                help="Non-NGSL words tracked in extra_words table.",
+                                key=f"edit_extras_{song_id}"
+                            )
+
+                        new_concept = st.text_area(
+                            "💡 Story / Creative Concept:",
+                            value=concept_val,
+                            key=f"edit_concept_{song_id}"
+                        )
+
+                        new_lyrics = st.text_area(
+                            "Song Lyrics:",
+                            value=lyrics_text,
+                            height=200,
+                            key=f"edit_lyrics_{song_id}"
+                        )
+
+                        sync_ngsl_chk = st.checkbox(
+                            "Sync & increment usage_count in NGSL Dictionary for any new target words added",
+                            value=True,
+                            key=f"sync_ngsl_{song_id}",
+                            help="If checked, any newly added target words will increment the NGSL usage counter."
+                        )
+
+                        save_btn = st.form_submit_button("💾 Save Updates", type="primary", use_container_width=True)
+                        if save_btn:
+                            db.update_song(
+                                song_id=song_id,
+                                title=new_title.strip() or song_title,
+                                lyrics=new_lyrics.strip(),
+                                target_words=new_targets.strip(),
+                                bonus_words=new_bonuses.strip(),
+                                extra_words=new_extras.strip(),
+                                genre=new_genre,
+                                creative_concept=new_concept.strip(),
+                                sync_ngsl_usage=sync_ngsl_chk
+                            )
+                            st.success(f"Song #{row_num} updated successfully!")
+                            st.rerun()
+
+                    # Gemini Re-analysis helper button
+                    st.markdown("##### 🤖 Re-analyze Mood for this Song with Gemini:")
+                    if st.button(f"✨ Run Gemini Mood Analysis on Target Words", key=f"gemini_reanalyze_{song_id}"):
+                        target_words_to_analyze = [w.strip() for w in target_words_raw.split(",") if w.strip()]
+                        if not target_words_to_analyze:
+                            st.warning("Please enter and save target words above first before running Gemini analysis.")
+                        else:
+                            with st.spinner("Analyzing target vocabulary mood with Gemini..."):
+                                res = gemini_client.analyze_vocabulary_mood(target_words_to_analyze)
+                                if res.get("success"):
+                                    db.update_song(
+                                        song_id=song_id,
+                                        title=song_title,
+                                        lyrics=lyrics_text,
+                                        target_words=target_words_raw,
+                                        bonus_words=bonus_words_raw,
+                                        extra_words=extra_words_raw,
+                                        mood_breakdown=res.get("mood_breakdown"),
+                                        genre=res.get("genre", genre_val),
+                                        creative_concept=res.get("creative_concept", concept_val),
+                                        sync_ngsl_usage=False
+                                    )
+                                    st.success("Gemini Mood Analysis completed and saved to song!")
+                                    st.rerun()
+                                else:
+                                    st.error(f"Gemini analysis failed: {res.get('error')}")
+
