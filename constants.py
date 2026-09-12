@@ -16,7 +16,8 @@ GENRES = [
     "Reggae / Tropical Pop",
     "Jazz / Bossa Nova",
     "Cinematic / Ballad",
-    "Lo-Fi / Chillhop"
+    "Lo-Fi / Chillhop",
+    "Melodic Chill Electronic"
 ]
 
 # Fixed list of song structures

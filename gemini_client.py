@@ -239,3 +239,103 @@ def generate_poster_prompt(title: str, lyrics: str, genre: str, vocalist: str) -
         "error": str(last_error),
         "prompt": ""
     }
+
+
+def build_variant_instruction(title: str, lyrics: str, genre: str, vocalist: str) -> str:
+    """Build the unified JSON prompt engineering instruction for Suno music prompt and Midjourney/DALL-E poster prompt."""
+    sample_lyrics = lyrics[:1500] if lyrics else "No lyrics provided."
+
+    return f"""You are an expert AI creative director for a music production SaaS. Your task is to generate both a music generation prompt (for Suno AI) and an album cover prompt (for Midjourney/DALL-E) based on the song details.
+
+[INPUT DATA]
+- Song Title: {title}
+- Song Theme/Lyrics summary:
+\"\"\"
+{sample_lyrics}
+\"\"\"
+- Target Genre: {genre}
+- Vocalist Gender: {vocalist}
+
+[RULES FOR SUNO MUSIC PROMPT]
+1. Must be strictly UNDER 120 characters.
+2. Format as a comma-separated list of keywords.
+3. Must explicitly include the {genre}, the {vocalist} lead vocals, and descriptors for clear, upfront vocals to ensure lyrical clarity.
+4. Include a steady BPM appropriate for the genre (e.g., 112 bpm).
+5. Examples:
+   - "Synthwave, steady 112 bpm, clear upfront male vocals, warm analog synths, pulsing bass, retro drum machine, clean mix"
+   - "Melodic chill electronic, soft piano, warm ambient synth pads, steady 112 bpm, clear upfront vocals, deep relaxed bass, clean atmospheric mix"
+
+[RULES FOR POSTER IMAGE PROMPT]
+1. Create a detailed, aesthetic visual prompt that perfectly matches the {genre} vibe and the lyrics theme.
+2. Feature a {vocalist} character or silhouette (or ambient aesthetic if instrumental).
+3. Include lighting, color grading, and camera aesthetic details.
+4. TYPOGRAPHY INTEGRATION: You MUST include instructions to artistically render the exact song title "{title}" into the image. Describe how the typography should look so it blends perfectly with the genre's aesthetic (e.g., "bold integrated gold-leaf serif lettering", "glowing neon futuristic font saying '{title}'").
+5. End with --ar 1:1.
+
+[OUTPUT FORMAT]
+You MUST output ONLY a valid JSON object with this exact schema:
+{{
+  "suno_prompt": "string",
+  "poster_prompt": "string"
+}}
+"""
+
+
+def generate_track_variant(title: str, lyrics: str, genre: str, vocalist: str) -> Dict[str, Any]:
+    """
+    Generate both Suno music prompt and Midjourney/DALL-E poster prompt for a song style variant.
+    Uses JSON response mode and cycles through PREFERRED_MODELS in case of rate limits or errors.
+    """
+    from google.genai import types
+
+    client = get_gemini_client()
+    instruction = build_variant_instruction(title, lyrics, genre, vocalist)
+
+    last_error = None
+
+    for model_name in PREFERRED_MODELS:
+        try:
+            logger.info("Generating track variant with model: %s", model_name)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=instruction,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.7,
+                ),
+            )
+            raw = response.text.strip()
+            
+            # Clean possible markdown wrap
+            if raw.startswith("```"):
+                lines = raw.splitlines()
+                raw = "\n".join(
+                    line for line in lines if not line.strip().startswith("```")
+                ).strip()
+
+            data = json.loads(raw)
+            suno_prompt = str(data.get("suno_prompt", "")).strip()
+            poster_prompt = str(data.get("poster_prompt", "")).strip()
+
+            # Ensure --ar 1:1 suffix on poster prompt
+            if poster_prompt and not poster_prompt.endswith("--ar 1:1"):
+                poster_prompt = f"{poster_prompt} --ar 1:1"
+
+            return {
+                "success": True,
+                "model_used": model_name,
+                "suno_prompt": suno_prompt,
+                "poster_prompt": poster_prompt
+            }
+        except Exception as exc:
+            logger.warning("Track variant generation failed with %s: %s", model_name, exc)
+            last_error = exc
+            continue
+
+    # Fallback if all models fail
+    return {
+        "success": False,
+        "error": str(last_error),
+        "suno_prompt": f"{genre}, steady tempo, clear upfront {vocalist.lower()} vocals, clean mix",
+        "poster_prompt": f"Cinematic album cover for '{title}', {genre} aesthetic, featuring {vocalist.lower()} artist, typography displaying '{title}', dramatic lighting, album art --ar 1:1"
+    }

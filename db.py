@@ -89,7 +89,7 @@ def init_db(db_path: Path = DB_PATH) -> None:
             )
         """)
 
-        # 5. poster_prompts table
+        # 5. poster_prompts table (legacy / backwards compatibility)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS poster_prompts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,6 +102,34 @@ def init_db(db_path: Path = DB_PATH) -> None:
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_poster_song ON poster_prompts(song_id);")
+
+        # 6. track_variants table (Packaging System: Suno Music Prompt + Midjourney/DALL-E Poster Prompt)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS track_variants (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                song_id INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+                genre TEXT NOT NULL,
+                vocalist TEXT NOT NULL,
+                suno_prompt TEXT NOT NULL,
+                poster_prompt TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(song_id, genre, vocalist)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_variant_song ON track_variants(song_id);")
+
+        # Automatic migration from poster_prompts if exists
+        try:
+            cursor.execute("""
+                INSERT OR IGNORE INTO track_variants (song_id, genre, vocalist, suno_prompt, poster_prompt, created_at)
+                SELECT song_id, genre, vocalist, 
+                       genre || ', steady tempo, clear upfront ' || LOWER(vocalist) || ' vocals, clean mix',
+                       prompt_text, created_at
+                FROM poster_prompts
+            """)
+        except Exception:
+            pass
+
         conn.commit()
 
 
@@ -490,13 +518,101 @@ def delete_song(song_id: int, rollback_words: bool = True, db_path: Path = DB_PA
             # Clean up extra words whose occurrence reached <= 0
             cursor.execute("DELETE FROM extra_words WHERE occurrence_count <= 0")
             
-        # 2. Delete associated poster prompts
+        # 2. Delete associated track variants and poster prompts
+        cursor.execute("DELETE FROM track_variants WHERE song_id = ?", (song_id,))
         cursor.execute("DELETE FROM poster_prompts WHERE song_id = ?", (song_id,))
 
         # 3. Delete the song row
         cursor.execute("DELETE FROM songs WHERE id = ?", (song_id,))
         conn.commit()
         return True
+
+
+def upsert_track_variant(
+    song_id: int,
+    genre: str,
+    vocalist: str,
+    suno_prompt: str,
+    poster_prompt: str,
+    db_path: Path = DB_PATH
+) -> int:
+    """
+    Insert or update a track variant (Suno music prompt + poster prompt) for (song_id, genre, vocalist).
+    If (song_id, genre, vocalist) exists, it overrides both prompts and refreshes timestamp.
+    """
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO track_variants (song_id, genre, vocalist, suno_prompt, poster_prompt, created_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(song_id, genre, vocalist) DO UPDATE SET
+                suno_prompt = excluded.suno_prompt,
+                poster_prompt = excluded.poster_prompt,
+                created_at = CURRENT_TIMESTAMP
+            """,
+            (song_id, genre.strip(), vocalist.strip(), suno_prompt.strip(), poster_prompt.strip())
+        )
+        conn.commit()
+        cursor.execute(
+            "SELECT id FROM track_variants WHERE song_id = ? AND genre = ? AND vocalist = ?",
+            (song_id, genre.strip(), vocalist.strip())
+        )
+        row = cursor.fetchone()
+        return row["id"] if row else cursor.lastrowid
+
+
+def get_track_variants(song_id: int, db_path: Path = DB_PATH) -> List[sqlite3.Row]:
+    """Retrieve all track variants for a song, ordered latest first."""
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, song_id, genre, vocalist, suno_prompt, poster_prompt, created_at FROM track_variants WHERE song_id = ? ORDER BY id DESC",
+            (song_id,)
+        )
+        return cursor.fetchall()
+
+
+def get_track_variant_by_combo(
+    song_id: int,
+    genre: str,
+    vocalist: str,
+    db_path: Path = DB_PATH
+) -> Optional[sqlite3.Row]:
+    """Retrieve a specific track variant by (song_id, genre, vocalist) combo if it exists."""
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, song_id, genre, vocalist, suno_prompt, poster_prompt, created_at FROM track_variants WHERE song_id = ? AND genre = ? AND vocalist = ?",
+            (song_id, genre.strip(), vocalist.strip())
+        )
+        return cursor.fetchone()
+
+
+def update_track_variant(
+    variant_id: int,
+    suno_prompt: str,
+    poster_prompt: str,
+    db_path: Path = DB_PATH
+) -> bool:
+    """Update both Suno prompt and poster prompt for a variant."""
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE track_variants SET suno_prompt = ?, poster_prompt = ? WHERE id = ?",
+            (suno_prompt.strip(), poster_prompt.strip(), variant_id)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def delete_track_variant(variant_id: int, db_path: Path = DB_PATH) -> bool:
+    """Delete a track variant by ID."""
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM track_variants WHERE id = ?", (variant_id,))
+        conn.commit()
+        return cursor.rowcount > 0
 
 
 def upsert_poster_prompt(

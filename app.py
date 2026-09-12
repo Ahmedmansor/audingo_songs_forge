@@ -767,22 +767,61 @@ def confirm_delete_song_dialog(song_id: int, song_title: str, row_num: int):
             st.rerun()
 
 
-@st.dialog("⚠️ Confirm Poster Prompt Deletion")
-def confirm_delete_poster_prompt_dialog(prompt_id: int, genre: str, vocalist: str):
-    """Safety confirmation modal before deleting a poster prompt."""
-    st.markdown("#### 🗑️ Delete Poster Prompt?")
+@st.dialog("⚠️ Confirm Track Variant Deletion")
+def confirm_delete_variant_dialog(variant_id: int, genre: str, vocalist: str):
+    """Safety confirmation modal before deleting a track variant package."""
+    st.markdown("#### 🗑️ Delete Track Variant Package?")
     st.warning(
-        f"Are you sure you want to delete the poster prompt for **{genre}** ({vocalist})?\n\n"
-        f"This action cannot be undone."
+        f"Are you sure you want to delete the production package for **{genre}** ({vocalist})?\n\n"
+        f"This will permanently delete both the Suno music prompt and the poster art prompt. This action cannot be undone."
     )
     dlg_c1, dlg_c2 = st.columns(2)
     with dlg_c1:
-        if st.button("🔥 Yes, Delete Prompt", type="primary", use_container_width=True, key=f"dlg_confirm_del_prompt_{prompt_id}"):
-            if db.delete_poster_prompt(prompt_id):
-                st.session_state["lib_toast_msg"] = f"Poster prompt for '{genre}' ({vocalist}) was deleted."
+        if st.button("🔥 Yes, Delete Variant", type="primary", use_container_width=True, key=f"dlg_confirm_del_variant_{variant_id}"):
+            if db.delete_track_variant(variant_id):
+                st.session_state["lib_toast_msg"] = f"Track variant for '{genre}' ({vocalist}) was deleted."
                 st.rerun()
     with dlg_c2:
-        if st.button("❌ Cancel", use_container_width=True, key=f"dlg_cancel_del_prompt_{prompt_id}"):
+        if st.button("❌ Cancel", use_container_width=True, key=f"dlg_cancel_del_variant_{variant_id}"):
+            st.rerun()
+
+
+@st.dialog("⚠️ Warning: Style Package Already Exists")
+def confirm_overwrite_variant_dialog(song_id: int, song_title: str, lyrics_text: str, genre: str, vocalist: str):
+    """Safety confirmation modal before overwriting an existing track variant."""
+    st.markdown("#### ⚠️ Style Package Already Exists!")
+    st.warning(
+        f"A production package for **'{song_title}'** in **{genre}** with **{vocalist}** vocals already exists.\n\n"
+        f"Generating a new package will **overwrite** both the current Suno music prompt and Midjourney/DALL-E poster prompt with freshly generated versions.\n\n"
+        f"Are you sure you want to proceed and overwrite?"
+    )
+    dlg_c1, dlg_c2 = st.columns(2)
+    clean_g = "".join(c for c in genre if c.isalnum())
+    with dlg_c1:
+        if st.button("⚡ Yes, Overwrite & Regenerate", type="primary", use_container_width=True, key=f"dlg_confirm_ovr_{song_id}_{clean_g}_{vocalist}"):
+            with st.spinner(f"Generating new package for '{genre}' ({vocalist})..."):
+                res = gemini_client.generate_track_variant(
+                    title=song_title,
+                    lyrics=lyrics_text,
+                    genre=genre,
+                    vocalist=vocalist
+                )
+                if res.get("success"):
+                    new_suno_p = res.get("suno_prompt", "").strip()
+                    new_poster_p = res.get("poster_prompt", "").strip()
+                    db.upsert_track_variant(
+                        song_id=song_id,
+                        genre=genre,
+                        vocalist=vocalist,
+                        suno_prompt=new_suno_p,
+                        poster_prompt=new_poster_p
+                    )
+                    st.session_state["lib_toast_msg"] = f"Track package for '{genre}' ({vocalist}) overwritten & updated!"
+                    st.rerun()
+                else:
+                    st.error(f"Failed to generate package: {res.get('error')}")
+    with dlg_c2:
+        if st.button("❌ Cancel", use_container_width=True, key=f"dlg_cancel_ovr_{song_id}_{clean_g}_{vocalist}"):
             st.rerun()
 
 
@@ -791,7 +830,9 @@ def confirm_delete_poster_prompt_dialog(prompt_id: int, genre: str, vocalist: st
 # ══════════════════════════════════════════════════════════════════════════════
 with tab4:
     if "lib_toast_msg" in st.session_state:
-        st.success(st.session_state.pop("lib_toast_msg"))
+        toast_msg = st.session_state.pop("lib_toast_msg")
+        st.toast(f"💾 {toast_msg}", icon="✅")
+        st.success(toast_msg)
 
     st.subheader("🎵 Saved Songs Library & Archives")
     st.markdown("Browse and manage all approved songs, review target vocabulary, inspect Gemini mood percentages, and edit song details.")
@@ -969,16 +1010,16 @@ with tab4:
                         confirm_delete_song_dialog(song_id, song_title, row_num)
 
                 # ──────────────────────────────────────────────────────────────
-                # 🎨 POSTER PROMPTS GENERATOR & REPOSITORY
+                # 💿 TRACK VARIANTS & PACKAGING (SUNO + POSTER)
                 # ──────────────────────────────────────────────────────────────
-                saved_poster_prompts = db.get_poster_prompts(song_id)
-                prompts_count = len(saved_poster_prompts)
-                poster_expander_title = f"🎨 Poster Prompts ({prompts_count})" if prompts_count > 0 else "🎨 Poster Prompts"
+                saved_variants = db.get_track_variants(song_id)
+                variants_count = len(saved_variants)
+                variant_expander_title = f"💿 Track Variants & Packaging ({variants_count})" if variants_count > 0 else "💿 Track Variants & Packaging"
 
-                with st.expander(poster_expander_title, expanded=(prompts_count > 0)):
-                    st.markdown("##### 🖼️ AI Poster & Album Cover Prompt Generator")
+                with st.expander(variant_expander_title, expanded=(variants_count > 0)):
+                    st.markdown("##### 💿 Audio & Visual Production Package (Suno AI + Midjourney/DALL-E)")
                     st.caption(
-                        "Generate hyper-detailed Midjourney / DALL-E image prompts based on the song's title, lyrics mood, musical genre, and lead vocalist persona. The song title is automatically embedded as a stylized visual text element on the cover art."
+                        "Generate unified style variations (Covers) for this song with a single click: a keyword-optimized music style prompt for Suno AI (< 120 chars, BPM, vocal clarity) paired with an aesthetic album cover prompt for Midjourney / DALL-E featuring artistic typography."
                     )
 
                     # Controls: Genre, Vocalist, Generate Button
@@ -986,117 +1027,144 @@ with tab4:
                     with p_c1:
                         default_p_genre_idx = GENRES.index(genre_val) if genre_val in GENRES else 0
                         p_selected_genre = st.selectbox(
-                            "🎨 Visual Genre / Style",
+                            "🎨 Visual & Musical Genre",
                             GENRES,
                             index=default_p_genre_idx,
-                            key=f"poster_genre_{song_id}"
+                            key=f"variant_genre_{song_id}"
                         )
                     with p_c2:
                         p_selected_vocalist = st.selectbox(
                             "🎤 Lead Vocalist",
                             ["Male", "Female", "Duet", "Instrumental"],
-                            key=f"poster_vocalist_{song_id}"
+                            key=f"variant_vocalist_{song_id}"
                         )
                     with p_c3:
                         st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-                        gen_prompt_btn = st.button(
-                            "✨ Generate Poster Prompt",
-                            key=f"btn_gen_poster_{song_id}",
+                        gen_variant_btn = st.button(
+                            "✨ Generate Package (Suno + Poster)",
+                            key=f"btn_gen_variant_{song_id}",
                             type="primary",
                             use_container_width=True
                         )
 
-                    if gen_prompt_btn:
-                        with st.spinner(f"Generating album cover prompt for '{song_title}' ({p_selected_genre} • {p_selected_vocalist})..."):
-                            res = gemini_client.generate_poster_prompt(
-                                title=song_title,
-                                lyrics=lyrics_text,
+                    if gen_variant_btn:
+                        existing = db.get_track_variant_by_combo(song_id, p_selected_genre, p_selected_vocalist)
+                        if existing:
+                            confirm_overwrite_variant_dialog(
+                                song_id=song_id,
+                                song_title=song_title,
+                                lyrics_text=lyrics_text,
                                 genre=p_selected_genre,
                                 vocalist=p_selected_vocalist
                             )
-                            if res.get("success"):
-                                new_p_text = res.get("prompt", "").strip()
-                                db.upsert_poster_prompt(
-                                    song_id=song_id,
+                        else:
+                            with st.spinner(f"Creating production package for '{song_title}' ({p_selected_genre} • {p_selected_vocalist})..."):
+                                res = gemini_client.generate_track_variant(
+                                    title=song_title,
+                                    lyrics=lyrics_text,
                                     genre=p_selected_genre,
-                                    vocalist=p_selected_vocalist,
-                                    prompt_text=new_p_text
+                                    vocalist=p_selected_vocalist
                                 )
-                                st.session_state["lib_toast_msg"] = f"🎨 Poster prompt for '{p_selected_genre}' ({p_selected_vocalist}) generated & saved!"
-                                st.rerun()
-                            else:
-                                st.error(f"Failed to generate prompt: {res.get('error')}")
+                                if res.get("success"):
+                                    new_suno_p = res.get("suno_prompt", "").strip()
+                                    new_poster_p = res.get("poster_prompt", "").strip()
+                                    db.upsert_track_variant(
+                                        song_id=song_id,
+                                        genre=p_selected_genre,
+                                        vocalist=p_selected_vocalist,
+                                        suno_prompt=new_suno_p,
+                                        poster_prompt=new_poster_p
+                                    )
+                                    st.session_state["lib_toast_msg"] = f"Track package for '{p_selected_genre}' ({p_selected_vocalist}) generated & saved!"
+                                    st.rerun()
+                                else:
+                                    st.error(f"Failed to generate package: {res.get('error')}")
 
-                    # Display saved poster prompts
-                    if saved_poster_prompts:
+                    # Display saved track variants
+                    if saved_variants:
                         st.markdown("<hr style='margin: 15px 0; border-color: rgba(255,255,255,0.08);'>", unsafe_allow_html=True)
-                        st.markdown(f"**Saved Poster Prompts ({len(saved_poster_prompts)}):**")
+                        st.markdown(f"**Saved Style Packages ({len(saved_variants)}):**")
 
-                        for p_row in saved_poster_prompts:
-                            p_id = int(p_row["id"])
-                            p_genre = p_row["genre"]
-                            p_vocalist = p_row["vocalist"]
-                            p_text = p_row["prompt_text"]
-                            p_date = p_row["created_at"]
+                        for v_row in saved_variants:
+                            v_id = int(v_row["id"])
+                            v_genre = v_row["genre"]
+                            v_vocalist = v_row["vocalist"]
+                            v_suno = v_row["suno_prompt"]
+                            v_poster = v_row["poster_prompt"]
+                            v_date = v_row["created_at"]
 
                             st.markdown(
                                 f"""
-                                <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px 14px; margin-top: 10px; margin-bottom: 6px;">
+                                <div style="background: rgba(30, 41, 59, 0.55); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 10px 14px; margin-top: 14px; margin-bottom: 8px;">
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
                                         <span>
-                                            <span style="background: #3B82F6; color: white; padding: 3px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 700; margin-right: 8px;">🎨 {p_genre}</span>
-                                            <span style="background: #8B5CF6; color: white; padding: 3px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 700;">🎤 {p_vocalist}</span>
+                                            <span style="background: #3B82F6; color: white; padding: 3px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 700; margin-right: 8px;">🎨 {v_genre}</span>
+                                            <span style="background: #8B5CF6; color: white; padding: 3px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 700;">🎤 {v_vocalist}</span>
                                         </span>
-                                        <span style="color: #94A3B8; font-size: 0.82rem;">📅 {p_date}</span>
+                                        <span style="color: #94A3B8; font-size: 0.82rem;">📅 {v_date}</span>
                                     </div>
                                 </div>
                                 """,
                                 unsafe_allow_html=True
                             )
 
-                            card_edited_text = st.text_area(
-                                label=f"Prompt #{p_id}",
-                                value=p_text,
+                            # Section 1: Suno Music Prompt
+                            st.markdown("##### 🎵 Suno AI Music Style Prompt:")
+                            card_edited_suno = st.text_area(
+                                label=f"Suno Prompt #{v_id}",
+                                value=v_suno,
+                                height=75,
+                                label_visibility="collapsed",
+                                key=f"txt_suno_{v_id}"
+                            )
+                            suno_char_count = len(card_edited_suno)
+                            count_color = "#10B981" if suno_char_count <= 120 else "#EF4444"
+                            st.markdown(
+                                f"<div style='display: flex; justify-content: space-between; align-items: center; margin-top: -8px; margin-bottom: 6px;'>"
+                                f"<small style='color: #94A3B8;'>📋 Click the copy icon in the box below to paste into Suno</small>"
+                                f"<small style='color: {count_color}; font-weight: 600;'>Length: {suno_char_count} / 120 chars</small>"
+                                f"</div>",
+                                unsafe_allow_html=True
+                            )
+                            st.code(card_edited_suno, language="markdown")
+
+                            # Section 2: Poster Image Prompt
+                            st.markdown("##### 🎨 Midjourney / DALL-E Album Cover Prompt:")
+                            card_edited_poster = st.text_area(
+                                label=f"Poster Prompt #{v_id}",
+                                value=v_poster,
                                 height=110,
                                 label_visibility="collapsed",
-                                key=f"txt_prompt_{p_id}"
+                                key=f"txt_poster_{v_id}"
                             )
+                            st.caption("📋 Click the copy icon in the box below to paste into Midjourney / DALL-E:")
+                            st.code(card_edited_poster, language="markdown")
 
-                            # Click-to-copy code block
-                            st.caption("📋 Click the icon in the box below to copy:")
-                            st.code(card_edited_text, language="markdown")
-
-                            # Action buttons
+                            # Action buttons: Save Edits, Regenerate, Delete
                             c_btn1, c_btn2, c_btn3 = st.columns([1.5, 1.5, 1.5])
                             with c_btn1:
-                                if st.button("💾 Save Edits", key=f"btn_save_p_{p_id}", use_container_width=True):
-                                    db.update_poster_prompt(p_id, card_edited_text)
-                                    st.session_state["lib_toast_msg"] = f"Poster prompt for '{p_genre}' ({p_vocalist}) saved!"
+                                if st.button("💾 Save Edits", key=f"btn_save_var_{v_id}", use_container_width=True):
+                                    db.update_track_variant(v_id, card_edited_suno, card_edited_poster)
+                                    st.session_state["lib_toast_msg"] = f"Variant package for '{v_genre}' ({v_vocalist}) saved successfully!"
                                     st.rerun()
 
                             with c_btn2:
-                                if st.button("🔄 Regenerate", key=f"btn_regen_p_{p_id}", use_container_width=True, help="Re-generate this prompt using Gemini"):
-                                    with st.spinner(f"Regenerating prompt for '{p_genre}' ({p_vocalist})..."):
-                                        regen_res = gemini_client.generate_poster_prompt(
-                                            title=song_title,
-                                            lyrics=lyrics_text,
-                                            genre=p_genre,
-                                            vocalist=p_vocalist
-                                        )
-                                        if regen_res.get("success"):
-                                            db.update_poster_prompt(p_id, regen_res.get("prompt", "").strip())
-                                            st.session_state["lib_toast_msg"] = f"Poster prompt for '{p_genre}' ({p_vocalist}) regenerated!"
-                                            st.rerun()
-                                        else:
-                                            st.error(f"Regeneration failed: {regen_res.get('error')}")
+                                if st.button("🔄 Regenerate Package", key=f"btn_regen_var_{v_id}", use_container_width=True, help="Re-generate both Suno and Poster prompts with safety confirmation"):
+                                    confirm_overwrite_variant_dialog(
+                                        song_id=song_id,
+                                        song_title=song_title,
+                                        lyrics_text=lyrics_text,
+                                        genre=v_genre,
+                                        vocalist=v_vocalist
+                                    )
 
                             with c_btn3:
-                                if st.button("🗑️ Delete", key=f"btn_del_p_{p_id}", use_container_width=True):
-                                    confirm_delete_poster_prompt_dialog(p_id, p_genre, p_vocalist)
+                                if st.button("🗑️ Delete", key=f"btn_del_var_{v_id}", use_container_width=True):
+                                    confirm_delete_variant_dialog(v_id, v_genre, v_vocalist)
 
-                            st.markdown("<hr style='margin: 12px 0 16px 0; border-color: rgba(255,255,255,0.06);'>", unsafe_allow_html=True)
+                            st.markdown("<hr style='margin: 16px 0 20px 0; border-color: rgba(255,255,255,0.06);'>", unsafe_allow_html=True)
                     else:
-                        st.info("ℹ️ No poster prompts generated yet for this song. Choose a genre and vocalist above and click **Generate Poster Prompt**.")
+                        st.info("ℹ️ No production packages generated yet for this song. Choose a genre and vocalist above and click **Generate Package (Suno + Poster)**.")
 
                 # In-Place Song & Target Words Editor
                 with st.expander("✏️ Edit Song Details, Words & Metadata", expanded=(len(target_list) == 0)):
