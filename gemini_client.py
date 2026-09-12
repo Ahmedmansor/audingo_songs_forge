@@ -158,3 +158,84 @@ def analyze_vocabulary_mood(words: List[str]) -> Dict[str, Any]:
         "song_structure": SONG_STRUCTURES[0],
         "creative_concept": "A vibrant and catchy song weaving the target vocabulary together."
     }
+
+
+def build_poster_prompt_instruction(title: str, lyrics: str, genre: str, vocalist: str) -> str:
+    """Build the prompt engineering instruction for generating an image generation prompt."""
+    sample_lyrics = lyrics[:1500] if lyrics else "No lyrics provided."
+
+    return f"""You are an elite AI art director and prompt engineer specializing in hyper-detailed album cover prompts for Midjourney, DALL-E 3, and modern AI image generators.
+
+Generate a single, comprehensive, visually striking image generation prompt for a commercial music album cover poster.
+
+[SONG DETAILS]
+- Title: {title}
+- Musical Genre: {genre}
+- Lead Vocalist/Artist Persona: {vocalist}
+- Lyrics Atmosphere & Context:
+\"\"\"
+{sample_lyrics}
+\"\"\"
+
+[STRICT DESIGN GUIDELINES]
+1. Visual Text: The exact song title "{title}" must be incorporated as stylized, integrated typographic text on the cover art (e.g. bold vintage typography, neon sign, embossed metallic lettering, or artistic overlay fitting the {genre} style).
+2. Genre Aesthetics: The visual aesthetic, lighting, color grading, camera lens, and texture must perfectly embody the {genre} music genre.
+3. Artist/Subject: Feature a compelling character or silhouette fitting the {vocalist} description, seamlessly blended into the environment with expressive mood, wardrobe, and atmosphere derived from the lyrics.
+4. Scene & Mood: Capture the emotional narrative and energy of the song. Evoke cinematic atmosphere, depth of field, vivid atmospheric lighting effects (e.g. volumetric lighting, mist, lens flare, cinematic film grain, or clean modern render appropriate to {genre}).
+5. Output Format:
+   - Provide ONLY the raw text prompt.
+   - Do NOT include any intro ("Here is the prompt:"), markdown code blocks, quotes, or explanations.
+   - End the prompt with aspect ratio parameter: --ar 1:1
+"""
+
+
+def generate_poster_prompt(title: str, lyrics: str, genre: str, vocalist: str) -> Dict[str, Any]:
+    """
+    Generate an AI image generator prompt (Midjourney/DALL-E style) for a song poster/album cover.
+    Cycles through PREFERRED_MODELS in case of error.
+    """
+    from google.genai import types
+
+    client = get_gemini_client()
+    instruction = build_poster_prompt_instruction(title, lyrics, genre, vocalist)
+
+    last_error = None
+
+    for model_name in PREFERRED_MODELS:
+        try:
+            logger.info("Generating poster prompt with model: %s", model_name)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=instruction,
+                config=types.GenerateContentConfig(
+                    temperature=0.8,
+                ),
+            )
+            raw = response.text.strip()
+            
+            # Clean possible markdown wrap
+            if raw.startswith("```"):
+                lines = raw.splitlines()
+                raw = "\n".join(
+                    line for line in lines if not line.strip().startswith("```")
+                ).strip()
+
+            # Ensure --ar 1:1 suffix
+            if not raw.endswith("--ar 1:1"):
+                raw = f"{raw} --ar 1:1"
+
+            return {
+                "success": True,
+                "model_used": model_name,
+                "prompt": raw
+            }
+        except Exception as exc:
+            logger.warning("Poster prompt generation failed with %s: %s", model_name, exc)
+            last_error = exc
+            continue
+
+    return {
+        "success": False,
+        "error": str(last_error),
+        "prompt": ""
+    }

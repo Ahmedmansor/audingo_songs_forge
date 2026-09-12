@@ -745,10 +745,54 @@ with tab3:
                 st.rerun()
 
 
+@st.dialog("⚠️ Confirm Song Deletion")
+def confirm_delete_song_dialog(song_id: int, song_title: str, row_num: int):
+    """Safety confirmation modal before executing atomic delete and rollback."""
+    st.markdown(f"#### 🗑️ Are you sure you want to delete Song #{row_num}?")
+    st.warning(
+        f"**Song Title:** {song_title}\n\n"
+        f"⚠️ **Atomic Safe Rollback will occur:**\n"
+        f"- Target & Bonus vocabulary will have their `usage_count` decremented (-1) in the NGSL dictionary.\n"
+        f"- Non-NGSL extra words will have their occurrences decremented (-1).\n"
+        f"- The song and all its recorded metadata will be permanently removed."
+    )
+    dlg_c1, dlg_c2 = st.columns(2)
+    with dlg_c1:
+        if st.button("🔥 Yes, Confirm Delete", type="primary", use_container_width=True, key=f"dlg_confirm_del_{song_id}"):
+            if db.delete_song(song_id, rollback_words=True):
+                st.session_state["lib_toast_msg"] = f"Song #{row_num} ('{song_title}') deleted and dictionary counters rolled back."
+                st.rerun()
+    with dlg_c2:
+        if st.button("❌ Cancel", use_container_width=True, key=f"dlg_cancel_del_{song_id}"):
+            st.rerun()
+
+
+@st.dialog("⚠️ Confirm Poster Prompt Deletion")
+def confirm_delete_poster_prompt_dialog(prompt_id: int, genre: str, vocalist: str):
+    """Safety confirmation modal before deleting a poster prompt."""
+    st.markdown("#### 🗑️ Delete Poster Prompt?")
+    st.warning(
+        f"Are you sure you want to delete the poster prompt for **{genre}** ({vocalist})?\n\n"
+        f"This action cannot be undone."
+    )
+    dlg_c1, dlg_c2 = st.columns(2)
+    with dlg_c1:
+        if st.button("🔥 Yes, Delete Prompt", type="primary", use_container_width=True, key=f"dlg_confirm_del_prompt_{prompt_id}"):
+            if db.delete_poster_prompt(prompt_id):
+                st.session_state["lib_toast_msg"] = f"Poster prompt for '{genre}' ({vocalist}) was deleted."
+                st.rerun()
+    with dlg_c2:
+        if st.button("❌ Cancel", use_container_width=True, key=f"dlg_cancel_del_prompt_{prompt_id}"):
+            st.rerun()
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 4: SONGS LIBRARY & ARCHIVES
 # ══════════════════════════════════════════════════════════════════════════════
 with tab4:
+    if "lib_toast_msg" in st.session_state:
+        st.success(st.session_state.pop("lib_toast_msg"))
+
     st.subheader("🎵 Saved Songs Library & Archives")
     st.markdown("Browse and manage all approved songs, review target vocabulary, inspect Gemini mood percentages, and edit song details.")
 
@@ -917,10 +961,142 @@ with tab4:
                         key=f"dl_song_{song_id}"
                     )
                 with act_c2:
-                    if st.button("🗑️ Delete Song (Safe Rollback)", key=f"del_song_{song_id}", help=f"Delete '{song_title}' and automatically roll back (-1) all its target, bonus, and extra words from dictionary counters"):
-                        if db.delete_song(song_id, rollback_words=True):
-                            st.success(f"Song #{row_num} ('{song_title}') deleted and dictionary counters rolled back.")
-                            st.rerun()
+                    if st.button(
+                        "🗑️ Delete Song (Safe Rollback)",
+                        key=f"del_song_{song_id}",
+                        help=f"Delete '{song_title}' with safety confirmation and automatic dictionary rollback"
+                    ):
+                        confirm_delete_song_dialog(song_id, song_title, row_num)
+
+                # ──────────────────────────────────────────────────────────────
+                # 🎨 POSTER PROMPTS GENERATOR & REPOSITORY
+                # ──────────────────────────────────────────────────────────────
+                saved_poster_prompts = db.get_poster_prompts(song_id)
+                prompts_count = len(saved_poster_prompts)
+                poster_expander_title = f"🎨 Poster Prompts ({prompts_count})" if prompts_count > 0 else "🎨 Poster Prompts"
+
+                with st.expander(poster_expander_title, expanded=(prompts_count > 0)):
+                    st.markdown("##### 🖼️ AI Poster & Album Cover Prompt Generator")
+                    st.caption(
+                        "Generate hyper-detailed Midjourney / DALL-E image prompts based on the song's title, lyrics mood, musical genre, and lead vocalist persona. The song title is automatically embedded as a stylized visual text element on the cover art."
+                    )
+
+                    # Controls: Genre, Vocalist, Generate Button
+                    p_c1, p_c2, p_c3 = st.columns([2, 1.5, 2])
+                    with p_c1:
+                        default_p_genre_idx = GENRES.index(genre_val) if genre_val in GENRES else 0
+                        p_selected_genre = st.selectbox(
+                            "🎨 Visual Genre / Style",
+                            GENRES,
+                            index=default_p_genre_idx,
+                            key=f"poster_genre_{song_id}"
+                        )
+                    with p_c2:
+                        p_selected_vocalist = st.selectbox(
+                            "🎤 Lead Vocalist",
+                            ["Male", "Female", "Duet", "Instrumental"],
+                            key=f"poster_vocalist_{song_id}"
+                        )
+                    with p_c3:
+                        st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                        gen_prompt_btn = st.button(
+                            "✨ Generate Poster Prompt",
+                            key=f"btn_gen_poster_{song_id}",
+                            type="primary",
+                            use_container_width=True
+                        )
+
+                    if gen_prompt_btn:
+                        with st.spinner(f"Generating album cover prompt for '{song_title}' ({p_selected_genre} • {p_selected_vocalist})..."):
+                            res = gemini_client.generate_poster_prompt(
+                                title=song_title,
+                                lyrics=lyrics_text,
+                                genre=p_selected_genre,
+                                vocalist=p_selected_vocalist
+                            )
+                            if res.get("success"):
+                                new_p_text = res.get("prompt", "").strip()
+                                db.upsert_poster_prompt(
+                                    song_id=song_id,
+                                    genre=p_selected_genre,
+                                    vocalist=p_selected_vocalist,
+                                    prompt_text=new_p_text
+                                )
+                                st.session_state["lib_toast_msg"] = f"🎨 Poster prompt for '{p_selected_genre}' ({p_selected_vocalist}) generated & saved!"
+                                st.rerun()
+                            else:
+                                st.error(f"Failed to generate prompt: {res.get('error')}")
+
+                    # Display saved poster prompts
+                    if saved_poster_prompts:
+                        st.markdown("<hr style='margin: 15px 0; border-color: rgba(255,255,255,0.08);'>", unsafe_allow_html=True)
+                        st.markdown(f"**Saved Poster Prompts ({len(saved_poster_prompts)}):**")
+
+                        for p_row in saved_poster_prompts:
+                            p_id = int(p_row["id"])
+                            p_genre = p_row["genre"]
+                            p_vocalist = p_row["vocalist"]
+                            p_text = p_row["prompt_text"]
+                            p_date = p_row["created_at"]
+
+                            st.markdown(
+                                f"""
+                                <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px 14px; margin-top: 10px; margin-bottom: 6px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <span>
+                                            <span style="background: #3B82F6; color: white; padding: 3px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 700; margin-right: 8px;">🎨 {p_genre}</span>
+                                            <span style="background: #8B5CF6; color: white; padding: 3px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 700;">🎤 {p_vocalist}</span>
+                                        </span>
+                                        <span style="color: #94A3B8; font-size: 0.82rem;">📅 {p_date}</span>
+                                    </div>
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+
+                            card_edited_text = st.text_area(
+                                label=f"Prompt #{p_id}",
+                                value=p_text,
+                                height=110,
+                                label_visibility="collapsed",
+                                key=f"txt_prompt_{p_id}"
+                            )
+
+                            # Click-to-copy code block
+                            st.caption("📋 Click the icon in the box below to copy:")
+                            st.code(card_edited_text, language="markdown")
+
+                            # Action buttons
+                            c_btn1, c_btn2, c_btn3 = st.columns([1.5, 1.5, 1.5])
+                            with c_btn1:
+                                if st.button("💾 Save Edits", key=f"btn_save_p_{p_id}", use_container_width=True):
+                                    db.update_poster_prompt(p_id, card_edited_text)
+                                    st.session_state["lib_toast_msg"] = f"Poster prompt for '{p_genre}' ({p_vocalist}) saved!"
+                                    st.rerun()
+
+                            with c_btn2:
+                                if st.button("🔄 Regenerate", key=f"btn_regen_p_{p_id}", use_container_width=True, help="Re-generate this prompt using Gemini"):
+                                    with st.spinner(f"Regenerating prompt for '{p_genre}' ({p_vocalist})..."):
+                                        regen_res = gemini_client.generate_poster_prompt(
+                                            title=song_title,
+                                            lyrics=lyrics_text,
+                                            genre=p_genre,
+                                            vocalist=p_vocalist
+                                        )
+                                        if regen_res.get("success"):
+                                            db.update_poster_prompt(p_id, regen_res.get("prompt", "").strip())
+                                            st.session_state["lib_toast_msg"] = f"Poster prompt for '{p_genre}' ({p_vocalist}) regenerated!"
+                                            st.rerun()
+                                        else:
+                                            st.error(f"Regeneration failed: {regen_res.get('error')}")
+
+                            with c_btn3:
+                                if st.button("🗑️ Delete", key=f"btn_del_p_{p_id}", use_container_width=True):
+                                    confirm_delete_poster_prompt_dialog(p_id, p_genre, p_vocalist)
+
+                            st.markdown("<hr style='margin: 12px 0 16px 0; border-color: rgba(255,255,255,0.06);'>", unsafe_allow_html=True)
+                    else:
+                        st.info("ℹ️ No poster prompts generated yet for this song. Choose a genre and vocalist above and click **Generate Poster Prompt**.")
 
                 # In-Place Song & Target Words Editor
                 with st.expander("✏️ Edit Song Details, Words & Metadata", expanded=(len(target_list) == 0)):

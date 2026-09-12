@@ -88,6 +88,20 @@ def init_db(db_path: Path = DB_PATH) -> None:
                 value TEXT
             )
         """)
+
+        # 5. poster_prompts table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS poster_prompts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                song_id INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+                genre TEXT NOT NULL,
+                vocalist TEXT NOT NULL,
+                prompt_text TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(song_id, genre, vocalist)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_poster_song ON poster_prompts(song_id);")
         conn.commit()
 
 
@@ -476,10 +490,77 @@ def delete_song(song_id: int, rollback_words: bool = True, db_path: Path = DB_PA
             # Clean up extra words whose occurrence reached <= 0
             cursor.execute("DELETE FROM extra_words WHERE occurrence_count <= 0")
             
-        # 2. Delete the song row
+        # 2. Delete associated poster prompts
+        cursor.execute("DELETE FROM poster_prompts WHERE song_id = ?", (song_id,))
+
+        # 3. Delete the song row
         cursor.execute("DELETE FROM songs WHERE id = ?", (song_id,))
         conn.commit()
         return True
+
+
+def upsert_poster_prompt(
+    song_id: int,
+    genre: str,
+    vocalist: str,
+    prompt_text: str,
+    db_path: Path = DB_PATH
+) -> int:
+    """
+    Insert or update a poster prompt for a (song_id, genre, vocalist) combination.
+    If the combination already exists, it overrides the prompt_text and updates timestamp.
+    """
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO poster_prompts (song_id, genre, vocalist, prompt_text, created_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(song_id, genre, vocalist) DO UPDATE SET
+                prompt_text = excluded.prompt_text,
+                created_at = CURRENT_TIMESTAMP
+            """,
+            (song_id, genre.strip(), vocalist.strip(), prompt_text.strip())
+        )
+        conn.commit()
+        cursor.execute(
+            "SELECT id FROM poster_prompts WHERE song_id = ? AND genre = ? AND vocalist = ?",
+            (song_id, genre.strip(), vocalist.strip())
+        )
+        row = cursor.fetchone()
+        return row["id"] if row else cursor.lastrowid
+
+
+def get_poster_prompts(song_id: int, db_path: Path = DB_PATH) -> List[sqlite3.Row]:
+    """Retrieve all poster prompts saved for a specific song, ordered by latest first."""
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, song_id, genre, vocalist, prompt_text, created_at FROM poster_prompts WHERE song_id = ? ORDER BY id DESC",
+            (song_id,)
+        )
+        return cursor.fetchall()
+
+
+def update_poster_prompt(prompt_id: int, new_text: str, db_path: Path = DB_PATH) -> bool:
+    """Update the text of an existing poster prompt."""
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE poster_prompts SET prompt_text = ? WHERE id = ?",
+            (new_text.strip(), prompt_id)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def delete_poster_prompt(prompt_id: int, db_path: Path = DB_PATH) -> bool:
+    """Delete a poster prompt by its ID."""
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM poster_prompts WHERE id = ?", (prompt_id,))
+        conn.commit()
+        return cursor.rowcount > 0
 
 
 def save_active_batch_state(

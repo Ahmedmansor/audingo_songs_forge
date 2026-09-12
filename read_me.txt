@@ -1,3 +1,11 @@
+.\venv\Scripts\activate  
+open the venv
+
+
+streamlit run app.py 
+run the app
+
+
 .\venv\Scripts\python.exe inspect_db.py
 هيطبع لك في ثانية ملخصاً شاملاً:
 
