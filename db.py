@@ -76,6 +76,8 @@ def init_db(db_path: Path = DB_PATH) -> None:
             cursor.execute("ALTER TABLE songs ADD COLUMN mood_breakdown TEXT")
         if "genre" not in existing_cols:
             cursor.execute("ALTER TABLE songs ADD COLUMN genre TEXT")
+        if "song_structure" not in existing_cols:
+            cursor.execute("ALTER TABLE songs ADD COLUMN song_structure TEXT")
         if "creative_concept" not in existing_cols:
             cursor.execute("ALTER TABLE songs ADD COLUMN creative_concept TEXT")
 
@@ -274,12 +276,13 @@ def approve_and_save_song(
     checked_target_words: Optional[List[str]] = None, # Green words checked
     mood_breakdown: Optional[Dict[str, Any]] = None,
     genre: str = "",
+    song_structure: str = "",
     creative_concept: str = "",
     db_path: Path = DB_PATH
 ) -> Tuple[int, int, int]:
     """
     Approve and save song:
-    1. Insert into songs table (target_words, bonus_words, extra_words, mood_breakdown, genre, creative_concept).
+    1. Insert into songs table (target_words, bonus_words, extra_words, mood_breakdown, genre, song_structure, creative_concept).
     2. Increment usage_count for checked Green + Blue NGSL words.
     3. Insert or increment occurrence_count for checked Yellow extra_words.
     Returns (song_id, approved_ngsl_count, approved_extra_count).
@@ -299,13 +302,13 @@ def approve_and_save_song(
             """
             INSERT INTO songs (
                 title, lyrics, target_words, bonus_words, extra_words,
-                mood_breakdown, genre, creative_concept
+                mood_breakdown, genre, song_structure, creative_concept
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 title, lyrics, target_words_str, bonus_words_str, extra_words_str,
-                mood_json, genre, creative_concept
+                mood_json, genre, song_structure, creative_concept
             )
         )
         song_id = cursor.lastrowid
@@ -340,7 +343,7 @@ def get_all_songs(db_path: Path = DB_PATH) -> pd.DataFrame:
     """Retrieve all saved songs from the database, sorted newest first."""
     with get_connection(db_path) as conn:
         df = pd.read_sql_query(
-            "SELECT id, title, lyrics, target_words, bonus_words, extra_words, mood_breakdown, genre, creative_concept, created_at FROM songs ORDER BY id DESC",
+            "SELECT id, title, lyrics, target_words, bonus_words, extra_words, mood_breakdown, genre, song_structure, creative_concept, created_at FROM songs ORDER BY id DESC",
             conn
         )
         return df
@@ -355,6 +358,7 @@ def update_song(
     extra_words: Optional[str] = None,
     mood_breakdown: Optional[Dict[str, Any]] = None,
     genre: Optional[str] = None,
+    song_structure: Optional[str] = None,
     creative_concept: Optional[str] = None,
     sync_ngsl_usage: bool = True,
     db_path: Path = DB_PATH
@@ -394,6 +398,8 @@ def update_song(
             updates.append(("mood_breakdown", mood_val))
         if genre is not None:
             updates.append(("genre", genre))
+        if song_structure is not None:
+            updates.append(("song_structure", song_structure))
         if creative_concept is not None:
             updates.append(("creative_concept", creative_concept))
             
