@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Environment — contains your real API key, NEVER commit this
+.env
+
+# Runtime state files (auto-regenerated)
+upload_state.json
+schedule_tracker.json
+
+# Logs
+logs/
+
+# Large video files
+*.mp4
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+
+# مجلدات المحتوى والحلقات (عشان مساحتها متضربش الـ Repo)
+Upload_Queue/
+Uploaded_Done/
+ChromeProfiles/
+# مجلدات البيئة الوهمية (لو بتستخدمها)
+venv/
+.venv/

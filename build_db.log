@@ -1,0 +1,2 @@
+2026-09-11 22:26:51,351 [WARNING] Unconfident POS for 'concert' (spaCy POS: X). Defaulting to Noun.
+2026-09-11 22:26:51,701 [WARNING] Unconfident POS for 'ear' (spaCy POS: X). Defaulting to Noun.

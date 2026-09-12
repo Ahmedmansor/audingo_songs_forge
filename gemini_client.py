@@ -1,0 +1,143 @@
+"""
+gemini_client.py — Gemini API integration with model fallback and mood/genre analysis.
+"""
+
+import json
+import logging
+import os
+from typing import Dict, Any, List, Optional
+from dotenv import load_dotenv
+
+from constants import GENRES, SONG_STRUCTURES, MOOD_CATEGORIES, GEMINI_MODEL_CANDIDATES
+
+load_dotenv()
+logger = logging.getLogger(__name__)
+
+# Preferred model order as specified by user:
+# 1. Gemini 3 Flash (models/gemini-3-flash-preview)
+# 2. Gemini 3.5 Flash Lite (models/gemini-3.5-flash-lite)
+# 3. Gemini 3.1 Flash Lite (models/gemini-3.1-flash-lite-preview)
+PREFERRED_MODELS = GEMINI_MODEL_CANDIDATES
+
+
+
+def get_gemini_client():
+    """Initialize and return google-genai Client."""
+    from google import genai
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY is not set in environment or .env file.")
+    return genai.Client(api_key=api_key)
+
+
+def build_analysis_prompt(words: List[str]) -> str:
+    """Build the JSON schema instruction prompt for Gemini."""
+    words_str = ", ".join(words)
+    genres_str = "\n".join(f"- {g}" for g in GENRES)
+    structures_str = "\n".join(f"- {s}" for s in SONG_STRUCTURES)
+    moods_str = "\n".join(f"- {m}" for m in MOOD_CATEGORIES)
+
+    return f"""You are an expert music producer and lyricist analyzing a specific vocabulary set for songwriting.
+Here is the batch of 20 target vocabulary words:
+{words_str}
+
+Analyze the emotional resonance, imagery, and linguistic rhythm of these words.
+You MUST choose the genre and structure ONLY from the provided closed lists below. Do NOT invent new genres or structures.
+
+Available Genres:
+{genres_str}
+
+Available Song Structures:
+{structures_str}
+
+Available Mood Categories (Percentages MUST sum up to exactly 100):
+{moods_str}
+
+CRITICAL PERCENTAGE DISTRIBUTION INSTRUCTION:
+Do NOT evenly distribute the percentages. Be highly decisive. If the 20 words strongly lean towards a specific mood, allow that primary mood to dominate the score (e.g., 70%, 80%, or even 90%). Avoid safe, flat distributions. Only mix percentages closely if the vocabulary is genuinely conflicting. The total must still exactly equal 100.
+
+Return a valid JSON object with the following exact schema:
+{{
+    "mood_breakdown": {{
+        "Category Name": integer_percentage, ...
+    }},
+    "genre": "Exact match from Available Genres",
+    "song_structure": "Exact match from Available Song Structures",
+    "creative_concept": "1-2 sentences describing the core story or theme linking these words into a hit song"
+}}
+"""
+
+
+def analyze_vocabulary_mood(words: List[str]) -> Dict[str, Any]:
+    """
+    Send the 20 words to Gemini to get mood breakdown, genre, and structure recommendations.
+    Cycles through preferred models if rate limits or errors occur.
+    """
+    from google.genai import types
+
+    client = get_gemini_client()
+    prompt = build_analysis_prompt(words)
+    
+    last_error = None
+    
+    for model_name in PREFERRED_MODELS:
+        try:
+            logger.info("Calling Gemini with model: %s", model_name)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.7,
+                ),
+            )
+            raw = response.text.strip()
+            
+            # Clean possible markdown blocks
+            if raw.startswith("```"):
+                lines = raw.splitlines()
+                raw = "\n".join(
+                    line for line in lines if not line.strip().startswith("```")
+                ).strip()
+                
+            data = json.loads(raw)
+            
+            # Basic validation
+            genre = data.get("genre", GENRES[0])
+            if genre not in GENRES:
+                genre = GENRES[0]
+                
+            structure = data.get("song_structure", SONG_STRUCTURES[0])
+            if structure not in SONG_STRUCTURES:
+                structure = SONG_STRUCTURES[0]
+                
+            mood_breakdown = data.get("mood_breakdown", {})
+            
+            return {
+                "success": True,
+                "model_used": model_name,
+                "mood_breakdown": mood_breakdown,
+                "genre": genre,
+                "song_structure": structure,
+                "creative_concept": data.get("creative_concept", "")
+            }
+        except Exception as exc:
+            logger.warning("Failed with model %s: %s. Trying next fallback model...", model_name, exc)
+            last_error = exc
+            continue
+
+    # If all models fail, return safe default
+    return {
+        "success": False,
+        "error": str(last_error),
+        "model_used": "Fallback Defaults",
+        "mood_breakdown": {
+            "Happy": 30,
+            "Energetic": 30,
+            "Uplifting / Inspiring": 20,
+            "Chill / Relaxed": 20
+        },
+        "genre": GENRES[0],
+        "song_structure": SONG_STRUCTURES[0],
+        "creative_concept": "A vibrant and catchy song weaving the target vocabulary together."
+    }
