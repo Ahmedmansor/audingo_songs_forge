@@ -5,7 +5,7 @@ db.py — SQLite database interface for Audingo Songs Forge.
 import json
 import sqlite3
 from pathlib import Path
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional, Set
 import pandas as pd
 
 DB_PATH = Path(__file__).parent / "ngsl_vocab.db"
@@ -80,6 +80,8 @@ def init_db(db_path: Path = DB_PATH) -> None:
             cursor.execute("ALTER TABLE songs ADD COLUMN song_structure TEXT")
         if "creative_concept" not in existing_cols:
             cursor.execute("ALTER TABLE songs ADD COLUMN creative_concept TEXT")
+        if "reused_words" not in existing_cols:
+            cursor.execute("ALTER TABLE songs ADD COLUMN reused_words TEXT")
 
         # 4. app_state table (persists active batch across browser refreshes)
         cursor.execute("""
@@ -143,6 +145,12 @@ def init_db(db_path: Path = DB_PATH) -> None:
             pass
 
         conn.commit()
+
+        # Migrate past songs bonus words to cleanly separate first-time bonus vs reused words
+        try:
+            migrate_past_songs_bonus_words(db_path)
+        except Exception:
+            pass
 
 
 def get_all_ngsl_words(db_path: Path = DB_PATH) -> pd.DataFrame:
@@ -321,13 +329,111 @@ def get_all_lemma_mappings(db_path: Path = DB_PATH) -> Dict[str, str]:
         return lemma_to_headword
 
 
+def get_used_ngsl_words(db_path: Path = DB_PATH) -> Set[str]:
+    """Retrieve set of all lowercased NGSL words that have usage_count > 0."""
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT LOWER(word) FROM ngsl_words WHERE usage_count > 0")
+        return {row[0].strip() for row in cursor.fetchall() if row[0]}
+
+
+def get_previously_used_words(
+    exclude_words: Optional[List[str]] = None,
+    db_path: Path = DB_PATH
+) -> List[str]:
+    """
+    Return list of content words previously used (usage_count > 0),
+    excluding current batch targets and common English stop words.
+    """
+    exclude_set = {w.lower().strip() for w in (exclude_words or []) if w.strip()}
+    
+    stop_words = {
+        "a", "about", "above", "after", "again", "against", "all", "am", "an", "and",
+        "any", "are", "aren't", "as", "at", "be", "because", "been", "before", "being",
+        "below", "between", "both", "but", "by", "can", "can't", "cannot", "could",
+        "couldn't", "did", "didn't", "do", "does", "doesn't", "doing", "don't", "down",
+        "during", "each", "few", "for", "from", "further", "had", "hadn't", "has",
+        "hasn't", "have", "haven't", "having", "he", "he'd", "he'll", "he's", "her",
+        "here", "here's", "hers", "herself", "him", "himself", "his", "how", "how's",
+        "i", "i'd", "i'll", "i'm", "i've", "if", "in", "into", "is", "isn't", "it",
+        "it's", "its", "itself", "let's", "me", "more", "most", "mustn't", "my",
+        "myself", "no", "nor", "not", "of", "off", "on", "once", "only", "or",
+        "other", "ought", "our", "ours", "ourselves", "out", "over", "own", "same",
+        "shan't", "she", "she'd", "she'll", "she's", "should", "shouldn't", "so",
+        "some", "such", "than", "that", "that's", "the", "their", "theirs", "them",
+        "themselves", "then", "there", "there's", "these", "they", "they'd", "they'll",
+        "they're", "they've", "this", "those", "through", "to", "too", "under", "until",
+        "up", "very", "was", "wasn't", "we", "we'd", "we'll", "we're", "we've", "were",
+        "weren't", "what", "what's", "when", "when's", "where", "where's", "which",
+        "while", "who", "who's", "whom", "why", "why's", "with", "won't", "would",
+        "wouldn't", "you", "you'd", "you'll", "you're", "you've", "your", "yours",
+        "yourself", "yourselves"
+    }
+
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT LOWER(word) FROM ngsl_words WHERE usage_count > 0 ORDER BY word ASC")
+        rows = cursor.fetchall()
+
+    filtered = [
+        r[0].strip() for r in rows
+        if r[0] and r[0].strip() not in exclude_set and r[0].strip() not in stop_words and len(r[0].strip()) > 1
+    ]
+    return filtered
+
+
+def migrate_past_songs_bonus_words(db_path: Path = DB_PATH) -> None:
+    """
+    Chronological migration for existing songs:
+    Ensures bonus_words only retains words on their FIRST appearance as bonus across songs.
+    Moves subsequent repeats of the word in later songs to reused_words.
+    Leaves ngsl_words.usage_count completely untouched.
+    """
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(songs)")
+        cols = {row["name"] for row in cursor.fetchall()}
+        if "reused_words" not in cols:
+            cursor.execute("ALTER TABLE songs ADD COLUMN reused_words TEXT")
+
+        cursor.execute("SELECT id, target_words, bonus_words, reused_words FROM songs ORDER BY id ASC")
+        rows = cursor.fetchall()
+        
+        seen_ngsl: Set[str] = set()
+        for r in rows:
+            song_id = r["id"]
+            target_list = [w.strip().lower() for w in (r["target_words"] or "").split(",") if w.strip()]
+            bonus_list = [w.strip().lower() for w in (r["bonus_words"] or "").split(",") if w.strip()]
+            existing_reused = [w.strip().lower() for w in (r["reused_words"] or "").split(",") if w.strip()]
+            
+            seen_ngsl.update(target_list)
+            
+            new_bonuses = []
+            new_reused = list(existing_reused)
+            
+            for b in bonus_list:
+                if b in seen_ngsl:
+                    if b not in new_reused:
+                        new_reused.append(b)
+                else:
+                    new_bonuses.append(b)
+                    seen_ngsl.add(b)
+                    
+            cursor.execute(
+                "UPDATE songs SET bonus_words = ?, reused_words = ? WHERE id = ?",
+                (", ".join(new_bonuses), ", ".join(new_reused), song_id)
+            )
+        conn.commit()
+
+
 def approve_and_save_song(
     title: str,
     lyrics: str,
     target_words: List[str],
-    checked_bonus_words: List[str],  # Blue words checked
+    checked_bonus_words: List[str],  # Blue words checked (new bonus words)
     checked_extra_words: List[str],  # Yellow words checked
     checked_target_words: Optional[List[str]] = None, # Green words checked
+    reused_words: Optional[List[str]] = None, # White words (previously covered)
     mood_breakdown: Optional[Dict[str, Any]] = None,
     genre: str = "",
     song_structure: str = "",
@@ -336,8 +442,8 @@ def approve_and_save_song(
 ) -> Tuple[int, int, int]:
     """
     Approve and save song:
-    1. Insert into songs table (target_words, bonus_words, extra_words, mood_breakdown, genre, song_structure, creative_concept).
-    2. Increment usage_count for checked Green + Blue NGSL words.
+    1. Insert into songs table (target_words, bonus_words, reused_words, extra_words, mood_breakdown, genre, song_structure, creative_concept).
+    2. Increment usage_count for Target + Bonus + Reused NGSL words.
     3. Insert or increment occurrence_count for checked Yellow extra_words.
     Returns (song_id, approved_ngsl_count, approved_extra_count).
     """
@@ -348,6 +454,7 @@ def approve_and_save_song(
         actual_target_words = checked_target_words if checked_target_words is not None else target_words
         target_words_str = ", ".join(actual_target_words)
         bonus_words_str = ", ".join(checked_bonus_words)
+        reused_words_str = ", ".join(reused_words or [])
         extra_words_str = ", ".join(checked_extra_words)
         mood_json = json.dumps(mood_breakdown) if isinstance(mood_breakdown, dict) else (mood_breakdown or "")
 
@@ -355,20 +462,20 @@ def approve_and_save_song(
         cursor.execute(
             """
             INSERT INTO songs (
-                title, lyrics, target_words, bonus_words, extra_words,
+                title, lyrics, target_words, bonus_words, reused_words, extra_words,
                 mood_breakdown, genre, song_structure, creative_concept
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                title, lyrics, target_words_str, bonus_words_str, extra_words_str,
+                title, lyrics, target_words_str, bonus_words_str, reused_words_str, extra_words_str,
                 mood_json, genre, song_structure, creative_concept
             )
         )
         song_id = cursor.lastrowid
         
-        # 2. Increment usage_count in ngsl_words for approved target + bonus words
-        all_ngsl_to_increment = actual_target_words + checked_bonus_words
+        # 2. Increment usage_count in ngsl_words for approved target + bonus + reused words
+        all_ngsl_to_increment = actual_target_words + checked_bonus_words + (reused_words or [])
         unique_ngsl = list(set([w.lower().strip() for w in all_ngsl_to_increment if w.strip()]))
         if unique_ngsl:
             placeholders = ",".join("?" * len(unique_ngsl))
@@ -397,7 +504,7 @@ def get_all_songs(db_path: Path = DB_PATH) -> pd.DataFrame:
     """Retrieve all saved songs from the database, sorted newest first."""
     with get_connection(db_path) as conn:
         df = pd.read_sql_query(
-            "SELECT id, title, lyrics, target_words, bonus_words, extra_words, mood_breakdown, genre, song_structure, creative_concept, created_at FROM songs ORDER BY id DESC",
+            "SELECT id, title, lyrics, target_words, bonus_words, reused_words, extra_words, mood_breakdown, genre, song_structure, creative_concept, created_at FROM songs ORDER BY id DESC",
             conn
         )
         return df
@@ -409,6 +516,7 @@ def update_song(
     lyrics: str,
     target_words: str,
     bonus_words: Optional[str] = None,
+    reused_words: Optional[str] = None,
     extra_words: Optional[str] = None,
     mood_breakdown: Optional[Dict[str, Any]] = None,
     genre: Optional[str] = None,
@@ -444,6 +552,9 @@ def update_song(
         if bonus_words is not None:
             new_bonuses = [w.strip() for w in bonus_words.split(",") if w.strip()]
             updates.append(("bonus_words", ", ".join(new_bonuses)))
+        if reused_words is not None:
+            new_reused = [w.strip() for w in reused_words.split(",") if w.strip()]
+            updates.append(("reused_words", ", ".join(new_reused)))
         if extra_words is not None:
             new_extras = [w.strip() for w in extra_words.split(",") if w.strip()]
             updates.append(("extra_words", ", ".join(new_extras)))
@@ -487,7 +598,7 @@ def delete_song(song_id: int, rollback_words: bool = True, db_path: Path = DB_PA
         
         # 1. Fetch song row before deleting
         cursor.execute(
-            "SELECT target_words, bonus_words, extra_words FROM songs WHERE id = ?",
+            "SELECT target_words, bonus_words, reused_words, extra_words FROM songs WHERE id = ?",
             (song_id,)
         )
         row = cursor.fetchone()
@@ -497,14 +608,18 @@ def delete_song(song_id: int, rollback_words: bool = True, db_path: Path = DB_PA
         if rollback_words:
             target_raw = row["target_words"] or ""
             bonus_raw = row["bonus_words"] or ""
+            reused_raw = (row["reused_words"] if "reused_words" in row.keys() else "") or ""
             extra_raw = row["extra_words"] or ""
             
-            # Decrement NGSL words (Target + Bonus)
+            # Decrement NGSL words (Target + Bonus + Reused)
             ngsl_words = set()
             for w in target_raw.split(","):
                 if w.strip():
                     ngsl_words.add(w.strip().lower())
             for w in bonus_raw.split(","):
+                if w.strip():
+                    ngsl_words.add(w.strip().lower())
+            for w in reused_raw.split(","):
                 if w.strip():
                     ngsl_words.add(w.strip().lower())
                     

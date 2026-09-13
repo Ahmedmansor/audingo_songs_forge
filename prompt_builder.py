@@ -6,7 +6,7 @@ This prompt is heavily optimized for ESL pedagogy: every line must be a natural,
 practical, conversational phrase that learners can internalize. No poetic fluff.
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 
 # Curated keyword presets for Suno v3/v3.5 — strictly under 120 characters,
@@ -55,7 +55,8 @@ def generate_master_prompt(
     genre: str,
     song_structure: str,
     mood_analysis: Dict[str, Any],
-    creative_concept: str = ""
+    creative_concept: str = "",
+    previously_used_words: Optional[List[str]] = None
 ) -> str:
     """
     Format a complete, production-ready Master Prompt ready to be copied into Claude / GPT-4o.
@@ -78,6 +79,26 @@ def generate_master_prompt(
         "life, relationships, social moments, and personal goals with authenticity and warmth."
     )
 
+    # Build optional avoidance section for previously used vocabulary
+    avoidance_section = ""
+    if previously_used_words:
+        used_words_str = ", ".join(previously_used_words)
+        avoidance_section = f"""---
+
+### 🚫 Vocabulary Diversity & Repetition Avoidance (Mindful Guideline):
+- **Previously Covered Vocabulary to Minimize/Avoid Where Possible:**
+{used_words_str}
+
+- **Core Pedagogy & Goal:** To help the ESL learner discover fresh, diverse vocabulary across songs and avoid repetitive song themes, make a conscious effort to steer away from the previously covered words listed above. When writing sentences, try to express ideas using fresh vocabulary or other suitable everyday words.
+- **CRITICAL BALANCE (Conversational Realism > Word Avoidance):**
+  - This is a **mindful avoidance guideline**, NOT an absolute or rigid ban.
+  - Under NO circumstances should you sacrifice natural English flow, conversational realism, rhythm, or grammatical correctness just to avoid a word.
+  - **100% EXEMPTIONS:** Common structural and functional words (pronouns: *I, you, we, they*, prepositions: *in, on, at, with*, articles, and essential basic auxiliary verbs) are completely exempt and should be used freely as needed.
+  - Indispensable everyday words that are essential to natural dialogue are fully allowed.
+  - **Never write awkward, robotic, or unnatural lines just to dodge a previously covered word!**
+
+"""
+
     prompt = f"""# 🎵 MASTER SONGWRITING & SUNO PROMPT (REAL-LIFE & PRACTICAL VOCABULARY)
 
 You are a world-class ESL pedagogy expert and scriptwriter who produces hit songs.
@@ -91,7 +112,7 @@ Your mission is to write a catchy, highly relatable, and radio-ready song that n
 
 *(Note: Inflected forms like plurals, verb tenses, etc. are allowed. You have full permission to use natural derivatives or alter the word class slightly if it prevents awkward phrasing. For example, use "every day" as two words if it fits better than the adjective "everyday", or use a plural/past-tense form if it sounds more natural in context.)*
 
----
+{avoidance_section}---
 
 ### 🎨 Creative Direction & Practical Vibe:
 - **Genre & Style:** {genre} (clean, warm, rhythm-driven, and highly relatable)

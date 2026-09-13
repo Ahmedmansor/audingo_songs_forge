@@ -172,6 +172,17 @@ st.markdown("""
         font-weight: 600 !important;
         margin: 2px 4px !important;
     }
+    .reused-pill {
+        display: inline-block !important;
+        background-color: #F1F5F9 !important;
+        color: #334155 !important;
+        border: 1px solid #CBD5E1 !important;
+        padding: 3px 10px !important;
+        border-radius: 12px !important;
+        font-size: 0.82rem !important;
+        font-weight: 500 !important;
+        margin: 2px 4px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -622,12 +633,14 @@ with tab2:
             )
             
             with st.spinner("🚀 Crafting Master Songwriting Prompt, Suno Style, and Poster Art Prompt..."):
+                used_content_words = db.get_previously_used_words(exclude_words=current_words)
                 prompt_text = prompt_builder.generate_master_prompt(
                     target_words=current_words,
                     genre=st.session_state.selected_genre,
                     song_structure=st.session_state.selected_structure,
                     mood_analysis=mood_dict,
-                    creative_concept=concept
+                    creative_concept=concept,
+                    previously_used_words=used_content_words
                 )
                 suno_text = prompt_builder.build_suno_style_prompt(
                     genre=st.session_state.selected_genre,
@@ -707,11 +720,15 @@ with tab3:
     if st.session_state.get("commit_success_message"):
         msg = st.session_state.commit_success_message
         st.balloons()
+        song_num = msg.get("song_number")
+        num_label = f"Song #{song_num}" if song_num else f"Song #{msg.get('song_id')}"
         st.success(
-            f"🎉 **Song '{msg['title']}' Saved Successfully!** (Song ID #{msg['song_id']})\n\n"
-            f"- Approved **{msg['approved_ngsl_count']}** words in the main NGSL dictionary.\n"
-            f"- Approved **{msg['approved_extra_count']}** words in Extra Words.\n"
-            f"- **{msg['unused_remaining']:,}** words remain unused in the NGSL dictionary."
+            f"🎉 **Song '{msg['title']}' Saved Successfully as {num_label}!**\n\n"
+            f"- 🟢 **Target Words Approved:** {msg.get('target_count', 0)} words\n"
+            f"- 🔵 **New Bonus NGSL Hits:** {msg.get('bonus_count', 0)} words (first time covered)\n"
+            f"- ⚪ **Previously Covered Words Reused:** {msg.get('reused_count', 0)} words (usage counters incremented)\n"
+            f"- 🟡 **Extra Non-NGSL Words:** {msg.get('extra_count', 0)} words\n\n"
+            f"📊 **Progress Update:** **{msg['unused_remaining']:,}** words remain unused in NGSL (**{msg.get('total_used', 0):,}** words covered total)."
         )
         st.session_state.commit_success_message = None
 
@@ -747,11 +764,13 @@ with tab3:
             else:
                 with st.spinner("Executing 5-step song processing pipeline..."):
                     lemma_map = db.get_all_lemma_mappings()
+                    used_ngsl = db.get_used_ngsl_words()
                     results = pipeline.process_song_text(
                         raw_lyrics=st.session_state.raw_lyrics_input,
                         target_words=current_target_words,
                         lemma_to_headword=lemma_map,
-                        nlp=nlp
+                        nlp=nlp,
+                        used_ngsl_words=used_ngsl
                     )
                     st.session_state.analysis_results = results
                     st.rerun()
@@ -762,16 +781,18 @@ with tab3:
         green_list = res.get("green", [])
         red_list = res.get("red", [])
         blue_list = res.get("blue", [])
+        reused_list = res.get("reused", [])
         yellow_list = res.get("yellow", [])
 
         st.markdown("---")
         st.subheader("📊 Color-Coded Classification Report")
         
-        m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+        m_col1, m_col2, m_col3, m_col4, m_col5 = st.columns(5)
         m_col1.metric("🟢 Target Hits", f"{len(green_list)} / {len(current_target_words)}")
         m_col2.metric("🔴 Missed Targets", f"{len(red_list)}")
-        m_col3.metric("🔵 Bonus NGSL Hits", f"{len(blue_list)}")
-        m_col4.metric("🟡 Extra Words", f"{len(yellow_list)}")
+        m_col3.metric("🔵 Bonus Hits (New)", f"{len(blue_list)}")
+        m_col4.metric("⚪ Previously Covered", f"{len(reused_list)}")
+        m_col5.metric("🟡 Extra Words", f"{len(yellow_list)}")
 
         st.info("Uncheck any word below if you do NOT want it counted towards the database counters.")
 
@@ -816,14 +837,14 @@ with tab3:
                 else:
                     st.success(f"🎉 Perfect! All {len(current_target_words)} target words were used in the song!")
 
-            # 🔵 Blue & 🟡 Yellow
+            # 🔵 Blue & ⚪ Reused & 🟡 Yellow
             with rep_col2:
-                # Blue
+                # Blue: New Bonus Hits
                 st.markdown(
                     f"""
                     <div class="report-card-blue">
                         <h4>🔵 Bonus NGSL Hits ({len(blue_list)})</h4>
-                        <p><small>Incidental words from NGSL → will increment <code>usage_count</code>.</small></p>
+                        <p><small>New, previously unused NGSL words → will count as newly covered and increment <code>usage_count</code>.</small></p>
                     </div>
                     """,
                     unsafe_allow_html=True
@@ -834,9 +855,23 @@ with tab3:
                         if st.checkbox(f"🔵 {w}", value=True, key=f"chk_blue_{w}"):
                             checked_blue.append(w)
                 else:
-                    st.caption("No incidental NGSL words found.")
+                    st.caption("No newly introduced NGSL words found.")
 
-                # Yellow
+                # Reused: Previously Covered NGSL Words
+                if reused_list:
+                    reused_pills = " ".join(f'<span class="reused-pill">{w}</span>' for w in reused_list)
+                    st.markdown(
+                        f"""
+                        <div style="background: rgba(148, 163, 184, 0.08); border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                            <h4 style="margin: 0 0 4px 0; color: #94A3B8;">⚪ Previously Covered Words ({len(reused_list)})</h4>
+                            <p style="margin: 0 0 8px 0;"><small style="color: #64748B;">NGSL words already introduced in past songs. Their global usage counter will update upon saving, but they are not counted as new bonus discoveries.</small></p>
+                            <div>{reused_pills}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                # Yellow: Extra Words
                 st.markdown(
                     f"""
                     <div class="report-card-yellow">
@@ -890,6 +925,7 @@ with tab3:
                     checked_bonus_words=checked_blue,
                     checked_extra_words=checked_yellow,
                     checked_target_words=checked_green,
+                    reused_words=reused_list,
                     mood_breakdown=mood_dict,
                     genre=current_genre,
                     song_structure=current_structure,
@@ -954,13 +990,21 @@ with tab3:
                 st.session_state.song_title_input = ""
                 db.clear_active_batch_state()
 
+                # Calculate real chronological song number
+                all_saved_df = db.get_all_songs()
+                real_song_num = len(all_saved_df)
+
                 # Store success message and trigger instant rerun so sidebar & tabs update reactively
                 st.session_state.commit_success_message = {
                     "title": title,
+                    "song_number": real_song_num,
                     "song_id": song_id,
-                    "approved_ngsl_count": approved_ngsl_count,
-                    "approved_extra_count": approved_extra_count,
-                    "unused_remaining": new_stats["unused"]
+                    "target_count": len(checked_green),
+                    "bonus_count": len(checked_blue),
+                    "reused_count": len(reused_list),
+                    "extra_count": len(checked_yellow),
+                    "unused_remaining": new_stats["unused"],
+                    "total_used": new_stats["used"]
                 }
                 st.rerun()
 
@@ -1081,6 +1125,7 @@ with tab4:
                 songs_df["lyrics"].str.lower().str.contains(q, na=False) |
                 songs_df["target_words"].str.lower().str.contains(q, na=False) |
                 songs_df["bonus_words"].str.lower().str.contains(q, na=False) |
+                songs_df.get("reused_words", pd.Series("", index=songs_df.index)).fillna("").str.lower().str.contains(q, na=False) |
                 songs_df["extra_words"].str.lower().str.contains(q, na=False)
             ]
 
@@ -1093,6 +1138,7 @@ with tab4:
             created_at = row["created_at"]
             target_words_raw = row["target_words"] or ""
             bonus_words_raw = row.get("bonus_words") or ""
+            reused_words_raw = row.get("reused_words") or ""
             extra_words_raw = row.get("extra_words") or ""
             lyrics_text = row["lyrics"] or ""
             genre_val = row.get("genre") or ""
@@ -1102,6 +1148,7 @@ with tab4:
 
             target_list = [w.strip() for w in target_words_raw.split(",") if w.strip()]
             bonus_list = [w.strip() for w in bonus_words_raw.split(",") if w.strip()]
+            reused_list = [w.strip() for w in reused_words_raw.split(",") if w.strip()]
             extra_list = [w.strip() for w in extra_words_raw.split(",") if w.strip()]
 
             # Parse mood breakdown
@@ -1113,7 +1160,7 @@ with tab4:
                     mood_dict = {}
 
             with st.expander(
-                f"🎵 #{row_num} — **{song_title}** ({len(target_list)} Targets • {len(bonus_list)} Bonus • {len(extra_list)} Extra) • 📅 {created_at}",
+                f"🎵 #{row_num} — **{song_title}** ({len(target_list)} Targets • {len(bonus_list)} Bonus • {len(reused_list)} Reused • {len(extra_list)} Extra) • 📅 {created_at}",
                 expanded=(loop_idx == 0)
             ):
                 # Overview columns: Vocabulary & Metrics
@@ -1133,7 +1180,13 @@ with tab4:
                         bonus_html = " ".join(f'<span class="bonus-pill">{w}</span>' for w in bonus_list)
                         st.markdown(bonus_html, unsafe_allow_html=True)
 
-                    # 3. Extra Non-NGSL Words
+                    # 3. Previously Covered Reused Words
+                    if reused_list:
+                        st.markdown(f"<div style='margin-top: 8px;'><b>⚪ Previously Covered Words ({len(reused_list)}):</b></div>", unsafe_allow_html=True)
+                        reused_html = " ".join(f'<span class="reused-pill">{w}</span>' for w in reused_list)
+                        st.markdown(reused_html, unsafe_allow_html=True)
+
+                    # 4. Extra Non-NGSL Words
                     if extra_list:
                         st.markdown(f"<div style='margin-top: 8px;'><b>🟡 Extra Words ({len(extra_list)}):</b></div>", unsafe_allow_html=True)
                         extra_html = " ".join(f'<span class="extra-pill">{w}</span>' for w in extra_list)
@@ -1418,16 +1471,24 @@ with tab4:
                             key=f"edit_targets_{song_id}"
                         )
 
-                        e_w_col1, e_w_col2 = st.columns(2)
+                        e_w_col1, e_w_col2, e_w_col3 = st.columns(3)
                         with e_w_col1:
                             new_bonuses = st.text_area(
                                 "🔵 Bonus NGSL Words (comma-separated):",
                                 value=bonus_words_raw,
-                                placeholder="Incidental NGSL words found in song...",
-                                help="Incidental words from the NGSL that appeared in the song lyrics.",
+                                placeholder="Incidental new NGSL words found in song...",
+                                help="New incidental words from NGSL introduced in this song.",
                                 key=f"edit_bonuses_{song_id}"
                             )
                         with e_w_col2:
+                            new_reused = st.text_area(
+                                "⚪ Previously Covered Words:",
+                                value=reused_words_raw,
+                                placeholder="NGSL words previously covered...",
+                                help="NGSL words already introduced in earlier songs.",
+                                key=f"edit_reused_{song_id}"
+                            )
+                        with e_w_col3:
                             new_extras = st.text_area(
                                 "🟡 Extra Words (comma-separated):",
                                 value=extra_words_raw,
@@ -1458,13 +1519,15 @@ with tab4:
                                 lyrics=new_lyrics.strip(),
                                 target_words=new_targets.strip(),
                                 bonus_words=new_bonuses.strip(),
+                                reused_words=new_reused.strip(),
                                 extra_words=new_extras.strip(),
                                 genre=new_genre,
                                 song_structure=new_structure,
                                 creative_concept=new_concept.strip(),
                                 sync_ngsl_usage=sync_ngsl_chk
                             )
-                            st.success(f"Song #{row_num} updated successfully!")
+                            updated_title = new_title.strip() or song_title
+                            st.session_state["lib_toast_msg"] = f"Song #{row_num} ('{updated_title}') updated successfully!"
                             st.rerun()
 
                     # Gemini Re-analysis helper button
@@ -1483,6 +1546,7 @@ with tab4:
                                         lyrics=lyrics_text,
                                         target_words=target_words_raw,
                                         bonus_words=bonus_words_raw,
+                                        reused_words=reused_words_raw,
                                         extra_words=extra_words_raw,
                                         mood_breakdown=res.get("mood_breakdown"),
                                         genre=res.get("genre", genre_val),
@@ -1490,7 +1554,7 @@ with tab4:
                                         creative_concept=res.get("creative_concept", concept_val),
                                         sync_ngsl_usage=False
                                     )
-                                    st.success("Gemini Mood & Story Analysis completed and saved to song!")
+                                    st.session_state["lib_toast_msg"] = f"Gemini Mood & Story Analysis completed and saved to Song #{row_num}!"
                                     st.rerun()
                                 else:
                                     st.error(f"Gemini analysis failed: {res.get('error')}")

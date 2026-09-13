@@ -4,7 +4,7 @@ pipeline.py — Song text processing and vocabulary classification pipeline.
 
 import re
 import string
-from typing import Dict, List, Set, Any, Tuple
+from typing import Dict, List, Set, Any, Tuple, Optional
 import contractions
 
 
@@ -68,7 +68,8 @@ def process_song_text(
     raw_lyrics: str,
     target_words: List[str],
     lemma_to_headword: Dict[str, str],
-    nlp
+    nlp,
+    used_ngsl_words: Optional[Set[str]] = None
 ) -> Dict[str, Any]:
     """
     Execute full pipeline:
@@ -76,10 +77,11 @@ def process_song_text(
     2. Strip structural tags, punctuation, duplicate lines
     3. Filter proper nouns (NER / POS)
     4. Filter stop words
-    5. Lemmatize and classify into 4 categories:
+    5. Lemmatize and classify into 5 categories:
        - Green: Target Hit
        - Red: Missed Target
-       - Blue: Bonus NGSL Hit
+       - Blue: Bonus NGSL Hit (in NGSL, not in target batch, usage_count == 0)
+       - Reused: Previously Covered NGSL Words (in NGSL, not in target batch, usage_count > 0)
        - Yellow: Extra Word
     """
     cleaned_text = clean_lyrics_text(raw_lyrics)
@@ -89,6 +91,7 @@ def process_song_text(
             "green": [],
             "red": sorted(list(set(w.lower() for w in target_words))),
             "blue": [],
+            "reused": [],
             "yellow": []
         }
 
@@ -156,15 +159,23 @@ def process_song_text(
             # Valid word not in NGSL at all (and already passed proper-noun & stop-word filters)
             candidate_extra_words.add(lemma_word)
 
-    # 4 Classification Categories:
+    used_set = {w.lower().strip() for w in used_ngsl_words} if used_ngsl_words else set()
+
+    # 5 Classification Categories:
     # 🟢 Green: Target Hit
     green_words = sorted(list(matched_target_words.union(target_set.intersection(matched_ngsl_headwords))))
 
     # 🔴 Red: Missed Target
     red_words = sorted(list(target_set.difference(green_words)))
 
-    # 🔵 Blue: Bonus NGSL Hit (in NGSL but not in target batch)
-    blue_words = sorted(list(matched_ngsl_headwords.difference(target_set)))
+    # Non-target NGSL headwords
+    non_target_ngsl = matched_ngsl_headwords.difference(target_set)
+
+    # 🔵 Blue: Bonus NGSL Hit (in NGSL, not in target batch, and NEVER used before in DB: usage_count == 0)
+    blue_words = sorted(list(w for w in non_target_ngsl if w not in used_set))
+
+    # ⚪ Reused: Previously Covered NGSL Words (in NGSL, not in target batch, but ALREADY used before in DB: usage_count > 0)
+    reused_words = sorted(list(w for w in non_target_ngsl if w in used_set))
 
     # 🟡 Yellow: Extra Word (not in NGSL at all, not proper noun, not stop word)
     yellow_words = sorted(list(candidate_extra_words))
@@ -173,5 +184,6 @@ def process_song_text(
         "green": green_words,
         "red": red_words,
         "blue": blue_words,
+        "reused": reused_words,
         "yellow": yellow_words
     }
