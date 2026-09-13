@@ -9,6 +9,47 @@ practical, conversational phrase that learners can internalize. No poetic fluff.
 from typing import List, Dict, Any
 
 
+# Curated keyword presets for Suno v3/v3.5 — strictly under 120 characters,
+# guaranteed tempo, clear upfront vocals, and genre-defining acoustic/electronic elements.
+SUNO_GENRE_PRESETS = {
+    "Pop": "Pop, steady 116 bpm, clear upfront {voc} vocals, bright acoustic guitar, modern synth, clean punchy mix",
+    "K-Pop Style (Clear English Vocals)": "K-Pop, steady 118 bpm, clear upfront {voc} vocals, punchy synth bass, crisp percussion, clean modern mix",
+    "Synth-Pop / 80s Retro": "Synthwave, 80s synth-pop, steady 112 bpm, clear upfront {voc} vocals, warm analog synths, pulsing bass, clean mix",
+    "Indie Pop": "Indie pop, steady 114 bpm, clear upfront {voc} vocals, warm acoustic guitar, melodic bassline, clean airy mix",
+    "Acoustic / Folk": "Acoustic folk, steady 110 bpm, clear upfront {voc} vocals, acoustic guitar, subtle strings, clean natural mix",
+    "R&B / Contemporary Soul": "Contemporary R&B, soul groove, steady 110 bpm, clear upfront {voc} vocals, electric piano, warm bass, clean mix",
+    "Country / Americana": "Americana, modern country, steady 112 bpm, clear upfront {voc} vocals, acoustic strumming, pedal steel, clean mix",
+    "Funk / Disco Groove": "Disco funk groove, steady 116 bpm, clear upfront {voc} vocals, rhythmic bassline, clean electric guitar, clean mix",
+    "Reggae / Tropical Pop": "Tropical reggae pop, steady 110 bpm, clear upfront {voc} vocals, island guitar skank, warm bass, clean mix",
+    "Jazz / Bossa Nova": "Bossa nova, smooth jazz, steady 110 bpm, clear upfront {voc} vocals, nylon acoustic guitar, upright bass, clean mix",
+    "Cinematic / Ballad": "Cinematic ballad, steady 110 bpm, clear upfront {voc} vocals, emotive grand piano, lush strings, clean dynamic mix",
+    "Lo-Fi / Chillhop": "Lo-fi chillhop, steady 110 bpm, clear upfront {voc} vocals, mellow electric piano, relaxed bass, clean vinyl mix",
+    "Melodic Chill Electronic": "Melodic chill electronic, steady 112 bpm, clear upfront {voc} vocals, soft piano, warm ambient pads, clean mix",
+}
+
+
+def build_suno_style_prompt(genre: str, vocalist: str = "Male") -> str:
+    """
+    Build a concise, keyword-rich Suno style prompt strictly under 120 chars,
+    tailored to the selected genre and vocalist.
+    """
+    voc_str = vocalist.lower().strip()
+    if voc_str == "instrumental":
+        voc_label = "instrumental, no"
+    else:
+        voc_label = f"{voc_str}"
+
+    template = SUNO_GENRE_PRESETS.get(
+        genre,
+        "{genre}, steady 112 bpm, clear upfront {voc} vocals, melodic instruments, clean mix"
+    )
+    prompt = template.format(voc=voc_label, genre=genre)
+    # Strict 120 character cap
+    if len(prompt) > 120:
+        prompt = prompt[:117] + "..."
+    return prompt
+
+
 def generate_master_prompt(
     target_words: List[str],
     genre: str,
@@ -57,7 +98,7 @@ Your mission is to write a catchy, highly relatable, and radio-ready song that n
 - **Song Structure:** {song_structure}
 - **Emotional Mood Profile:** {mood_str if mood_str else "Casual & Conversational: 70%, Reflective: 30%"}
 - **Core Concept / Story:** {concept_text}
-- **STRICT RULE:** Absolutely NO metaphors, NO poetic imagery, and NO abstract concepts. Every single sentence MUST be a literal, practical phrase (Lexical Chunk / Idiom) that a real person would naturally use in daily life, friendly conversations, casual banter, or real-world social interactions. Use the target words in their most common, literal collocations (e.g., "foreign language/currency" not "foreign dream", "ten percent discount" not "percent of courage").
+- **STRICT RULE:** Absolutely NO metaphors, NO poetic imagery, NO abstract concepts, and NO surreal or illogical causality. Every single sentence MUST be a literal, practical phrase (Lexical Chunk / Idiom) that a real person would naturally use in daily life, friendly conversations, casual banter, or real-world social interactions. Actions and causes MUST match physical reality — never force an illogical sentence just to fit a target word or a rhyme (**Logic > Rhyme**). Use the target words in their most common, literal collocations (e.g., "foreign language/currency" not "foreign dream", "ten percent discount" not "percent of courage").
 - **CHORUS STRICT RULE:** The Chorus is the most repeated and memorized part of the song. It MUST be composed of 100% natural, highly practical phrases that a native speaker would use in daily life. Sacrifice rhymes if necessary, but NEVER sacrifice natural sentence structure in the Chorus.
 
 ---
@@ -71,11 +112,12 @@ Your mission is to write a catchy, highly relatable, and radio-ready song that n
 ### 📝 Generation Instructions:
 1. **Title:** Propose a catchy, down-to-earth song title related to everyday life or personal growth.
 2. **Suno Style Prompt (under 120 chars):** Provide a dense, keyword-rich Suno prompt optimized for clarity and a modern vibe (e.g., `Indie pop, 114 bpm, warm clear male vocals, acoustic rhythm, catchy chorus, clean mix`).
-3. **Internal Quality Gate (Self-Correction):**
+3. **Internal Quality Gate (Self-Correction & Reality Filter):**
    - Before outputting the final lyrics, you MUST silently draft the song internally.
    - For every single line you write, act as a strict Native English Editor and rate its "Natural Conversational Accuracy" from 0% to 100%.
-   - If a line sounds like a forced rhyme, poetic, or awkward, it scores below 90%.
-   - You MUST rewrite any line that scores below 95% until it reaches 100% natural native phrasing.
+   - **LOGIC & CAUSALITY CHECK (Logic > Rhyme):** Ensure physical actions and causes strictly match their real-world effects. Do NOT write surreal, nonsensical, or illogical sentences (e.g., "a word ruins a building", "a coffee called my name") just to force-fit a target word or catch a rhyme. **Real-world Logic ALWAYS trumps rhyming.**
+   - If a line sounds like a forced rhyme, poetic fantasy, illogical statement, or awkward construction, it scores below 90%.
+   - You MUST rewrite any line that scores below 95% until it reaches 100% realistic, natural native phrasing that a real person would genuinely say.
    - ONLY output the final, 100% perfected lyrics. Do not show your internal scoring process.
 4. **Full Lyrics:**
    - Follow the structure: `{song_structure}`.

@@ -686,6 +686,8 @@ def save_active_batch_state(
     song_structure: str = "",
     mood_analysis: Optional[Dict[str, Any]] = None,
     master_prompt: str = "",
+    suno_prompt: str = "",
+    vocalist: str = "Male",
     db_path: Path = DB_PATH
 ) -> None:
     """Save active studio batch state to app_state table in SQLite for persistence across browser refreshes."""
@@ -695,7 +697,9 @@ def save_active_batch_state(
         "selected_genre": genre,
         "selected_structure": song_structure,
         "mood_analysis": mood_analysis,
-        "master_prompt": master_prompt
+        "master_prompt": master_prompt,
+        "suno_prompt": suno_prompt,
+        "selected_vocalist": vocalist
     }
     with get_connection(db_path) as conn:
         cursor = conn.cursor()

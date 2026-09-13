@@ -207,8 +207,14 @@ if "mood_analysis" not in st.session_state:
 if "master_prompt" not in st.session_state:
     st.session_state.master_prompt = persisted_session.get("master_prompt", "")
 
+if "studio_suno_prompt" not in st.session_state:
+    st.session_state.studio_suno_prompt = persisted_session.get("suno_prompt", "")
+
 if "selected_genre" not in st.session_state:
     st.session_state.selected_genre = persisted_session.get("selected_genre", GENRES[0])
+
+if "selected_vocalist" not in st.session_state:
+    st.session_state.selected_vocalist = persisted_session.get("selected_vocalist", "Male")
 
 if "selected_structure" not in st.session_state:
     st.session_state.selected_structure = persisted_session.get("selected_structure", SONG_STRUCTURES[0])
@@ -238,7 +244,9 @@ def sync_active_session():
             genre=st.session_state.get("selected_genre", GENRES[0]),
             song_structure=st.session_state.get("selected_structure", SONG_STRUCTURES[0]),
             mood_analysis=st.session_state.get("mood_analysis", None),
-            master_prompt=st.session_state.get("master_prompt", "")
+            master_prompt=st.session_state.get("master_prompt", ""),
+            suno_prompt=st.session_state.get("studio_suno_prompt", ""),
+            vocalist=st.session_state.get("selected_vocalist", "Male")
         )
     else:
         db.clear_active_batch_state()
@@ -378,6 +386,7 @@ with tab2:
                     st.session_state.target_batch = new_batch
                     st.session_state.mood_analysis = None
                     st.session_state.master_prompt = ""
+                    st.session_state.studio_suno_prompt = ""
                     st.session_state.custom_concept = ""
                     sync_active_session()
                     st.success("Pulled 20 unused words (10 Nouns, 6 Verbs, 4 Adjectives)!")
@@ -385,6 +394,7 @@ with tab2:
                 elif len(new_batch) > 0:
                     st.session_state.target_batch = new_batch
                     st.session_state.custom_concept = ""
+                    st.session_state.studio_suno_prompt = ""
                     sync_active_session()
                     st.warning(f"Only {len(new_batch)} unused words available in database.")
                     st.rerun()
@@ -397,6 +407,7 @@ with tab2:
                 st.session_state.target_batch = new_batch
                 st.session_state.mood_analysis = None
                 st.session_state.master_prompt = ""
+                st.session_state.studio_suno_prompt = ""
                 st.session_state.custom_concept = ""
                 sync_active_session()
                 st.info("Batch redrawn.")
@@ -407,6 +418,7 @@ with tab2:
                 st.session_state.target_batch = []
                 st.session_state.mood_analysis = None
                 st.session_state.master_prompt = ""
+                st.session_state.studio_suno_prompt = ""
                 st.session_state.custom_concept = ""
                 db.clear_active_batch_state()
                 st.rerun()
@@ -449,6 +461,7 @@ with tab2:
                         if swapped:
                             st.session_state.target_batch[idx] = swapped
                             st.session_state.master_prompt = ""  # prompt needs regen
+                            st.session_state.studio_suno_prompt = ""
                             sync_active_session()
                             st.success(f"Swapped '{word_item['word']}' → '{swapped['word']}'")
                             st.rerun()
@@ -491,25 +504,42 @@ with tab2:
 
         # Style & Structure Selector (Initialized by Gemini, user can tweak)
         st.markdown("#### 🎛️ Tune Musical Direction & Story Concept")
-        tune_col1, tune_col2 = st.columns(2)
+        tune_col1, tune_col2, tune_col3 = st.columns([1.5, 1, 1.5])
         with tune_col1:
             default_genre_idx = GENRES.index(st.session_state.selected_genre) if st.session_state.selected_genre in GENRES else 0
-            st.session_state.selected_genre = st.selectbox("Genre (Closed List)", GENRES, index=default_genre_idx)
+            new_genre = st.selectbox("Genre (Closed List)", GENRES, index=default_genre_idx)
+            if new_genre != st.session_state.selected_genre:
+                st.session_state.selected_genre = new_genre
+                sync_active_session()
 
         with tune_col2:
-            default_struct_idx = SONG_STRUCTURES.index(st.session_state.selected_structure) if st.session_state.selected_structure in SONG_STRUCTURES else 0
-            st.session_state.selected_structure = st.selectbox("Song Structure (Closed List)", SONG_STRUCTURES, index=default_struct_idx)
+            voc_options = ["Male", "Female", "Duet", "Instrumental"]
+            default_voc_idx = voc_options.index(st.session_state.selected_vocalist) if st.session_state.selected_vocalist in voc_options else 0
+            new_voc = st.selectbox("Lead Vocalist", voc_options, index=default_voc_idx)
+            if new_voc != st.session_state.selected_vocalist:
+                st.session_state.selected_vocalist = new_voc
+                sync_active_session()
 
-        st.session_state.custom_concept = st.text_area(
+        with tune_col3:
+            default_struct_idx = SONG_STRUCTURES.index(st.session_state.selected_structure) if st.session_state.selected_structure in SONG_STRUCTURES else 0
+            new_struct = st.selectbox("Song Structure (Closed List)", SONG_STRUCTURES, index=default_struct_idx)
+            if new_struct != st.session_state.selected_structure:
+                st.session_state.selected_structure = new_struct
+                sync_active_session()
+
+        new_concept = st.text_area(
             "💡 Story / Creative Concept (Generated by Gemini, fully editable by you):",
             value=st.session_state.custom_concept,
             height=75,
             help="Tweak Gemini's concept or write your own practical everyday life scenario before generating the prompt."
         )
+        if new_concept != st.session_state.custom_concept:
+            st.session_state.custom_concept = new_concept
+            sync_active_session()
 
-        # Generate Master Prompt
+        # Generate Master Prompt & Suno Style Prompt
         st.markdown("---")
-        st.subheader("📋 Step 3: Master Prompt Output")
+        st.subheader("📋 Step 3: Generation & Production Prompts")
         
         if st.button("🚀 Generate Final Prompt", type="primary", use_container_width=True):
             mood_dict = st.session_state.mood_analysis.get("mood_breakdown", {}) if st.session_state.mood_analysis else {}
@@ -524,11 +554,43 @@ with tab2:
                 mood_analysis=mood_dict,
                 creative_concept=concept
             )
+            suno_text = prompt_builder.build_suno_style_prompt(
+                genre=st.session_state.selected_genre,
+                vocalist=st.session_state.selected_vocalist
+            )
             st.session_state.master_prompt = prompt_text
+            st.session_state.studio_suno_prompt = suno_text
             sync_active_session()
 
         if st.session_state.master_prompt:
-            st.markdown("Copy the master prompt below and paste into Claude / GPT-4o to write lyrics and Suno style tags:")
+            # ──────────────────────────────────────────────────────────
+            # 1. Dedicated Suno AI Music Style Prompt Section
+            # ──────────────────────────────────────────────────────────
+            st.markdown("#### 🎵 1. Suno AI Music Style Prompt (Ready to Paste into Suno):")
+            st.caption("Dense, keyword-rich Suno style prompt (< 120 chars) tailored to your selected genre, tempo, and vocal clarity:")
+            
+            suno_prompt_val = st.session_state.studio_suno_prompt or prompt_builder.build_suno_style_prompt(
+                genre=st.session_state.selected_genre,
+                vocalist=st.session_state.selected_vocalist
+            )
+            suno_char_len = len(suno_prompt_val)
+            suno_color = "#10B981" if suno_char_len <= 120 else "#EF4444"
+            st.markdown(
+                f"<div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;'>"
+                f"<small style='color: #94A3B8;'>📋 Click the copy icon in the box below to paste into Suno's 'Style of Music' box</small>"
+                f"<small style='color: {suno_color}; font-weight: 700;'>Length: {suno_char_len} / 120 chars</small>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+            st.code(suno_prompt_val, language="markdown")
+
+            st.markdown("<hr style='margin: 18px 0; border-color: rgba(255,255,255,0.08);'>", unsafe_allow_html=True)
+
+            # ──────────────────────────────────────────────────────────
+            # 2. Master Songwriting Prompt Section
+            # ──────────────────────────────────────────────────────────
+            st.markdown("#### 📝 2. Master Lyrics Prompt (Copy & Paste into Claude / GPT-4o):")
+            st.caption("Full prompt containing all 20 target vocabulary words, real-world narrative concept, and strict Logic Gate:")
             st.code(st.session_state.master_prompt, language="markdown")
     else:
         st.info("👉 Click **[Pull 20 Words]** above to select a batch of 20 unused words and begin.")
