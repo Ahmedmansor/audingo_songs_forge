@@ -379,7 +379,77 @@ with tab1:
 # ══════════════════════════════════════════════════════════════════════════════
 with tab2:
     st.subheader("🎯 Target Word Selection & AI Prompt Generator")
-    
+
+    # ─── Approved Session Drafts — Recovery Dropdown ───────────────────────────────────
+    _all_drafts = db.list_studio_drafts()
+    if _all_drafts:
+        with st.expander("📂 Load from Approved Session Drafts (last 10)", expanded=False):
+            st.caption(
+                "These snapshots were saved automatically each time you approved a song. "
+                "Load one to restore its word batch and re-use it as a starting point."
+            )
+            _draft_options = {
+                f"🎵 \u2018{d['song_title']}\u2019 — {d['label']} ({d['saved_at'][:16]})": d['id']
+                for d in _all_drafts
+            }
+            _selected_label = st.selectbox(
+                "Select a draft to preview or load:",
+                options=list(_draft_options.keys()),
+                index=0,
+                key="draft_selector"
+            )
+            _selected_draft_id = _draft_options[_selected_label]
+
+            _draft_payload = db.load_studio_draft(_selected_draft_id)
+            _draft_batch = _draft_payload.get("target_batch", [])
+
+            if _draft_batch:
+                st.markdown(
+                    "**Words in this draft:** " +
+                    " ".join(
+                        f"`{w['word']}`" for w in _draft_batch
+                    )
+                )
+
+            _dc1, _dc2, _dc3 = st.columns([2, 2, 1])
+            with _dc1:
+                if st.button("♻️ Load Draft (words only)", use_container_width=True, key="btn_load_draft_words"):
+                    if _draft_batch:
+                        st.session_state.target_batch = _draft_batch
+                        st.session_state.mood_analysis = None
+                        st.session_state.master_prompt = ""
+                        st.session_state.studio_suno_prompt = ""
+                        st.session_state.studio_poster_prompt = ""
+                        st.session_state.custom_concept = ""
+                        sync_active_session()
+                        st.success("✅ Word batch restored from draft!")
+                        st.rerun()
+                    else:
+                        st.warning("This draft has no words saved.")
+            with _dc2:
+                if st.button("📦 Load Draft (full session)", use_container_width=True, key="btn_load_draft_full"):
+                    if _draft_payload:
+                        st.session_state.target_batch = _draft_batch
+                        st.session_state.mood_analysis = _draft_payload.get("mood_analysis", None)
+                        st.session_state.master_prompt = _draft_payload.get("master_prompt", "")
+                        st.session_state.studio_suno_prompt = _draft_payload.get("suno_prompt", "")
+                        st.session_state.studio_poster_prompt = _draft_payload.get("poster_prompt", "")
+                        st.session_state.custom_concept = _draft_payload.get("custom_concept", "")
+                        st.session_state.selected_genre = _draft_payload.get("selected_genre", st.session_state.selected_genre)
+                        st.session_state.selected_structure = _draft_payload.get("selected_structure", st.session_state.selected_structure)
+                        st.session_state.selected_vocalist = _draft_payload.get("selected_vocalist", st.session_state.selected_vocalist)
+                        sync_active_session()
+                        st.success("✅ Full session restored from draft!")
+                        st.rerun()
+                    else:
+                        st.warning("Could not load this draft.")
+            with _dc3:
+                if st.button("🗑️ Delete", use_container_width=True, key="btn_delete_draft"):
+                    db.delete_studio_draft(_selected_draft_id)
+                    st.success("Draft deleted.")
+                    st.rerun()
+
+
     col_actions, col_status = st.columns([2, 1])
     with col_actions:
         b_col1, b_col2, b_col3 = st.columns([1, 1, 1.2])
@@ -857,6 +927,20 @@ with tab3:
                 )
 
                 new_stats = db.get_progress_stats()
+
+                # ── Save studio draft snapshot BEFORE clearing session state ──
+                db.save_studio_draft(
+                    song_title=title,
+                    batch=list(st.session_state.target_batch),
+                    concept=current_concept,
+                    genre=current_genre,
+                    song_structure=current_structure,
+                    mood_analysis=st.session_state.mood_analysis,
+                    master_prompt=st.session_state.get("master_prompt", ""),
+                    suno_prompt=st.session_state.get("studio_suno_prompt", ""),
+                    poster_prompt=st.session_state.get("studio_poster_prompt", ""),
+                    vocalist=current_vocalist,
+                )
 
                 # Reset batch & form
                 st.session_state.target_batch = []

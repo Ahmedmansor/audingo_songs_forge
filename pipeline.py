@@ -11,22 +11,42 @@ import contractions
 def clean_lyrics_text(raw_lyrics: str) -> str:
     """
     Step 1 & 2:
-    1. Expand contractions (e.g. don't -> do not).
-    2. Strip structural markup [Chorus], [Verse], etc., remove punctuation,
-       and eliminate duplicate lines caused by repetition/rhyme.
+    1. Expand standard contractions without mangling real words (slang=False).
+    2. Strip structural markup like [Verse], [Chorus] and section cues like (Chorus).
+    3. Isolate punctuation and delimiters to ensure words aren't merged.
+    4. Deduplicate repeated lines.
     """
     if not raw_lyrics:
         return ""
 
-    # Step 1: Expand contractions
-    expanded = contractions.fix(raw_lyrics)
+    # Normalize unicode apostrophes and quotation marks to standard ASCII
+    text = (
+        raw_lyrics
+        .replace('’', "'")
+        .replace('‘', "'")
+        .replace('`', "'")
+        .replace('´', "'")
+        .replace('“', '"')
+        .replace('”', '"')
+    )
 
-    # Step 2: Strip structural tags like [Verse 1], [Chorus], (Bridge), etc.
-    cleaned_no_tags = re.sub(r'\[.*?\]', ' ', expanded)
-    cleaned_no_tags = re.sub(r'\(.*?\)', ' ', cleaned_no_tags)
+    # Step 1: Expand ONLY standard contractions (slang=False ensures real words like
+    # 'shell' (she'll), 'shed' (she'd), 'cause' (because) are NOT mangled)
+    expanded = contractions.fix(text, slang=False)
+
+    # Step 2: Strip structural tags like [Verse 1], [Chorus], [Bridge], etc.
+    cleaned = re.sub(r'\[.*?\]', ' ', expanded)
+
+    # Strip structural section cues in parentheses e.g. (Chorus), (Bridge), (Verse 2), (Intro), (Outro)
+    tag_pattern = r'\s*\(\s*(?:verse|chorus|bridge|intro|outro|pre-chorus|hook|solo|instrumental|interlude|drop|break|refrain|spoken|whisper|ad-lib|repeat)[\s\d:.-]*\)\s*'
+    cleaned = re.sub(tag_pattern, ' ', cleaned, flags=re.IGNORECASE)
+
+    # Convert dashes, slashes, underscores, ellipses, and remaining parentheses to spaces
+    # so words inside (e.g. (shell)) or glued by symbols (shell/context, shell—now) are cleanly isolated
+    cleaned = re.sub(r'[\(\)\u2014\u2013\u2026/_\\]', ' ', cleaned)
 
     # Split into lines and deduplicate repetitive lines while preserving flow
-    lines = cleaned_no_tags.splitlines()
+    lines = cleaned.splitlines()
     seen_lines: Set[str] = set()
     unique_lines: List[str] = []
     
@@ -88,16 +108,24 @@ def process_song_text(
     # Map target words to lowercase set
     target_set = {w.lower().strip() for w in target_words if w.strip()}
 
+    matched_target_words: Set[str] = set()
     matched_ngsl_headwords: Set[str] = set()
     candidate_extra_words: Set[str] = set()
 
     for token in doc:
+        # Strip any attached punctuation characters from the token text and lemma
+        raw_word = token.text.strip(string.punctuation + "“”‘’…—–").lower()
+        lemma_word = token.lemma_.strip(string.punctuation + "“”‘’…—–").lower()
+
         # Check basic validity
-        if not token.is_alpha or len(token.text) <= 1:
+        if not raw_word or len(raw_word) <= 1 or not raw_word.isalpha():
             continue
 
-        raw_word = token.text.lower()
-        lemma_word = token.lemma_.lower()
+        # If it directly matches a target word, record it immediately
+        if raw_word in target_set:
+            matched_target_words.add(raw_word)
+        if lemma_word in target_set:
+            matched_target_words.add(lemma_word)
 
         # Step 3: Filter out proper nouns (people, places, organizations)
         # Proper nouns should never be added to extra_words or counted as bonus hits
@@ -122,17 +150,18 @@ def process_song_text(
 
         if matched_headword:
             matched_ngsl_headwords.add(matched_headword)
+            if matched_headword in target_set:
+                matched_target_words.add(matched_headword)
         else:
             # Valid word not in NGSL at all (and already passed proper-noun & stop-word filters)
             candidate_extra_words.add(lemma_word)
 
-
     # 4 Classification Categories:
     # 🟢 Green: Target Hit
-    green_words = sorted(list(target_set.intersection(matched_ngsl_headwords)))
+    green_words = sorted(list(matched_target_words.union(target_set.intersection(matched_ngsl_headwords))))
 
     # 🔴 Red: Missed Target
-    red_words = sorted(list(target_set.difference(matched_ngsl_headwords)))
+    red_words = sorted(list(target_set.difference(green_words)))
 
     # 🔵 Blue: Bonus NGSL Hit (in NGSL but not in target batch)
     blue_words = sorted(list(matched_ngsl_headwords.difference(target_set)))
