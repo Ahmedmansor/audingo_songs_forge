@@ -5,7 +5,9 @@ Full NGSL Vocabulary Tracking & Song Production Pipeline.
 
 import os
 import json
+import datetime
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 from pathlib import Path
 from dotenv import load_dotenv
@@ -140,10 +142,78 @@ st.markdown("""
         margin-top: 10px !important;
         margin-bottom: 12px !important;
     }
+    .song-meta-bar {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.75)) !important;
+        border: 1px solid rgba(148, 163, 184, 0.2) !important;
+        border-radius: 12px !important;
+        padding: 10px 16px !important;
+        margin-bottom: 14px !important;
+        gap: 10px !important;
+    }
+    .song-time-tag {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        font-size: 0.85rem !important;
+        color: #94A3B8 !important;
+        font-weight: 500 !important;
+    }
+    .song-time-tag b {
+        color: #F1F5F9 !important;
+        font-weight: 600 !important;
+    }
+    .song-stats-group {
+        display: inline-flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        gap: 8px !important;
+    }
+    .stat-badge {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 5px !important;
+        font-size: 0.82rem !important;
+        font-weight: 600 !important;
+        padding: 4px 12px !important;
+        border-radius: 20px !important;
+        letter-spacing: 0.2px !important;
+    }
+    .stat-badge-total-new {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(6, 182, 212, 0.22) 100%) !important;
+        color: #A7F3D0 !important;
+        border: 1px solid rgba(52, 211, 153, 0.5) !important;
+        font-weight: 700 !important;
+        box-shadow: 0 0 10px rgba(16, 185, 129, 0.25) !important;
+    }
+    .stat-badge-target {
+        background: rgba(16, 185, 129, 0.15) !important;
+        color: #34D399 !important;
+        border: 1px solid rgba(52, 211, 153, 0.35) !important;
+    }
+    .stat-badge-bonus {
+        background: rgba(59, 130, 246, 0.15) !important;
+        color: #60A5FA !important;
+        border: 1px solid rgba(96, 165, 250, 0.35) !important;
+    }
+    .stat-badge-reused {
+        background: rgba(148, 163, 184, 0.15) !important;
+        color: #CBD5E1 !important;
+        border: 1px solid rgba(203, 213, 225, 0.28) !important;
+    }
+    .stat-badge-extra {
+        background: rgba(245, 158, 11, 0.15) !important;
+        color: #FBBF24 !important;
+        border: 1px solid rgba(251, 191, 36, 0.35) !important;
+    }
     .target-pill {
         display: inline-block !important;
-        background-color: #EDE9FE !important;
-        color: #4C1D95 !important;
+        background: rgba(139, 92, 246, 0.15) !important;
+        color: #C4B5FD !important;
+        border: 1px solid rgba(167, 139, 250, 0.3) !important;
         padding: 3px 10px !important;
         border-radius: 12px !important;
         font-size: 0.82rem !important;
@@ -152,9 +222,9 @@ st.markdown("""
     }
     .bonus-pill {
         display: inline-block !important;
-        background-color: #EFF6FF !important;
-        color: #1E3A8A !important;
-        border: 1px solid #BFDBFE !important;
+        background: rgba(59, 130, 246, 0.15) !important;
+        color: #93C5FD !important;
+        border: 1px solid rgba(96, 165, 250, 0.3) !important;
         padding: 3px 10px !important;
         border-radius: 12px !important;
         font-size: 0.82rem !important;
@@ -163,9 +233,9 @@ st.markdown("""
     }
     .extra-pill {
         display: inline-block !important;
-        background-color: #FEFCE8 !important;
-        color: #713F12 !important;
-        border: 1px solid #FEF08A !important;
+        background: rgba(245, 158, 11, 0.15) !important;
+        color: #FDE047 !important;
+        border: 1px solid rgba(251, 191, 36, 0.3) !important;
         padding: 3px 10px !important;
         border-radius: 12px !important;
         font-size: 0.82rem !important;
@@ -174,14 +244,287 @@ st.markdown("""
     }
     .reused-pill {
         display: inline-block !important;
-        background-color: #F1F5F9 !important;
-        color: #334155 !important;
-        border: 1px solid #CBD5E1 !important;
+        background: rgba(148, 163, 184, 0.15) !important;
+        color: #E2E8F0 !important;
+        border: 1px solid rgba(148, 163, 184, 0.28) !important;
         padding: 3px 10px !important;
         border-radius: 12px !important;
         font-size: 0.82rem !important;
         font-weight: 500 !important;
         margin: 2px 4px !important;
+    }
+
+    /* Modern Catchy Sidebar Styling */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0B0F19 0%, #111827 50%, #0F172A 100%) !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+    }
+    [data-testid="stSidebar"] > div:first-child {
+        padding-top: 1.5rem !important;
+        padding-bottom: 2rem !important;
+    }
+    
+    .sb-brand-hero {
+        background: linear-gradient(135deg, rgba(79, 70, 229, 0.18) 0%, rgba(6, 182, 212, 0.14) 100%);
+        border: 1px solid rgba(99, 102, 241, 0.35);
+        border-radius: 16px;
+        padding: 18px 14px 14px 14px;
+        margin-bottom: 16px;
+        text-align: center;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        position: relative;
+        overflow: hidden;
+    }
+    .sb-brand-hero::before {
+        content: "";
+        position: absolute;
+        top: -25px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 140px;
+        height: 55px;
+        background: radial-gradient(circle, rgba(99, 102, 241, 0.45) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    .sb-logo-icon {
+        font-size: 2rem;
+        display: inline-block;
+        margin-bottom: 4px;
+        filter: drop-shadow(0 2px 10px rgba(99, 102, 241, 0.6));
+    }
+    .sb-title {
+        font-size: 1.25rem;
+        font-weight: 800;
+        letter-spacing: -0.3px;
+        background: linear-gradient(90deg, #C7D2FE, #38BDF8, #A78BFA);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 4px;
+        line-height: 1.2;
+    }
+    .sb-badge {
+        display: inline-block;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        padding: 3px 9px;
+        border-radius: 20px;
+        background: rgba(99, 102, 241, 0.25);
+        color: #C7D2FE;
+        border: 1px solid rgba(165, 180, 252, 0.35);
+        margin-bottom: 8px;
+    }
+    .sb-subtitle {
+        font-size: 0.78rem;
+        color: #94A3B8;
+        line-height: 1.4;
+        margin: 0;
+    }
+    
+    /* Progress Card */
+    .sb-progress-card {
+        background: rgba(30, 41, 59, 0.6);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 14px;
+        padding: 13px 14px;
+        margin-bottom: 14px;
+        backdrop-filter: blur(8px);
+    }
+    .sb-progress-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+    .sb-progress-title {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #F1F5F9;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .sb-progress-pct {
+        font-size: 1.02rem;
+        font-weight: 800;
+        color: #34D399;
+        font-family: monospace;
+    }
+    .sb-progress-bar-bg {
+        width: 100%;
+        height: 8px;
+        background: rgba(51, 65, 85, 0.75);
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 8px;
+    }
+    .sb-progress-bar-fill {
+        height: 100%;
+        border-radius: 10px;
+        background: linear-gradient(90deg, #6366F1 0%, #06B6D4 50%, #10B981 100%);
+        box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+        transition: width 0.6s ease;
+    }
+    .sb-progress-caption {
+        font-size: 0.75rem;
+        color: #94A3B8;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    /* 2x2 Metric Grid */
+    .sb-stat-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 9px;
+        margin-bottom: 14px;
+    }
+    .sb-stat-tile {
+        background: rgba(30, 41, 59, 0.5);
+        border-radius: 12px;
+        padding: 11px 8px;
+        text-align: center;
+        transition: all 0.22s ease;
+        position: relative;
+        backdrop-filter: blur(6px);
+    }
+    .sb-stat-tile:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 14px rgba(0, 0, 0, 0.35);
+    }
+    .sb-stat-tile-indigo {
+        border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+    .sb-stat-tile-indigo:hover {
+        border-color: rgba(129, 140, 248, 0.6);
+        background: rgba(99, 102, 241, 0.14);
+    }
+    .sb-stat-tile-green {
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .sb-stat-tile-green:hover {
+        border-color: rgba(52, 211, 153, 0.6);
+        background: rgba(16, 185, 129, 0.14);
+    }
+    .sb-stat-tile-amber {
+        border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    .sb-stat-tile-amber:hover {
+        border-color: rgba(251, 191, 36, 0.6);
+        background: rgba(245, 158, 11, 0.14);
+    }
+    .sb-stat-tile-purple {
+        border: 1px solid rgba(168, 85, 247, 0.3);
+    }
+    .sb-stat-tile-purple:hover {
+        border-color: rgba(192, 132, 252, 0.6);
+        background: rgba(168, 85, 247, 0.14);
+    }
+    .sb-tile-icon {
+        font-size: 1.05rem;
+        margin-bottom: 2px;
+    }
+    .sb-tile-val {
+        font-size: 1.28rem;
+        font-weight: 800;
+        letter-spacing: -0.4px;
+        line-height: 1.15;
+        margin-bottom: 2px;
+    }
+    .sb-tile-val-indigo { color: #A5B4FC; }
+    .sb-tile-val-green { color: #34D399; }
+    .sb-tile-val-amber { color: #FBBF24; }
+    .sb-tile-val-purple { color: #C084FC; }
+    .sb-tile-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: #94A3B8;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        margin-bottom: 1px;
+    }
+    .sb-tile-sub {
+        font-size: 0.66rem;
+        color: #64748B;
+    }
+
+    /* Songs Library Mini Banner */
+    .sb-songs-banner {
+        background: linear-gradient(135deg, rgba(236, 72, 153, 0.12) 0%, rgba(139, 92, 246, 0.12) 100%);
+        border: 1px solid rgba(236, 72, 153, 0.3);
+        border-radius: 12px;
+        padding: 9px 13px;
+        margin-bottom: 14px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: all 0.2s ease;
+    }
+    .sb-songs-banner:hover {
+        border-color: rgba(236, 72, 153, 0.55);
+        transform: translateY(-1px);
+    }
+    .sb-songs-info {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+    }
+    .sb-songs-text {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #F472B6;
+    }
+    .sb-songs-count {
+        background: rgba(236, 72, 153, 0.22);
+        color: #FDF2F8;
+        font-size: 0.76rem;
+        font-weight: 800;
+        padding: 2px 8px;
+        border-radius: 10px;
+        border: 1px solid rgba(244, 114, 182, 0.35);
+    }
+
+    /* AI Status Pill */
+    .sb-ai-status-active {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.15) 100%);
+        border: 1px solid rgba(52, 211, 153, 0.32);
+        border-radius: 12px;
+        padding: 9px 13px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    .sb-pulse-dot {
+        width: 8px;
+        height: 8px;
+        background-color: #10B981;
+        border-radius: 50%;
+        display: inline-block;
+        box-shadow: 0 0 10px #10B981;
+        animation: pulseDot 2s infinite;
+        margin-right: 6px;
+    }
+    @keyframes pulseDot {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+        70% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .sb-ai-label {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #6EE7B7;
+    }
+    .sb-ai-model-tag {
+        font-size: 0.68rem;
+        font-weight: 700;
+        background: rgba(16, 185, 129, 0.2);
+        color: #A7F3D0;
+        padding: 2px 7px;
+        border-radius: 8px;
+        border: 1px solid rgba(52, 211, 153, 0.35);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -189,6 +532,228 @@ st.markdown("""
 
 # Initialize SQLite DB
 db.init_db()
+
+
+def format_cairo_display_time(raw_ts: str) -> str:
+    """Format raw timestamp into an elegant modern date & time string."""
+    if not raw_ts:
+        return ""
+    try:
+        clean_ts = str(raw_ts).replace("T", " ")
+        dt = datetime.datetime.fromisoformat(clean_ts)
+        return dt.strftime("%d %b %Y, %I:%M %p")
+    except Exception:
+        return str(raw_ts)
+
+
+def render_copy_words_toolbar(words: list[str]):
+    """Renders a sleek, modern one-click copy toolbar for active target words."""
+    if not words:
+        return
+
+    words_count = len(words)
+    words_csv = ", ".join(words)
+    words_list = "\n".join(words)
+    words_csv_json = json.dumps(words_csv)
+    words_list_json = json.dumps(words_list)
+
+    html_code = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta charset="utf-8">
+    <style>
+      * {{
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }}
+      body, html {{
+        background: transparent;
+        overflow: hidden;
+        height: 100%;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+      }}
+      .toolbar-wrap {{
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 2px;
+      }}
+      .copy-btn {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+        color: #FFFFFF;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        padding: 7px 15px;
+        border-radius: 9px;
+        font-size: 0.86rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 2px 8px rgba(79, 70, 229, 0.28);
+        outline: none;
+        user-select: none;
+        white-space: nowrap;
+        text-decoration: none;
+      }}
+      .copy-btn:hover {{
+        background: linear-gradient(135deg, #4338CA 0%, #6D28D9 100%);
+        box-shadow: 0 4px 14px rgba(79, 70, 229, 0.42);
+        transform: translateY(-1px);
+      }}
+      .copy-btn:active {{
+        transform: translateY(0) scale(0.97);
+      }}
+      .copy-btn.copied {{
+        background: linear-gradient(135deg, #059669 0%, #10B981 100%) !important;
+        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.45) !important;
+        border-color: rgba(52, 211, 153, 0.5) !important;
+      }}
+      .copy-btn-secondary {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        background: #FFFFFF;
+        color: #334155;
+        border: 1px solid #CBD5E1;
+        padding: 7px 12px;
+        border-radius: 9px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        outline: none;
+        user-select: none;
+        white-space: nowrap;
+      }}
+      .copy-btn-secondary:hover {{
+        background: #F8FAFC;
+        color: #0F172A;
+        border-color: #94A3B8;
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+        transform: translateY(-1px);
+      }}
+      .copy-btn-secondary:active {{
+        transform: translateY(0) scale(0.97);
+      }}
+      .copy-btn-secondary.copied {{
+        background: #ECFDF5 !important;
+        color: #065F46 !important;
+        border-color: #34D399 !important;
+        box-shadow: 0 2px 10px rgba(16, 185, 129, 0.25) !important;
+      }}
+      .badge-pill {{
+        background: rgba(255, 255, 255, 0.22);
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 10px;
+      }}
+      .icon {{
+        flex-shrink: 0;
+        transition: transform 0.2s ease;
+      }}
+      .copy-btn:hover .icon, .copy-btn-secondary:hover .icon {{
+        transform: scale(1.1);
+      }}
+    </style>
+    </head>
+    <body>
+    <div class="toolbar-wrap">
+      <button id="copy-csv-btn" class="copy-btn" onclick="copyWords('csv')" title="Copy words separated by commas">
+        <svg class="icon" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <span id="csv-label">Copy {words_count} Words</span>
+        <span class="badge-pill">CSV</span>
+      </button>
+
+      <button id="copy-list-btn" class="copy-btn-secondary" onclick="copyWords('list')" title="Copy words one per line">
+        <svg class="icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6"></line>
+          <line x1="8" y1="12" x2="21" y2="12"></line>
+          <line x1="8" y1="18" x2="21" y2="18"></line>
+          <line x1="3" y1="6" x2="3.01" y2="6"></line>
+          <line x1="3" y1="12" x2="3.01" y2="12"></line>
+          <line x1="3" y1="18" x2="3.01" y2="18"></line>
+        </svg>
+        <span id="list-label">As List</span>
+      </button>
+    </div>
+
+    <script>
+      const wordsCSV = {words_csv_json};
+      const wordsList = {words_list_json};
+
+      function copyWords(mode) {{
+        const text = mode === 'csv' ? wordsCSV : wordsList;
+        const btn = document.getElementById(mode === 'csv' ? 'copy-csv-btn' : 'copy-list-btn');
+        const label = document.getElementById(mode === 'csv' ? 'csv-label' : 'list-label');
+        const origText = label.textContent;
+
+        function indicateSuccess() {{
+          btn.classList.add('copied');
+          label.textContent = mode === 'csv' ? '✅ Copied {words_count} Words!' : '✅ Copied List!';
+          setTimeout(() => {{
+            btn.classList.remove('copied');
+            label.textContent = origText;
+          }}, 2200);
+        }}
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {{
+          navigator.clipboard.writeText(text)
+            .then(indicateSuccess)
+            .catch(() => fallback(text, indicateSuccess));
+        }} else {{
+          fallback(text, indicateSuccess);
+        }}
+      }}
+
+      function fallback(text, onSuccess) {{
+        try {{
+          if (window.parent && window.parent.navigator && window.parent.navigator.clipboard) {{
+            window.parent.navigator.clipboard.writeText(text)
+              .then(onSuccess)
+              .catch(() => execCopy(text, onSuccess));
+            return;
+          }}
+        }} catch(e) {{}}
+        execCopy(text, onSuccess);
+      }}
+
+      function execCopy(text, onSuccess) {{
+        try {{
+          const el = document.createElement('textarea');
+          el.value = text;
+          el.setAttribute('readonly', '');
+          el.style.position = 'fixed';
+          el.style.left = '-9999px';
+          el.style.top = '-9999px';
+          document.body.appendChild(el);
+          el.focus();
+          el.select();
+          const res = document.execCommand('copy');
+          document.body.removeChild(el);
+          if (res) onSuccess();
+        }} catch(err) {{
+          console.error('Copy fallback failed:', err);
+        }}
+      }}
+    </script>
+    </body>
+    </html>
+    """
+    components.html(html_code, height=44, scrolling=False)
 
 
 # Cached spaCy loader
@@ -242,6 +807,9 @@ if "raw_lyrics_input" not in st.session_state:
 if "song_title_input" not in st.session_state:
     st.session_state.song_title_input = ""
 
+if "title_has_error" not in st.session_state:
+    st.session_state.title_has_error = False
+
 if "custom_concept" not in st.session_state:
     st.session_state.custom_concept = persisted_session.get("custom_concept", "")
 
@@ -269,21 +837,119 @@ def sync_active_session():
 
 # Sidebar info
 with st.sidebar:
-    st.markdown("### 🎙️ Audingo Songs Forge")
-    st.markdown("Automated NGSL vocabulary tracking & songwriting master prompt pipeline.")
-    
-    # Progress overview in sidebar
     stats = db.get_progress_stats()
-    st.metric(label="Total NGSL Words", value=f"{stats['total']:,}")
-    st.metric(label="Mastered / Used", value=f"{stats['used']:,}")
-    st.metric(label="Unused Remaining", value=f"{stats['unused']:,}")
-    st.metric(label="Extra Words Discovered", value=f"{stats['extra_count']:,}")
-
+    songs_df = db.get_all_songs()
+    songs_count = len(songs_df) if songs_df is not None else 0
+    pct = stats.get("percent", 0.0)
     api_key_set = bool(os.environ.get("GEMINI_API_KEY"))
+
+    # 1. Brand Hero Header
+    st.markdown(
+        """
+        <div class="sb-brand-hero">
+            <div class="sb-logo-icon">🎙️</div>
+            <div class="sb-title">Audingo Songs Forge</div>
+            <div class="sb-badge">NGSL STUDIO • v1.2 PRO</div>
+            <p class="sb-subtitle">AI-Powered Vocabulary Targeting & Pedagogical Songwriting Engine</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # 2. Mastery Progress Widget
+    st.markdown(
+        f"""
+        <div class="sb-progress-card">
+            <div class="sb-progress-header">
+                <span class="sb-progress-title">🎯 NGSL Mastery</span>
+                <span class="sb-progress-pct">{pct:.1f}%</span>
+            </div>
+            <div class="sb-progress-bar-bg">
+                <div class="sb-progress-bar-fill" style="width: {min(pct, 100):.1f}%;"></div>
+            </div>
+            <div class="sb-progress-caption">
+                <span><b>{stats['used']:,}</b> of {stats['total']:,} Words</span>
+                <span style="color: #38BDF8; font-weight: 700;">Level {int(pct // 10) + 1}</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # 3. 2x2 Catchy Metric Tiles
+    st.markdown(
+        f"""
+        <div class="sb-stat-grid">
+            <div class="sb-stat-tile sb-stat-tile-indigo">
+                <div class="sb-tile-icon">📚</div>
+                <div class="sb-tile-val sb-tile-val-indigo">{stats['total']:,}</div>
+                <div class="sb-tile-label">Vocabulary</div>
+                <div class="sb-tile-sub">Total NGSL</div>
+            </div>
+            <div class="sb-stat-tile sb-stat-tile-green">
+                <div class="sb-tile-icon">🎯</div>
+                <div class="sb-tile-val sb-tile-val-green">{stats['used']:,}</div>
+                <div class="sb-tile-label">Mastered</div>
+                <div class="sb-tile-sub">In Songs ({pct:.1f}%)</div>
+            </div>
+            <div class="sb-stat-tile sb-stat-tile-amber">
+                <div class="sb-tile-icon">💎</div>
+                <div class="sb-tile-val sb-tile-val-amber">{stats['unused']:,}</div>
+                <div class="sb-tile-label">Unused</div>
+                <div class="sb-tile-sub">Ready to Forge</div>
+            </div>
+            <div class="sb-stat-tile sb-stat-tile-purple">
+                <div class="sb-tile-icon">✨</div>
+                <div class="sb-tile-val sb-tile-val-purple">{stats['extra_count']:,}</div>
+                <div class="sb-tile-label">Extra Hits</div>
+                <div class="sb-tile-sub">Rich Discovery</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # 4. Songs Produced Counter Banner
+    st.markdown(
+        f"""
+        <div class="sb-songs-banner">
+            <div class="sb-songs-info">
+                <span style="font-size: 1.15rem;">🎵</span>
+                <span class="sb-songs-text">Crafted Songs Vault</span>
+            </div>
+            <span class="sb-songs-count">{songs_count} Songs</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # 5. AI Engine Status
     if api_key_set:
-        st.success("🔑 Gemini API Key configured")
+        st.markdown(
+            """
+            <div class="sb-ai-status-active">
+                <div style="display: flex; align-items: center;">
+                    <span class="sb-pulse-dot"></span>
+                    <span class="sb-ai-label">Gemini AI Engine</span>
+                </div>
+                <span class="sb-ai-model-tag">ONLINE</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
     else:
-        st.warning("⚠️ GEMINI_API_KEY not found in .env")
+        st.markdown(
+            """
+            <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 12px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center;">
+                    <span style="margin-right: 6px;">⚠️</span>
+                    <span style="font-size: 0.82rem; font-weight: 700; color: #FBBF24;">API Key Missing</span>
+                </div>
+                <span style="font-size: 0.7rem; font-weight: 700; background: rgba(245, 158, 11, 0.2); color: #FDE68A; padding: 2px 7px; border-radius: 8px;">CHECK .ENV</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
 
 # Header
@@ -519,7 +1185,25 @@ with tab2:
         adjs_count = sum(1 for w in st.session_state.target_batch if w["pos_type"] == "Adjective")
         others_count = sum(1 for w in st.session_state.target_batch if w["pos_type"] not in ("Noun", "Verb", "Adjective"))
 
-        st.caption(f"Current Batch: **{len(st.session_state.target_batch)} Words** (🔵 {nouns_count} Nouns, 🟢 {verbs_count} Verbs, 🟡 {adjs_count} Adjectives{f', ⚪ {others_count} Other' if others_count else ''})")
+        # Batch Header & Quick Action Toolbar
+        col_batch_info, col_batch_actions = st.columns([1.25, 1.15], vertical_alignment="center")
+        with col_batch_info:
+            other_pill = f'<span style="background: #F1F5F9; color: #475569; font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid #CBD5E1;">⚪ {others_count} Other</span>' if others_count else ''
+            st.markdown(
+                f"""
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 2px;">
+                    <span style="font-weight: 700; color: #0F172A; font-size: 1.05rem;">🎯 Active Target Batch:</span>
+                    <span style="background: #EDE9FE; color: #5B21B6; font-size: 0.82rem; font-weight: 700; padding: 2px 9px; border-radius: 12px; border: 1px solid #DDD6FE;">{len(st.session_state.target_batch)} Words</span>
+                    <span style="background: #E0E7FF; color: #3730A3; font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid #C7D2FE;">🔵 {nouns_count} Nouns</span>
+                    <span style="background: #DCFCE7; color: #166534; font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid #BBF7D0;">🟢 {verbs_count} Verbs</span>
+                    <span style="background: #FEF3C7; color: #92400E; font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid #FDE68A;">🟡 {adjs_count} Adjectives</span>
+                    {other_pill}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with col_batch_actions:
+            render_copy_words_toolbar(current_words)
 
         # 4 columns of 5 words
         cols = st.columns(4)
@@ -743,11 +1427,78 @@ with tab3:
 
     st.markdown("Paste the final song lyrics generated by Suno AI / external LLM:")
     
+    # ── Song Title with Mandatory Validation, Red Highlight & Auto-Focus ──
+    has_title_error = st.session_state.get("title_has_error", False) and not (st.session_state.song_title_input or "").strip()
+
+    title_label = "🎵 Song Title *(Required before approval)*" if has_title_error else "🎵 Song Title"
+    
     st.session_state.song_title_input = st.text_input(
-        "Song Title",
+        title_label,
         value=st.session_state.song_title_input,
-        placeholder="e.g. Echoes of the Horizon"
+        placeholder="e.g. Echoes of the Horizon (Required to Approve & Save)",
+        key="commit_song_title_input_field"
     )
+    if st.session_state.song_title_input.strip() and st.session_state.get("title_has_error"):
+        st.session_state.title_has_error = False
+
+    if has_title_error:
+        st.markdown(
+            """
+            <div id="title-error-banner" style="
+                background: rgba(239, 68, 68, 0.12);
+                border: 1px solid rgba(239, 68, 68, 0.4);
+                border-radius: 8px;
+                padding: 9px 14px;
+                color: #EF4444;
+                font-size: 0.88rem;
+                font-weight: 700;
+                margin-top: -6px;
+                margin-bottom: 12px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            ">
+                <span style="font-size: 1.15rem;">⚠️</span>
+                <span>لا يمكن اعتماد الأغنية بدون عنوان! يرجى كتابة عنوان الأغنية هنا أولاً (Song Title is required).</span>
+            </div>
+            <style>
+            div[data-testid="stTextInput"]:has(input[aria-label*="Song Title"]) input,
+            div[data-testid="stTextInput"]:has(input[placeholder*="Echoes"]) input {
+                border: 2px solid #EF4444 !important;
+                background-color: rgba(239, 68, 68, 0.08) !important;
+                box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.28) !important;
+                animation: pulseTitleError 1.5s infinite alternate !important;
+            }
+            @keyframes pulseTitleError {
+                from { box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2); }
+                to { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.45); }
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+        # Automatically scroll viewport and focus cursor directly into Song Title
+        components.html(
+            """
+            <script>
+            setTimeout(() => {
+                try {
+                    const doc = window.parent.document;
+                    const el = doc.querySelector('input[aria-label*="Song Title"]') || doc.querySelector('input[placeholder*="Echoes"]');
+                    if (el) {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        el.focus();
+                        el.select();
+                    }
+                } catch(e) {
+                    console.error("Focus error:", e);
+                }
+            }, 100);
+            </script>
+            """,
+            height=0,
+            width=0
+        )
     
     st.session_state.raw_lyrics_input = st.text_area(
         "Song Lyrics",
@@ -904,9 +1655,13 @@ with tab3:
             submitted = st.form_submit_button("✅ Approve & Save Song", type="primary", use_container_width=True)
             
             if submitted:
-                title = st.session_state.song_title_input.strip()
+                title = (st.session_state.song_title_input or "").strip()
                 if not title:
-                    title = "Untitled Song"
+                    st.session_state.title_has_error = True
+                    st.toast("⚠️ برجاء كتابة عنوان الأغنية أولاً! تم نقلك لحقل العنوان.", icon="⚠️")
+                    st.rerun()
+
+                st.session_state.title_has_error = False
 
                 all_ngsl_to_increment = checked_green + checked_blue
                 
@@ -988,6 +1743,7 @@ with tab3:
                 st.session_state.analysis_results = None
                 st.session_state.raw_lyrics_input = ""
                 st.session_state.song_title_input = ""
+                st.session_state.title_has_error = False
                 db.clear_active_batch_state()
 
                 # Calculate real chronological song number
@@ -1159,10 +1915,32 @@ with tab4:
                 except Exception:
                     mood_dict = {}
 
+            display_time = format_cairo_display_time(created_at)
+            total_new_words = len(target_list) + len(bonus_list)
+
             with st.expander(
-                f"🎵 #{row_num} — **{song_title}** ({len(target_list)} Targets • {len(bonus_list)} Bonus • {len(reused_list)} Reused • {len(extra_list)} Extra) • 📅 {created_at}",
+                f"🎵 #{row_num} — **{song_title}** ｜ 🔥 **+{total_new_words} New NGSL** (🟢 {len(target_list)} + 🔵 {len(bonus_list)}) ｜ ⚪ {len(reused_list)} Reused  🟡 {len(extra_list)} Extra ｜ 📅 {display_time}",
                 expanded=(loop_idx == 0)
             ):
+                # Modern Meta & Stats Header Bar
+                st.markdown(
+                    f"""
+                    <div class="song-meta-bar">
+                        <div class="song-time-tag">
+                            <span>🕒</span> <span>Created: <b>{display_time}</b> <small style="color: #64748B;">(Cairo Time)</small></span>
+                        </div>
+                        <div class="song-stats-group">
+                            <span class="stat-badge stat-badge-total-new">🔥 +{total_new_words} New NGSL</span>
+                            <span class="stat-badge stat-badge-target">🟢 {len(target_list)} Targets</span>
+                            <span class="stat-badge stat-badge-bonus">🔵 {len(bonus_list)} Bonus</span>
+                            <span class="stat-badge stat-badge-reused">⚪ {len(reused_list)} Reused</span>
+                            <span class="stat-badge stat-badge-extra">🟡 {len(extra_list)} Extra</span>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
                 # Overview columns: Vocabulary & Metrics
                 info_col1, info_col2 = st.columns([3, 1])
                 with info_col1:
@@ -1193,6 +1971,13 @@ with tab4:
                         st.markdown(extra_html, unsafe_allow_html=True)
 
                 with info_col2:
+                    st.metric(
+                        label="🔥 Total New NGSL",
+                        value=f"+{total_new_words} Words",
+                        delta=f"🟢 {len(target_list)} Targets + 🔵 {len(bonus_list)} Bonus",
+                        delta_color="normal",
+                        help="Total brand-new NGSL vocabulary introduced in this song (Targets + New Bonus Hits)"
+                    )
                     words_in_lyrics = len(lyrics_text.split())
                     lines_in_lyrics = len([l for l in lyrics_text.splitlines() if l.strip()])
                     st.metric("Song Length", f"{words_in_lyrics} words", help=f"{lines_in_lyrics} lines")

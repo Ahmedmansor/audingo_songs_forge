@@ -7,8 +7,19 @@ import sqlite3
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional, Set
 import pandas as pd
+import datetime
+import zoneinfo
 
 DB_PATH = Path(__file__).parent / "ngsl_vocab.db"
+
+
+def get_cairo_now_str() -> str:
+    """Return current timestamp in Egypt (Africa/Cairo) timezone as YYYY-MM-DD HH:MM:SS."""
+    try:
+        cairo_tz = zoneinfo.ZoneInfo("Africa/Cairo")
+        return datetime.datetime.now(cairo_tz).strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return (datetime.datetime.utcnow() + datetime.timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def get_connection(db_path: Path = DB_PATH) -> sqlite3.Connection:
@@ -149,6 +160,21 @@ def init_db(db_path: Path = DB_PATH) -> None:
         # Migrate past songs bonus words to cleanly separate first-time bonus vs reused words
         try:
             migrate_past_songs_bonus_words(db_path)
+        except Exception:
+            pass
+
+        # One-time migration to adjust past song UTC timestamps to Cairo local time (UTC+3)
+        try:
+            cursor.execute("SELECT value FROM app_state WHERE key = 'cairo_tz_migrated'")
+            tz_row = cursor.fetchone()
+            if not tz_row or tz_row["value"] != "1":
+                cursor.execute("""
+                    UPDATE songs
+                    SET created_at = datetime(created_at, '+3 hours')
+                    WHERE created_at IS NOT NULL
+                """)
+                cursor.execute("INSERT OR REPLACE INTO app_state (key, value) VALUES ('cairo_tz_migrated', '1')")
+                conn.commit()
         except Exception:
             pass
 
@@ -459,17 +485,18 @@ def approve_and_save_song(
         mood_json = json.dumps(mood_breakdown) if isinstance(mood_breakdown, dict) else (mood_breakdown or "")
 
         # 1. Insert song
+        cairo_now = get_cairo_now_str()
         cursor.execute(
             """
             INSERT INTO songs (
                 title, lyrics, target_words, bonus_words, reused_words, extra_words,
-                mood_breakdown, genre, song_structure, creative_concept
+                mood_breakdown, genre, song_structure, creative_concept, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 title, lyrics, target_words_str, bonus_words_str, reused_words_str, extra_words_str,
-                mood_json, genre, song_structure, creative_concept
+                mood_json, genre, song_structure, creative_concept, cairo_now
             )
         )
         song_id = cursor.lastrowid
