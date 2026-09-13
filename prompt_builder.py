@@ -85,17 +85,15 @@ def generate_master_prompt(
         used_words_str = ", ".join(previously_used_words)
         avoidance_section = f"""---
 
-### 🚫 Vocabulary Diversity & Repetition Avoidance (Mindful Guideline):
-- **Previously Covered Vocabulary to Minimize/Avoid Where Possible:**
+### 🚫 Mindful Vocabulary Diversity (Smart Repetition Avoidance):
+- **Previously Covered Thematic Vocabulary to Avoid/Minimize (Where Practical):**
 {used_words_str}
 
-- **Core Pedagogy & Goal:** To help the ESL learner discover fresh, diverse vocabulary across songs and avoid repetitive song themes, make a conscious effort to steer away from the previously covered words listed above. When writing sentences, try to express ideas using fresh vocabulary or other suitable everyday words.
-- **CRITICAL BALANCE (Conversational Realism > Word Avoidance):**
-  - This is a **mindful avoidance guideline**, NOT an absolute or rigid ban.
-  - Under NO circumstances should you sacrifice natural English flow, conversational realism, rhythm, or grammatical correctness just to avoid a word.
-  - **100% EXEMPTIONS:** Common structural and functional words (pronouns: *I, you, we, they*, prepositions: *in, on, at, with*, articles, and essential basic auxiliary verbs) are completely exempt and should be used freely as needed.
-  - Indispensable everyday words that are essential to natural dialogue are fully allowed.
-  - **Never write awkward, robotic, or unnatural lines just to dodge a previously covered word!**
+- **Core Pedagogy & Goal:** To help the ESL learner discover fresh vocabulary and avoid repetitive themes across songs, make a conscious effort to steer away from the previously covered content words listed above. When drafting lyrics, explore fresh situations, synonyms, or new imagery that introduces diverse vocabulary.
+- **CRITICAL SMART GUIDELINES (Conversational Naturalness > Word Avoidance):**
+  - This is a **mindful pedagogical guideline**, NOT a rigid, artificial ban.
+  - **100% UNCONDITIONAL EXEMPTIONS:** All structural grammar glue, pronouns (*I, you, we, they, me, us*), prepositions (*in, on, at, with, about, for*), conjunctions (*and, but, because, so*), and indispensable everyday conversational verbs and words (*be, have, do, go, get, see, know, think, take, make, come, say, want, look, feel, good, time, way, day, life, friend, home, etc.*) are completely exempt and MUST be used freely to maintain natural English.
+  - **GOLDEN RULE:** Conversational realism, emotional authenticity, and musical rhythm ALWAYS take priority. Under NO circumstances should you sacrifice natural phrasing or write awkward, robotic lines just to dodge a previously covered word!
 
 """
 

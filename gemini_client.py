@@ -37,18 +37,14 @@ def build_analysis_prompt(words: List[str]) -> str:
     structures_str = "\n".join(f"- {s}" for s in SONG_STRUCTURES)
     moods_str = "\n".join(f"- {m}" for m in MOOD_CATEGORIES)
 
-    return f"""You are an expert music producer, ESL pedagogy specialist, and creative lyricist analyzing a specific vocabulary set for educational songwriting.
+    return f"""You are an elite music producer, ESL pedagogy specialist, and master lyricist analyzing a specific vocabulary batch for educational songwriting.
 
-CONTEXT: These words will be turned into a song designed for English language learners. The song must use these words in practical, conversational, real-life human contexts — NOT in poetic metaphors or abstract themes.
+CONTEXT: These words will be crafted into a radio-ready song designed for English language learners. The song must weave these words into authentic, practical real-life human experiences and conversational dialogue — NOT in abstract metaphors or fantasy tropes.
 
 Here is the batch of 20 target vocabulary words:
 {words_str}
 
-Analyze how these words connect to authentic real-life situations, interpersonal relationships, emotional turning points, or engaging everyday storylines.
-You MUST choose the genre and structure ONLY from the provided closed lists below. Do NOT invent new genres or structures.
-Choose a genre where vocals are always upfront and crystal clear — this is for language learning, so clarity is paramount.
-
-Available Genres (all optimized for vocal clarity):
+Available Genres (ALL 13 genres below are pre-curated for ESL vocal clarity with upfront, crystal-clear vocals):
 {genres_str}
 
 Available Song Structures:
@@ -57,21 +53,35 @@ Available Song Structures:
 Available Mood Categories (Percentages MUST sum up to exactly 100):
 {moods_str}
 
-CRITICAL PERCENTAGE DISTRIBUTION INSTRUCTION:
-Do NOT evenly distribute the percentages. Be highly decisive. If the 20 words strongly lean towards a specific mood, allow that primary mood to dominate the score (e.g., 70%, 80%, or even 90%). Avoid safe, flat distributions. Only mix percentages closely if the vocabulary is genuinely conflicting. The total must still exactly equal 100.
+CRITICAL DIRECTIVE 1: FULL HUMAN EMOTIONAL SPECTRUM (DO NOT DEFAULT TO HAPPY / UPLIFTING):
+- Real human life encompasses a rich tapestry of emotions:
+  * Sadness, heartbreak, painful goodbyes, disappointment, separation, loneliness, or grieving a loss -> MUST select "Sad / Heartbroken" or "Nostalgic / Melancholic".
+  * Deep nostalgia, reminiscing on old memories, homesickness, childhood, longing -> "Nostalgic / Melancholic".
+  * High-stakes personal crossroads, intense drama, heated arguments, confrontation, pressure -> "Dramatic / Intense" or "Dark / Moody".
+  * Romantic chemistry, tender confessions, vulnerability, butterflies -> "Romantic / Sweet".
+  * Pure funk, weekend party, high adrenaline, celebration, triumph -> "Energetic" or "Playful / Quirky".
+  * Laid-back contentment, lazy rainy Sunday, unwinding after a long week -> "Chill / Relaxed".
+  * Genuine optimism, breakthroughs, shared triumphs -> "Happy" or "Uplifting / Inspiring".
+- If the words convey struggle, hardship, difficulty, loss, or heavy emotional weight, DO NOT force an artificial happy ending or default to "Uplifting". Dive deep into authentic poignant sentiment!
+- Be decisive in your percentages: let the dominant emotional tone lead strongly (e.g., 60-80%).
 
-CREATIVE STORY CONCEPT INSTRUCTIONS (CRITICAL FOR VARIETY & RELATABILITY):
-- DO NOT default to office work, corporate cubicles, booting up computers, desk jobs, or paperwork. That is repetitive, boring, and uncreative.
-- Everyday practical life is rich, varied, and social. Explore diverse, vibrant, relatable human contexts across life domains:
-  * Social & Friendships: Catching up with friends at a bustling café, weekend road trip, funny diner conversations, laughing through misadventures.
-  * Home & Everyday Living: Cooking a meal together, moving to a new neighborhood, DIY repairs, weekend market shopping, personal morning rituals.
-  * Relationships & Dating: The excitement/nerves of a first date, overcoming a misunderstanding, late-night phone calls, planning a surprise.
-  * Hobbies, Sports & Health: Training for a personal goal, gym/outdoor fitness, learning a creative craft, playing an instrument, health and wellness.
-  * Urban Life & Travel: Exploring an unfamiliar street, catching a train/flight, navigating public transit, spontaneous neighborhood discoveries.
-  * Everyday Dilemmas & Life Choices: Budgeting for a dream purchase, making a tough personal choice, overcoming daily obstacles with optimism.
-  * If tech/work words are present, frame them in modern human ways (e.g., a freelancer at a coffee shop, helping a friend with a project, working on a creative hobby) — NEVER a generic corporate desk routine.
-- The concept MUST feel like a relatable, cinematic snapshot of real life that an ordinary person lives and speaks about in daily conversation.
-- NO abstract metaphors, NO fantasy, NO corporate monotony.
+CRITICAL DIRECTIVE 2: DIVERSE GENRE MATCHING (BREAK THE ACOUSTIC / INDIE-POP MONOPOLY):
+- DO NOT default repeatedly to "Acoustic / Folk" or "Indie Pop". Actively choose from the diverse genre palette based on emotional fit:
+  * Emotional heartbreak, sorrow, or grand vocal moments -> "Cinematic / Ballad", "R&B / Contemporary Soul", "Lo-Fi / Chillhop", "Country / Americana"
+  * Romantic, tender, or soulful moments -> "R&B / Contemporary Soul", "Jazz / Bossa Nova", "Pop"
+  * High energy, celebration, dance, groove -> "Funk / Disco Groove", "Synth-Pop / 80s Retro", "K-Pop Style (Clear English Vocals)", "Pop"
+  * Nostalgic retro vibes, night drives, tension -> "Synth-Pop / 80s Retro", "Cinematic / Ballad", "Lo-Fi / Chillhop"
+  * Relaxed, mellow, introspective, everyday coffee shop -> "Lo-Fi / Chillhop", "Melodic Chill Electronic", "Jazz / Bossa Nova", "Reggae / Tropical Pop"
+  * Rootsy storytelling, everyday blue-collar struggles, journey -> "Country / Americana", "Acoustic / Folk"
+
+CRITICAL STORY CONCEPT INSTRUCTIONS:
+- Ground the story in a vivid, relatable slice-of-life scenario with real spoken dialogue and human stakes.
+- Explore diverse domains:
+  * Emotional turning points: Packing bags for a move, an emotional late-night phone call, a difficult confession, parting ways at an airport, returning to a childhood hometown.
+  * Relationships: First date jitters, apologizing after a misunderstanding, quiet reassurance during tough times, celebrating an anniversary.
+  * Daily life & struggles: Overcoming burnout, a tough shift, budgeting for rent, fixing up a beat-up car, preparing for a life-changing interview.
+  * Friendship & fun: Impromptu diner conversations, laughing through mistakes, road-tripping with the radio on, a bustling weekend market.
+- NO corporate cubicle monotony, NO abstract surreal metaphors. Keep it conversational, cinematic, and genuinely human.
 
 Return a valid JSON object with the following exact schema:
 {{
@@ -80,7 +90,7 @@ Return a valid JSON object with the following exact schema:
     }},
     "genre": "Exact match from Available Genres",
     "song_structure": "Exact match from Available Song Structures",
-    "creative_concept": "1-2 sentences describing an engaging, authentic real-life scenario or human storyline (from the diverse everyday domains above — NEVER an office desk routine) that weaves these words naturally into spoken dialogue and realistic actions."
+    "creative_concept": "1-2 sentences describing an engaging, authentic real-life scenario or human storyline that weaves these words naturally into spoken dialogue and realistic actions."
 }}
 """
 
@@ -105,7 +115,7 @@ def analyze_vocabulary_mood(words: List[str]) -> Dict[str, Any]:
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
-                    temperature=0.7,
+                    temperature=0.85,
                 ),
             )
             raw = response.text.strip()

@@ -363,38 +363,158 @@ def get_used_ngsl_words(db_path: Path = DB_PATH) -> Set[str]:
         return {row[0].strip() for row in cursor.fetchall() if row[0]}
 
 
+# Comprehensive white-list of structural words and indispensable daily conversational vocabulary
+# These words must NEVER be placed in the avoidance list so that songwriting remains 100% natural.
+CORE_EXEMPT_WORDS: Set[str] = {
+    # Pronouns & Determiners
+    "i", "me", "my", "myself", "you", "your", "yours", "yourself", "yourselves",
+    "he", "him", "his", "himself", "she", "her", "hers", "herself",
+    "it", "its", "itself", "we", "us", "our", "ours", "ourselves",
+    "they", "them", "their", "theirs", "themselves",
+    "this", "that", "these", "those", "who", "whom", "whose", "which", "what", "whatever", "whoever",
+    # Prepositions, Particles, Articles & Conjunctions
+    "a", "an", "the", "in", "on", "at", "by", "for", "with", "about", "against", "between",
+    "into", "through", "during", "before", "after", "above", "below", "to", "from", "up", "down",
+    "out", "off", "over", "under", "again", "further", "then", "once", "here", "there",
+    "when", "where", "why", "how", "all", "any", "both", "each", "few", "more", "most", "other",
+    "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very",
+    "and", "but", "if", "or", "because", "as", "until", "while", "of", "since", "although", "though",
+    "whether", "unless", "till", "yet", "can", "could", "will", "would", "shall", "should", "may",
+    "might", "must", "just", "now", "don't", "doesn't", "didn't", "won't", "wouldn't", "can't",
+    "cannot", "couldn't", "shouldn't", "isn't", "aren't", "wasn't", "weren't", "haven't", "hasn't",
+    "hadn't", "let's", "i'm", "you're", "he's", "she's", "it's", "we're", "they're", "i've",
+    "you've", "we've", "they've", "i'll", "you'll", "he'll", "she'll", "we'll", "they'll", "i'd",
+    # Indispensable Everyday Verbs (and their natural inflections)
+    "be", "am", "is", "are", "was", "were", "been", "being",
+    "have", "has", "had", "having",
+    "do", "does", "did", "doing", "done",
+    "go", "goes", "went", "gone", "going",
+    "get", "gets", "got", "gotten", "getting",
+    "make", "makes", "made", "making",
+    "take", "takes", "took", "taken", "taking",
+    "come", "comes", "came", "coming",
+    "see", "sees", "saw", "seen", "seeing",
+    "know", "knows", "knew", "known", "knowing",
+    "think", "thinks", "thought", "thinking",
+    "look", "looks", "looked", "looking",
+    "want", "wants", "wanted", "wanting",
+    "give", "gives", "gave", "given", "giving",
+    "tell", "tells", "told", "telling",
+    "say", "says", "said", "saying",
+    "feel", "feels", "felt", "feeling",
+    "find", "finds", "found", "finding",
+    "ask", "asks", "asked", "asking",
+    "seem", "seems", "seemed", "seeming",
+    "leave", "leaves", "left", "leaving",
+    "call", "calls", "called", "calling",
+    "keep", "keeps", "kept", "keeping",
+    "let", "lets", "letting",
+    "put", "puts", "putting",
+    "try", "tries", "tried", "trying",
+    "start", "starts", "started", "starting",
+    "show", "shows", "showed", "shown", "showing",
+    "hear", "hears", "heard", "hearing",
+    "play", "plays", "played", "playing",
+    "run", "runs", "ran", "running",
+    "move", "moves", "moved", "moving",
+    "live", "lives", "lived", "living",
+    "turn", "turns", "turned", "turning",
+    "bring", "brings", "brought", "bringing",
+    "hold", "holds", "held", "holding",
+    "write", "writes", "wrote", "written", "writing",
+    "stand", "stands", "stood", "standing",
+    "sit", "sits", "sat", "sitting",
+    "lose", "loses", "lost", "losing",
+    "pay", "pays", "paid", "paying",
+    "meet", "meets", "met", "meeting",
+    "include", "includes", "included", "including",
+    "continue", "continues", "continued", "continuing",
+    "set", "sets", "setting",
+    "learn", "learns", "learned", "learning",
+    "change", "changes", "changed", "changing",
+    "lead", "leads", "led", "leading",
+    "understand", "understands", "understood", "understanding",
+    "watch", "watches", "watched", "watching",
+    "follow", "follows", "followed", "following",
+    "stop", "stops", "stopped", "stopping",
+    "create", "creates", "created", "creating",
+    "speak", "speaks", "spoke", "spoken", "speaking",
+    "read", "reads", "reading",
+    "spend", "spends", "spent", "spending",
+    "grow", "grows", "grew", "grown", "growing",
+    "open", "opens", "opened", "opening",
+    "walk", "walks", "walked", "walking",
+    "win", "wins", "won", "winning",
+    "teach", "teaches", "taught", "teaching",
+    "offer", "offers", "offered", "offering",
+    "remember", "remembers", "remembered", "remembering",
+    "consider", "considers", "considered", "considering",
+    "love", "loves", "loved", "loving",
+    "buy", "buys", "bought", "buying",
+    "wait", "waits", "waited", "waiting",
+    "serve", "serves", "served", "serving",
+    "die", "dies", "died", "dying",
+    "send", "sends", "sent", "sending",
+    "expect", "expects", "expected", "expecting",
+    "build", "builds", "built", "building",
+    "stay", "stays", "stayed", "staying",
+    "fall", "falls", "fell", "fallen", "falling",
+    "cut", "cuts", "cutting",
+    "reach", "reaches", "reached", "reaching",
+    "kill", "kills", "killed", "killing",
+    "remain", "remains", "remained", "remaining",
+    "pass", "passes", "passed", "passing",
+    "sell", "sells", "sold", "selling",
+    "require", "requires", "required", "requiring",
+    "report", "reports", "reported", "reporting",
+    "decide", "decides", "decided", "deciding",
+    "pull", "pulls", "pulled", "pulling",
+    "break", "breaks", "broke", "broken", "breaking",
+    "hope", "hopes", "hoped", "hoping",
+    "wish", "wishes", "wished", "wishing",
+    "laugh", "laughs", "laughed", "laughing",
+    "smile", "smiles", "smiled", "smiling",
+    "talk", "talks", "talked", "talking",
+    "listen", "listens", "listened", "listening",
+    "work", "works", "worked", "working",
+    "help", "helps", "helped", "helping",
+    "need", "needs", "needed", "needing",
+    # Indispensable Conversational Nouns & Adjectives
+    "time", "times", "year", "years", "people", "way", "ways", "day", "days",
+    "man", "men", "woman", "women", "life", "lives", "child", "children",
+    "world", "school", "state", "family", "student", "group", "country",
+    "problem", "hand", "hands", "part", "place", "places", "case", "week", "weeks",
+    "company", "system", "program", "question", "work", "night", "nights",
+    "point", "home", "water", "room", "mother", "area", "money", "story",
+    "fact", "month", "months", "lot", "right", "study", "book", "eye", "eyes",
+    "job", "word", "words", "business", "issue", "side", "kind", "head",
+    "house", "service", "friend", "friends", "father", "power", "hour", "hours",
+    "game", "line", "end", "member", "law", "car", "city", "community", "name",
+    "morning", "evening", "tonight", "today", "tomorrow", "yesterday",
+    "good", "new", "first", "last", "long", "great", "little", "own", "other",
+    "old", "right", "big", "high", "different", "small", "large", "next",
+    "early", "young", "important", "few", "public", "bad", "same", "able",
+    "well", "better", "best", "simple", "sure", "fine", "true", "false",
+    "easy", "hard", "real", "clear", "ready", "happy", "alright",
+    "thing", "things", "something", "anything", "nothing", "everything",
+    "someone", "anyone", "everyone", "no one", "nobody", "somebody", "anybody",
+    "everywhere", "somewhere", "anywhere", "nowhere",
+    "always", "never", "ever", "often", "sometimes", "usually", "really",
+    "together", "back", "away", "still", "even", "almost", "enough",
+    "maybe", "perhaps", "please", "thanks", "thank", "yeah", "yes", "no", "oh", "hey", "okay", "ok"
+}
+
+
 def get_previously_used_words(
     exclude_words: Optional[List[str]] = None,
     db_path: Path = DB_PATH
 ) -> List[str]:
     """
     Return list of content words previously used (usage_count > 0),
-    excluding current batch targets and common English stop words.
+    strictly excluding current batch targets, structural grammar words,
+    and all indispensable basic conversational English words.
     """
     exclude_set = {w.lower().strip() for w in (exclude_words or []) if w.strip()}
-    
-    stop_words = {
-        "a", "about", "above", "after", "again", "against", "all", "am", "an", "and",
-        "any", "are", "aren't", "as", "at", "be", "because", "been", "before", "being",
-        "below", "between", "both", "but", "by", "can", "can't", "cannot", "could",
-        "couldn't", "did", "didn't", "do", "does", "doesn't", "doing", "don't", "down",
-        "during", "each", "few", "for", "from", "further", "had", "hadn't", "has",
-        "hasn't", "have", "haven't", "having", "he", "he'd", "he'll", "he's", "her",
-        "here", "here's", "hers", "herself", "him", "himself", "his", "how", "how's",
-        "i", "i'd", "i'll", "i'm", "i've", "if", "in", "into", "is", "isn't", "it",
-        "it's", "its", "itself", "let's", "me", "more", "most", "mustn't", "my",
-        "myself", "no", "nor", "not", "of", "off", "on", "once", "only", "or",
-        "other", "ought", "our", "ours", "ourselves", "out", "over", "own", "same",
-        "shan't", "she", "she'd", "she'll", "she's", "should", "shouldn't", "so",
-        "some", "such", "than", "that", "that's", "the", "their", "theirs", "them",
-        "themselves", "then", "there", "there's", "these", "they", "they'd", "they'll",
-        "they're", "they've", "this", "those", "through", "to", "too", "under", "until",
-        "up", "very", "was", "wasn't", "we", "we'd", "we'll", "we're", "we've", "were",
-        "weren't", "what", "what's", "when", "when's", "where", "where's", "which",
-        "while", "who", "who's", "whom", "why", "why's", "with", "won't", "would",
-        "wouldn't", "you", "you'd", "you'll", "you're", "you've", "your", "yours",
-        "yourself", "yourselves"
-    }
 
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -403,7 +523,7 @@ def get_previously_used_words(
 
     filtered = [
         r[0].strip() for r in rows
-        if r[0] and r[0].strip() not in exclude_set and r[0].strip() not in stop_words and len(r[0].strip()) > 1
+        if r[0] and r[0].strip() not in exclude_set and r[0].strip() not in CORE_EXEMPT_WORDS and len(r[0].strip()) > 1
     ]
     return filtered
 
