@@ -334,7 +334,7 @@ def approve_and_save_song(
         
         # Determine actual NGSL words approved
         actual_target_words = checked_target_words if checked_target_words is not None else target_words
-        target_words_str = ", ".join(target_words)
+        target_words_str = ", ".join(actual_target_words)
         bonus_words_str = ", ".join(checked_bonus_words)
         extra_words_str = ", ".join(checked_extra_words)
         mood_json = json.dumps(mood_breakdown) if isinstance(mood_breakdown, dict) else (mood_breakdown or "")
@@ -562,6 +562,10 @@ def upsert_track_variant(
         return row["id"] if row else cursor.lastrowid
 
 
+# Alias for upsert_track_variant
+save_track_variant = upsert_track_variant
+
+
 def get_track_variants(song_id: int, db_path: Path = DB_PATH) -> List[sqlite3.Row]:
     """Retrieve all track variants for a song, ordered latest first."""
     with get_connection(db_path) as conn:
@@ -687,6 +691,7 @@ def save_active_batch_state(
     mood_analysis: Optional[Dict[str, Any]] = None,
     master_prompt: str = "",
     suno_prompt: str = "",
+    poster_prompt: str = "",
     vocalist: str = "Male",
     db_path: Path = DB_PATH
 ) -> None:
@@ -699,6 +704,7 @@ def save_active_batch_state(
         "mood_analysis": mood_analysis,
         "master_prompt": master_prompt,
         "suno_prompt": suno_prompt,
+        "poster_prompt": poster_prompt,
         "selected_vocalist": vocalist
     }
     with get_connection(db_path) as conn:

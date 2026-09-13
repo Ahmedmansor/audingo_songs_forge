@@ -210,6 +210,9 @@ if "master_prompt" not in st.session_state:
 if "studio_suno_prompt" not in st.session_state:
     st.session_state.studio_suno_prompt = persisted_session.get("suno_prompt", "")
 
+if "studio_poster_prompt" not in st.session_state:
+    st.session_state.studio_poster_prompt = persisted_session.get("poster_prompt", "")
+
 if "selected_genre" not in st.session_state:
     st.session_state.selected_genre = persisted_session.get("selected_genre", GENRES[0])
 
@@ -246,6 +249,7 @@ def sync_active_session():
             mood_analysis=st.session_state.get("mood_analysis", None),
             master_prompt=st.session_state.get("master_prompt", ""),
             suno_prompt=st.session_state.get("studio_suno_prompt", ""),
+            poster_prompt=st.session_state.get("studio_poster_prompt", ""),
             vocalist=st.session_state.get("selected_vocalist", "Male")
         )
     else:
@@ -537,7 +541,7 @@ with tab2:
             st.session_state.custom_concept = new_concept
             sync_active_session()
 
-        # Generate Master Prompt & Suno Style Prompt
+        # Generate Master Prompt, Suno Style Prompt & Poster Prompt
         st.markdown("---")
         st.subheader("📋 Step 3: Generation & Production Prompts")
         
@@ -547,20 +551,28 @@ with tab2:
                 st.session_state.mood_analysis.get("creative_concept", "") if st.session_state.mood_analysis else ""
             )
             
-            prompt_text = prompt_builder.generate_master_prompt(
-                target_words=current_words,
-                genre=st.session_state.selected_genre,
-                song_structure=st.session_state.selected_structure,
-                mood_analysis=mood_dict,
-                creative_concept=concept
-            )
-            suno_text = prompt_builder.build_suno_style_prompt(
-                genre=st.session_state.selected_genre,
-                vocalist=st.session_state.selected_vocalist
-            )
-            st.session_state.master_prompt = prompt_text
-            st.session_state.studio_suno_prompt = suno_text
-            sync_active_session()
+            with st.spinner("🚀 Crafting Master Songwriting Prompt, Suno Style, and Poster Art Prompt..."):
+                prompt_text = prompt_builder.generate_master_prompt(
+                    target_words=current_words,
+                    genre=st.session_state.selected_genre,
+                    song_structure=st.session_state.selected_structure,
+                    mood_analysis=mood_dict,
+                    creative_concept=concept
+                )
+                suno_text = prompt_builder.build_suno_style_prompt(
+                    genre=st.session_state.selected_genre,
+                    vocalist=st.session_state.selected_vocalist
+                )
+                poster_text = gemini_client.generate_studio_poster_prompt(
+                    concept=concept,
+                    genre=st.session_state.selected_genre,
+                    vocalist=st.session_state.selected_vocalist,
+                    title="[Song Title]"
+                )
+                st.session_state.master_prompt = prompt_text
+                st.session_state.studio_suno_prompt = suno_text
+                st.session_state.studio_poster_prompt = poster_text
+                sync_active_session()
 
         if st.session_state.master_prompt:
             # ──────────────────────────────────────────────────────────
@@ -587,9 +599,28 @@ with tab2:
             st.markdown("<hr style='margin: 18px 0; border-color: rgba(255,255,255,0.08);'>", unsafe_allow_html=True)
 
             # ──────────────────────────────────────────────────────────
-            # 2. Master Songwriting Prompt Section
+            # 2. Midjourney / DALL-E Album Cover Poster Prompt Section
             # ──────────────────────────────────────────────────────────
-            st.markdown("#### 📝 2. Master Lyrics Prompt (Copy & Paste into Claude / GPT-4o):")
+            st.markdown("#### 🎨 2. Midjourney / DALL-E Album Cover Prompt (Poster Art):")
+            st.caption("Artistic visual prompt capturing the genre aesthetic, lighting, and story atmosphere (will automatically incorporate your official song title when saved in Commit Lab):")
+            
+            concept_for_poster = st.session_state.custom_concept.strip() or (
+                st.session_state.mood_analysis.get("creative_concept", "") if st.session_state.mood_analysis else ""
+            )
+            poster_prompt_val = st.session_state.studio_poster_prompt or gemini_client.generate_studio_poster_prompt(
+                concept=concept_for_poster,
+                genre=st.session_state.selected_genre,
+                vocalist=st.session_state.selected_vocalist,
+                title="[Song Title]"
+            )
+            st.code(poster_prompt_val, language="markdown")
+
+            st.markdown("<hr style='margin: 18px 0; border-color: rgba(255,255,255,0.08);'>", unsafe_allow_html=True)
+
+            # ──────────────────────────────────────────────────────────
+            # 3. Master Songwriting Prompt Section
+            # ──────────────────────────────────────────────────────────
+            st.markdown("#### 📝 3. Master Lyrics Prompt (Copy & Paste into Claude / GPT-4o):")
             st.caption("Full prompt containing all 20 target vocabulary words, real-world narrative concept, and strict Logic Gate:")
             st.code(st.session_state.master_prompt, language="markdown")
     else:
@@ -753,6 +784,17 @@ with tab3:
                 else:
                     st.caption("No extra non-NGSL words found.")
 
+            pack_vocalist = st.session_state.get("selected_vocalist", "Male")
+            st.markdown(
+                f"""
+                <div style="background: rgba(99, 102, 241, 0.08); border-left: 4px solid #6366F1; padding: 10px 14px; border-radius: 8px; margin: 12px 0 16px 0; font-size: 0.92rem; color: #E2E8F0;">
+                    💿 <b>Packaging Integration:</b> When you approve, this song will automatically register its 
+                    <b>Suno AI Music Style Prompt</b> and <b>Album Poster Prompt</b> under genre <b>{st.session_state.selected_genre}</b> ({pack_vocalist}) in your Songs Library!
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
             st.markdown("---")
             submitted = st.form_submit_button("✅ Approve & Save Song", type="primary", use_container_width=True)
             
@@ -784,12 +826,44 @@ with tab3:
                     creative_concept=current_concept
                 )
 
+                # Auto-save track variant packaging (Suno prompt + Poster prompt) for this song
+                current_vocalist = st.session_state.get("selected_vocalist", "Male")
+                saved_suno = (st.session_state.get("studio_suno_prompt") or "").strip()
+                if not saved_suno:
+                    saved_suno = prompt_builder.build_suno_style_prompt(current_genre, current_vocalist)
+
+                saved_poster = (st.session_state.get("studio_poster_prompt") or "").strip()
+                if saved_poster:
+                    saved_poster = (
+                        saved_poster
+                        .replace("[Song Title]", title)
+                        .replace("Your Song Title", title)
+                        .replace("Untitled Song", title)
+                    )
+                else:
+                    saved_poster = gemini_client.generate_studio_poster_prompt(
+                        concept=current_concept or title,
+                        genre=current_genre,
+                        vocalist=current_vocalist,
+                        title=title
+                    )
+
+                db.save_track_variant(
+                    song_id=song_id,
+                    genre=current_genre,
+                    vocalist=current_vocalist,
+                    suno_prompt=saved_suno,
+                    poster_prompt=saved_poster
+                )
+
                 new_stats = db.get_progress_stats()
 
                 # Reset batch & form
                 st.session_state.target_batch = []
                 st.session_state.mood_analysis = None
                 st.session_state.master_prompt = ""
+                st.session_state.studio_suno_prompt = ""
+                st.session_state.studio_poster_prompt = ""
                 st.session_state.custom_concept = ""
                 st.session_state.analysis_results = None
                 st.session_state.raw_lyrics_input = ""
@@ -904,9 +978,9 @@ with tab4:
     if songs_df.empty:
         st.info("No songs saved yet. Head to the **Commit Lab** to analyze and approve songs to build your library!")
     else:
-        # Assign 1-based sequential row number
+        # Assign chronological song number: oldest is #1, newest is #N
         songs_df = songs_df.reset_index(drop=True)
-        songs_df["row_num"] = range(1, len(songs_df) + 1)
+        songs_df["row_num"] = songs_df["id"].rank(method="dense", ascending=True).astype(int)
 
         # Metrics summary
         lib_c1, lib_c2 = st.columns([1, 2])
@@ -928,7 +1002,7 @@ with tab4:
 
         st.caption(f"Showing **{len(filtered_df)}** of **{len(songs_df)}** saved songs:")
 
-        for _, row in filtered_df.iterrows():
+        for loop_idx, (_, row) in enumerate(filtered_df.iterrows()):
             song_id = int(row["id"])
             row_num = int(row["row_num"])
             song_title = row["title"]
@@ -956,7 +1030,7 @@ with tab4:
 
             with st.expander(
                 f"🎵 #{row_num} — **{song_title}** ({len(target_list)} Targets • {len(bonus_list)} Bonus • {len(extra_list)} Extra) • 📅 {created_at}",
-                expanded=(row_num == 1)
+                expanded=(loop_idx == 0)
             ):
                 # Overview columns: Vocabulary & Metrics
                 info_col1, info_col2 = st.columns([3, 1])

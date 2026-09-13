@@ -241,6 +241,77 @@ def generate_poster_prompt(title: str, lyrics: str, genre: str, vocalist: str) -
     }
 
 
+def generate_studio_poster_prompt(
+    concept: str,
+    genre: str,
+    vocalist: str,
+    title: str = "[Song Title]"
+) -> str:
+    """
+    Generate a high-end Midjourney/DALL-E album cover prompt in Studio mode
+    based on the story concept, genre, and vocalist persona.
+    Cycles through preferred models, returning high-quality fallback on failure.
+    """
+    from google.genai import types
+
+    client = get_gemini_client()
+    clean_concept = concept.strip() if concept else "A vibrant, relatable real-life narrative."
+    instruction = f"""You are an elite AI art director and prompt engineer specializing in hyper-detailed album cover prompts for Midjourney, DALL-E 3, and modern AI image generators.
+
+Generate a single, comprehensive, visually striking image generation prompt for a commercial music album cover poster.
+
+[SONG DETAILS]
+- Musical Genre: {genre}
+- Lead Vocalist/Artist Persona: {vocalist}
+- Story Concept & Theme:
+\"\"\"
+{clean_concept}
+\"\"\"
+- Song Title for Typography: "{title}"
+
+[STRICT DESIGN GUIDELINES]
+1. Visual Text & Typography: Include instructions to incorporate the song title "{title}" as stylized, artistic integrated lettering fitting the {genre} genre (e.g. glowing neon, minimalist clean sans-serif, vintage embossed, or handwritten aesthetic).
+2. Genre Aesthetics: The visual aesthetic, lighting, color grading, camera lens (e.g. 35mm film, anamorphic, Hasselblad medium format), and atmosphere must perfectly embody {genre}.
+3. Artist/Subject: Feature a character, silhouette, or aesthetic fitting {vocalist}, naturally set in a cinematic real-life scene matching the story concept.
+4. Scene & Mood: Capture the emotional narrative and lighting (golden hour, neon night, volumetric mist, soft morning window light).
+5. Output Format:
+   - Provide ONLY the raw text prompt.
+   - Do NOT include any markdown code blocks, quotes, or conversational intros.
+   - End the prompt with aspect ratio parameter: --ar 1:1
+"""
+    for model_name in PREFERRED_MODELS:
+        try:
+            logger.info("Generating studio poster prompt with model: %s", model_name)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=instruction,
+                config=types.GenerateContentConfig(
+                    temperature=0.8,
+                ),
+            )
+            raw = response.text.strip()
+            if raw.startswith("```"):
+                lines = raw.splitlines()
+                raw = "\n".join(
+                    line for line in lines if not line.strip().startswith("```")
+                ).strip()
+            if not raw.endswith("--ar 1:1"):
+                raw = f"{raw} --ar 1:1"
+            return raw
+        except Exception as exc:
+            logger.warning("Studio poster prompt generation failed with %s: %s", model_name, exc)
+            continue
+
+    # High-quality offline fallback
+    fallback_char = f"silhouette of a {vocalist.lower()} artist" if vocalist != "Instrumental" else "atmospheric architectural landscape"
+    short_concept = clean_concept[:120].strip()
+    return (
+        f"Cinematic album cover for a {genre} track, featuring {fallback_char} in an evocative scene inspired by {short_concept}. "
+        f"Atmospheric volumetric lighting, rich color grading, shallow depth of field, 35mm photograph texture, "
+        f"tastefully integrated artistic typography reading '{title}', highly detailed, award-winning cover art --ar 1:1"
+    )
+
+
 def build_variant_instruction(title: str, lyrics: str, genre: str, vocalist: str) -> str:
     """Build the unified JSON prompt engineering instruction for Suno music prompt and Midjourney/DALL-E poster prompt."""
     sample_lyrics = lyrics[:1500] if lyrics else "No lyrics provided."
