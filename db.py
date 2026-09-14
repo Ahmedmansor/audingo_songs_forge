@@ -298,6 +298,98 @@ def pull_20_words(db_path: Path = DB_PATH) -> List[Dict[str, Any]]:
     return selected_words
 
 
+def pull_candidate_pool_for_thematic_curation(
+    nouns_limit: int = 70,
+    verbs_limit: int = 40,
+    adjs_limit: int = 30,
+    db_path: Path = DB_PATH
+) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Randomly select candidate pool of unused words (usage_count = 0)
+    for thematic AI curation:
+    - 70 Nouns
+    - 40 Verbs
+    - 30 Adjectives
+    Total: 140 candidate words.
+    """
+    candidate_targets = [
+        ("Noun", nouns_limit),
+        ("Verb", verbs_limit),
+        ("Adjective", adjs_limit)
+    ]
+    pool: Dict[str, List[Dict[str, Any]]] = {
+        "Noun": [],
+        "Verb": [],
+        "Adjective": []
+    }
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        for pos, count in candidate_targets:
+            cursor.execute(
+                """
+                SELECT id, word, lemma_family, pos_type, usage_count
+                FROM ngsl_words
+                WHERE usage_count = 0 AND pos_type = ?
+                ORDER BY RANDOM()
+                LIMIT ?
+                """,
+                (pos, count)
+            )
+            for r in cursor.fetchall():
+                pool[pos].append({
+                    "id": r["id"],
+                    "word": r["word"],
+                    "lemma_family": r["lemma_family"],
+                    "pos_type": r["pos_type"],
+                    "usage_count": r["usage_count"]
+                })
+    return pool
+
+
+def build_curated_batch_from_words(
+    selected_nouns: List[str],
+    selected_verbs: List[str],
+    selected_adjs: List[str],
+    candidate_pool: Dict[str, List[Dict[str, Any]]]
+) -> List[Dict[str, Any]]:
+    """
+    Map selected word strings back to full SQLite record dicts,
+    strictly ensuring exactly 10 Nouns, 6 Verbs, and 4 Adjectives (20 words total).
+    Any shortfall is safely backfilled from the candidate pool.
+    """
+    final_batch: List[Dict[str, Any]] = []
+    used_ids: Set[int] = set()
+
+    def process_pos(selected_words: List[str], pos: str, target_count: int):
+        candidates = candidate_pool.get(pos, [])
+        word_map = {c["word"].lower().strip(): c for c in candidates}
+        added_count = 0
+        
+        # 1. Add matching words from selection
+        for w in selected_words:
+            w_clean = w.lower().strip()
+            if w_clean in word_map:
+                item = word_map[w_clean]
+                if item["id"] not in used_ids and added_count < target_count:
+                    final_batch.append(item)
+                    used_ids.add(item["id"])
+                    added_count += 1
+
+        # 2. If short, backfill from candidate pool
+        if added_count < target_count:
+            for item in candidates:
+                if item["id"] not in used_ids and added_count < target_count:
+                    final_batch.append(item)
+                    used_ids.add(item["id"])
+                    added_count += 1
+
+    process_pos(selected_nouns, "Noun", 10)
+    process_pos(selected_verbs, "Verb", 6)
+    process_pos(selected_adjs, "Adjective", 4)
+
+    return final_batch
+
+
 def swap_single_word(
     pos_type: str,
     current_word_ids: List[int],

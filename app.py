@@ -1127,11 +1127,11 @@ with tab2:
                     st.rerun()
 
 
-    col_actions, col_status = st.columns([2, 1])
+    col_actions, col_status = st.columns([2.5, 1])
     with col_actions:
-        b_col1, b_col2, b_col3 = st.columns([1, 1, 1.2])
+        b_col1, b_col2, b_col3, b_col4 = st.columns([1.1, 1.3, 1, 0.9])
         with b_col1:
-            if st.button("🎲 Pull 20 Words", type="primary", use_container_width=True):
+            if st.button("🎲 Random 20", type="secondary", use_container_width=True, help="Randomly pull 20 unused words (10 N, 6 V, 4 A) directly from SQLite."):
                 new_batch = db.pull_20_words()
                 if len(new_batch) == 20:
                     st.session_state.target_batch = new_batch
@@ -1140,7 +1140,7 @@ with tab2:
                     st.session_state.studio_suno_prompt = ""
                     st.session_state.custom_concept = ""
                     sync_active_session()
-                    st.success("Pulled 20 unused words (10 Nouns, 6 Verbs, 4 Adjectives)!")
+                    st.success("Pulled 20 random unused words (10 Nouns, 6 Verbs, 4 Adjectives)!")
                     st.rerun()
                 elif len(new_batch) > 0:
                     st.session_state.target_batch = new_batch
@@ -1153,6 +1153,46 @@ with tab2:
                     st.error("No unused words remaining in the database!")
 
         with b_col2:
+            if st.button("🧠 Smart Thematic Pull", type="primary", use_container_width=True, help="Gemini analyzes 140 candidate unused words and selects 20 words (10 N, 6 V, 4 A) that share natural chemistry and relate to an authentic everyday life scenario."):
+                with st.spinner("🧠 Gemini is curating a cohesive 20-word batch from 140 candidate unused words..."):
+                    candidate_pool = db.pull_candidate_pool_for_thematic_curation(nouns_limit=70, verbs_limit=40, adjs_limit=30)
+                    candidate_nouns = [w["word"] for w in candidate_pool["Noun"]]
+                    candidate_verbs = [w["word"] for w in candidate_pool["Verb"]]
+                    candidate_adjs = [w["word"] for w in candidate_pool["Adjective"]]
+                    
+                    curation_res = gemini_client.curate_thematic_vocabulary_batch(
+                        candidate_nouns=candidate_nouns,
+                        candidate_verbs=candidate_verbs,
+                        candidate_adjs=candidate_adjs
+                    )
+                    
+                    curated_batch = db.build_curated_batch_from_words(
+                        selected_nouns=curation_res.get("selected_nouns", []),
+                        selected_verbs=curation_res.get("selected_verbs", []),
+                        selected_adjs=curation_res.get("selected_adjectives", []),
+                        candidate_pool=candidate_pool
+                    )
+                    
+                    if len(curated_batch) == 20:
+                        st.session_state.target_batch = curated_batch
+                        st.session_state.mood_analysis = None
+                        st.session_state.master_prompt = ""
+                        st.session_state.studio_suno_prompt = ""
+                        st.session_state.custom_concept = curation_res.get("theme_description", "")
+                        sync_active_session()
+                        theme_title = curation_res.get("theme_name", "Curated Storyline")
+                        st.success(f"✨ Curated 20 thematic words for '{theme_title}' (10 Nouns, 6 Verbs, 4 Adjectives)!")
+                        st.rerun()
+                    elif len(curated_batch) > 0:
+                        st.session_state.target_batch = curated_batch
+                        st.session_state.custom_concept = curation_res.get("theme_description", "")
+                        sync_active_session()
+                        st.warning(f"Curated {len(curated_batch)} words.")
+                        st.rerun()
+                    else:
+                        st.error("Could not curate a batch from unused words.")
+
+        with b_col3:
             if st.button("🔄 Cancel & Redraw", use_container_width=True):
                 new_batch = db.pull_20_words()
                 st.session_state.target_batch = new_batch
@@ -1164,8 +1204,8 @@ with tab2:
                 st.info("Batch redrawn.")
                 st.rerun()
 
-        with b_col3:
-            if st.button("🧹 Clear Batch", use_container_width=True):
+        with b_col4:
+            if st.button("🧹 Clear", use_container_width=True, help="Clear active target batch"):
                 st.session_state.target_batch = []
                 st.session_state.mood_analysis = None
                 st.session_state.master_prompt = ""

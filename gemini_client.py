@@ -420,3 +420,106 @@ def generate_track_variant(title: str, lyrics: str, genre: str, vocalist: str) -
         "suno_prompt": f"{genre}, steady tempo, clear upfront {vocalist.lower()} vocals, clean mix",
         "poster_prompt": f"Cinematic album cover for '{title}', {genre} aesthetic, featuring {vocalist.lower()} artist, typography displaying '{title}', dramatic lighting, album art --ar 1:1"
     }
+
+
+def curate_thematic_vocabulary_batch(
+    candidate_nouns: List[str],
+    candidate_verbs: List[str],
+    candidate_adjs: List[str]
+) -> Dict[str, Any]:
+    """
+    Given pools of candidate unused words (e.g. 70 Nouns, 40 Verbs, 30 Adjectives),
+    ask Gemini to curate a thematic, cohesive set of 20 words:
+    - Exactly 10 Nouns
+    - Exactly 6 Verbs
+    - Exactly 4 Adjectives
+    that share an authentic, relatable everyday real-life theme and chemistry.
+    """
+    from google.genai import types
+
+    nouns_str = ", ".join(candidate_nouns)
+    verbs_str = ", ".join(candidate_verbs)
+    adjs_str = ", ".join(candidate_adjs)
+
+    prompt = f"""You are an elite ESL vocabulary curator and hit songwriter.
+
+TASK: From the provided pools of candidate unused English words, curate a cohesive, highly relatable set of EXACTLY 20 target vocabulary words:
+- Exactly 10 Nouns (chosen ONLY from Candidate Nouns below)
+- Exactly 6 Verbs (chosen ONLY from Candidate Verbs below)
+- Exactly 4 Adjectives (chosen ONLY from Candidate Adjectives below)
+
+CANDIDATE NOUNS (Pick 10):
+{nouns_str}
+
+CANDIDATE VERBS (Pick 6):
+{verbs_str}
+
+CANDIDATE ADJECTIVES (Pick 4):
+{adjs_str}
+
+CRITICAL SELECTION CRITERIA:
+1. THEMATIC CHEMISTRY & COHESION:
+   - Do NOT pick disjointed, random words.
+   - Choose 20 words that naturally fit together in an authentic everyday real-life scenario (e.g., city living, weekend road trip, relationship crossroads, career hustle, late-night cafe conversation, neighborhood community, overcoming personal struggle).
+2. CONVERSATIONAL UTILITY:
+   - Prioritize words that are practical, expressive, and useful for English language learners in daily small talk and real-world dialogue.
+3. EXACT COUNT & STRICT MEMBERSHIP:
+   - You MUST select words that appear verbatim in the candidate lists.
+   - Exactly 10 Nouns, 6 Verbs, 4 Adjectives. Total: 20 words.
+
+Return a valid JSON object with the following exact schema:
+{{
+    "selected_nouns": ["noun1", "noun2", "noun3", "noun4", "noun5", "noun6", "noun7", "noun8", "noun9", "noun10"],
+    "selected_verbs": ["verb1", "verb2", "verb3", "verb4", "verb5", "verb6"],
+    "selected_adjectives": ["adj1", "adj2", "adj3", "adj4"],
+    "theme_name": "Short, catchy 2-4 word theme name (e.g., Downtown Hustle, Weekend Escape, Starting Fresh)",
+    "theme_description": "1-2 vivid, practical sentences describing the real-life scenario and how these 20 words naturally intertwine in everyday conversation."
+}}
+"""
+
+    client = get_gemini_client()
+    last_error = None
+
+    for model_name in PREFERRED_MODELS:
+        try:
+            logger.info("Calling Gemini for thematic curation with model: %s", model_name)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.85,
+                ),
+            )
+            raw = response.text.strip()
+            if raw.startswith("```"):
+                lines = raw.splitlines()
+                raw = "\n".join(
+                    line for line in lines if not line.strip().startswith("```")
+                ).strip()
+
+            data = json.loads(raw)
+            return {
+                "success": True,
+                "model_used": model_name,
+                "selected_nouns": data.get("selected_nouns", candidate_nouns[:10]),
+                "selected_verbs": data.get("selected_verbs", candidate_verbs[:6]),
+                "selected_adjectives": data.get("selected_adjectives", candidate_adjs[:4]),
+                "theme_name": data.get("theme_name", "Everyday Life & Human Stories"),
+                "theme_description": data.get("theme_description", "")
+            }
+        except Exception as exc:
+            logger.warning("Thematic curation failed with model %s: %s", model_name, exc)
+            last_error = exc
+            continue
+
+    # Fallback to simple slicing if all models fail
+    return {
+        "success": False,
+        "error": str(last_error),
+        "selected_nouns": candidate_nouns[:10],
+        "selected_verbs": candidate_verbs[:6],
+        "selected_adjectives": candidate_adjs[:4],
+        "theme_name": "Everyday Life & Human Stories",
+        "theme_description": "A diverse snapshot of everyday real-life experiences."
+    }
