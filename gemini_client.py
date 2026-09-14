@@ -425,7 +425,8 @@ def generate_track_variant(title: str, lyrics: str, genre: str, vocalist: str) -
 def curate_thematic_vocabulary_batch(
     candidate_nouns: List[str],
     candidate_verbs: List[str],
-    candidate_adjs: List[str]
+    candidate_adjs: List[str],
+    domain_focus: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Given pools of candidate unused words (e.g. 70 Nouns, 40 Verbs, 30 Adjectives),
@@ -441,13 +442,21 @@ def curate_thematic_vocabulary_batch(
     verbs_str = ", ".join(candidate_verbs)
     adjs_str = ", ".join(candidate_adjs)
 
+    domain_instruction = ""
+    if domain_focus and domain_focus != "All Domains" and "الكل" not in domain_focus and "All" not in domain_focus:
+        domain_instruction = f"""
+PRIMARY THEMATIC DOMAIN FOCUS:
+- The user requested words specifically revolving around the '{domain_focus}' domain.
+- Ensure the curated theme, story concept, and 20 words are deeply anchored in the world of {domain_focus}.
+"""
+
     prompt = f"""You are an elite ESL vocabulary curator and hit songwriter.
 
 TASK: From the provided pools of candidate unused English words, curate a cohesive, highly relatable set of EXACTLY 20 target vocabulary words:
 - Exactly 10 Nouns (chosen ONLY from Candidate Nouns below)
 - Exactly 6 Verbs (chosen ONLY from Candidate Verbs below)
 - Exactly 4 Adjectives (chosen ONLY from Candidate Adjectives below)
-
+{domain_instruction}
 CANDIDATE NOUNS (Pick 10):
 {nouns_str}
 

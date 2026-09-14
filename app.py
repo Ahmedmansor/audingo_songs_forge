@@ -9,13 +9,14 @@ import datetime
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
+from typing import Dict, Any, List, Optional, Tuple, Set
 from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables (such as GEMINI_API_KEY)
 load_dotenv()
 
-from constants import GENRES, SONG_STRUCTURES, MOOD_CATEGORIES
+from constants import GENRES, SONG_STRUCTURES, MOOD_CATEGORIES, DOMAINS, DOMAIN_CONFIG
 import db
 import pipeline
 import prompt_builder
@@ -259,19 +260,34 @@ st.markdown("""
         background: linear-gradient(180deg, #0B0F19 0%, #111827 50%, #0F172A 100%) !important;
         border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
     }
-    [data-testid="stSidebar"] > div:first-child {
-        padding-top: 1.5rem !important;
-        padding-bottom: 2rem !important;
+    
+    /* Remove large empty gap at top of Streamlit sidebar */
+    [data-testid="stSidebarHeader"] {
+        display: none !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    [data-testid="stSidebarContent"] {
+        padding-top: 0.4rem !important;
+    }
+    [data-testid="stSidebarUserContent"] {
+        padding-top: 0 !important;
+    }
+    section[data-testid="stSidebar"] > div:first-child {
+        padding-top: 0.4rem !important;
+        padding-bottom: 0.8rem !important;
     }
     
     .sb-brand-hero {
         background: linear-gradient(135deg, rgba(79, 70, 229, 0.18) 0%, rgba(6, 182, 212, 0.14) 100%);
         border: 1px solid rgba(99, 102, 241, 0.35);
-        border-radius: 16px;
-        padding: 18px 14px 14px 14px;
-        margin-bottom: 16px;
+        border-radius: 12px;
+        padding: 10px 10px 8px 10px;
+        margin-bottom: 8px;
         text-align: center;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
         position: relative;
         overflow: hidden;
     }
@@ -287,38 +303,38 @@ st.markdown("""
         pointer-events: none;
     }
     .sb-logo-icon {
-        font-size: 2rem;
+        font-size: 1.4rem;
         display: inline-block;
-        margin-bottom: 4px;
-        filter: drop-shadow(0 2px 10px rgba(99, 102, 241, 0.6));
+        margin-bottom: 1px;
+        filter: drop-shadow(0 2px 8px rgba(99, 102, 241, 0.6));
     }
     .sb-title {
-        font-size: 1.25rem;
+        font-size: 1.12rem;
         font-weight: 800;
         letter-spacing: -0.3px;
         background: linear-gradient(90deg, #C7D2FE, #38BDF8, #A78BFA);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        margin-bottom: 4px;
+        margin-bottom: 2px;
         line-height: 1.2;
     }
     .sb-badge {
         display: inline-block;
-        font-size: 0.68rem;
+        font-size: 0.64rem;
         font-weight: 700;
-        letter-spacing: 0.8px;
+        letter-spacing: 0.6px;
         text-transform: uppercase;
-        padding: 3px 9px;
+        padding: 2px 7px;
         border-radius: 20px;
         background: rgba(99, 102, 241, 0.25);
         color: #C7D2FE;
         border: 1px solid rgba(165, 180, 252, 0.35);
-        margin-bottom: 8px;
+        margin-bottom: 4px;
     }
     .sb-subtitle {
-        font-size: 0.78rem;
+        font-size: 0.7rem;
         color: #94A3B8;
-        line-height: 1.4;
+        line-height: 1.35;
         margin: 0;
     }
     
@@ -326,48 +342,48 @@ st.markdown("""
     .sb-progress-card {
         background: rgba(30, 41, 59, 0.6);
         border: 1px solid rgba(148, 163, 184, 0.18);
-        border-radius: 14px;
-        padding: 13px 14px;
-        margin-bottom: 14px;
+        border-radius: 10px;
+        padding: 8px 11px;
+        margin-bottom: 8px;
         backdrop-filter: blur(8px);
     }
     .sb-progress-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 8px;
+        margin-bottom: 5px;
     }
     .sb-progress-title {
-        font-size: 0.82rem;
+        font-size: 0.78rem;
         font-weight: 700;
         color: #F1F5F9;
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 5px;
     }
     .sb-progress-pct {
-        font-size: 1.02rem;
+        font-size: 0.95rem;
         font-weight: 800;
         color: #34D399;
         font-family: monospace;
     }
     .sb-progress-bar-bg {
         width: 100%;
-        height: 8px;
+        height: 6px;
         background: rgba(51, 65, 85, 0.75);
-        border-radius: 10px;
+        border-radius: 6px;
         overflow: hidden;
-        margin-bottom: 8px;
+        margin-bottom: 5px;
     }
     .sb-progress-bar-fill {
         height: 100%;
-        border-radius: 10px;
+        border-radius: 6px;
         background: linear-gradient(90deg, #6366F1 0%, #06B6D4 50%, #10B981 100%);
         box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
         transition: width 0.6s ease;
     }
     .sb-progress-caption {
-        font-size: 0.75rem;
+        font-size: 0.68rem;
         color: #94A3B8;
         display: flex;
         justify-content: space-between;
@@ -378,13 +394,13 @@ st.markdown("""
     .sb-stat-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 9px;
-        margin-bottom: 14px;
+        gap: 6px;
+        margin-bottom: 8px;
     }
     .sb-stat-tile {
         background: rgba(30, 41, 59, 0.5);
-        border-radius: 12px;
-        padding: 11px 8px;
+        border-radius: 10px;
+        padding: 7px 5px;
         text-align: center;
         transition: all 0.22s ease;
         position: relative;
@@ -423,22 +439,22 @@ st.markdown("""
         background: rgba(168, 85, 247, 0.14);
     }
     .sb-tile-icon {
-        font-size: 1.05rem;
-        margin-bottom: 2px;
+        font-size: 0.95rem;
+        margin-bottom: 1px;
     }
     .sb-tile-val {
-        font-size: 1.28rem;
+        font-size: 1.15rem;
         font-weight: 800;
-        letter-spacing: -0.4px;
-        line-height: 1.15;
-        margin-bottom: 2px;
+        letter-spacing: -0.3px;
+        line-height: 1.1;
+        margin-bottom: 1px;
     }
     .sb-tile-val-indigo { color: #A5B4FC; }
     .sb-tile-val-green { color: #34D399; }
     .sb-tile-val-amber { color: #FBBF24; }
     .sb-tile-val-purple { color: #C084FC; }
     .sb-tile-label {
-        font-size: 0.7rem;
+        font-size: 0.66rem;
         font-weight: 700;
         color: #94A3B8;
         text-transform: uppercase;
@@ -446,7 +462,7 @@ st.markdown("""
         margin-bottom: 1px;
     }
     .sb-tile-sub {
-        font-size: 0.66rem;
+        font-size: 0.6rem;
         color: #64748B;
     }
 
@@ -454,9 +470,9 @@ st.markdown("""
     .sb-songs-banner {
         background: linear-gradient(135deg, rgba(236, 72, 153, 0.12) 0%, rgba(139, 92, 246, 0.12) 100%);
         border: 1px solid rgba(236, 72, 153, 0.3);
-        border-radius: 12px;
-        padding: 9px 13px;
-        margin-bottom: 14px;
+        border-radius: 10px;
+        padding: 6px 10px;
+        margin-bottom: 7px;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -525,6 +541,62 @@ st.markdown("""
         padding: 2px 7px;
         border-radius: 8px;
         border: 1px solid rgba(52, 211, 153, 0.35);
+    }
+
+    /* Sidebar Domain Remaining Breakdown Card */
+    .sb-domain-card {
+        background: rgba(30, 41, 59, 0.55);
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 10px;
+        padding: 8px 10px;
+        margin-bottom: 8px;
+        backdrop-filter: blur(6px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+    .sb-domain-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+        padding-bottom: 4px;
+    }
+    .sb-domain-title {
+        font-size: 0.74rem;
+        font-weight: 800;
+        color: #F1F5F9;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .sb-domain-total {
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: #FBBF24;
+        background: rgba(245, 158, 11, 0.15);
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        padding: 1px 6px;
+        border-radius: 8px;
+    }
+    .sb-domain-row {
+        margin-bottom: 6px;
+    }
+    .sb-domain-row:last-child {
+        margin-bottom: 0;
+    }
+    .sb-domain-bar-bg {
+        width: 100%;
+        height: 4px;
+        background: rgba(51, 65, 85, 0.6);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    .sb-domain-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.3s ease;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -756,6 +828,108 @@ def render_copy_words_toolbar(words: list[str]):
     components.html(html_code, height=44, scrolling=False)
 
 
+def render_domain_breakdown_section(
+    domain_data: Dict[str, Any],
+    title: str = "🎯 Song Vocabulary Domain Register",
+    compact: bool = False
+):
+    """Render a visual stacked progress bar and percentage badges for vocabulary domains."""
+    if not domain_data or domain_data.get("total_words", 0) == 0:
+        return
+
+    domains_dict = domain_data.get("domains", {})
+    total_words = domain_data.get("total_words", 0)
+    primary_domain = domain_data.get("primary_domain", DOMAINS[0])
+    primary_pct = domain_data.get("primary_percent", 0.0)
+    is_high_formal = domain_data.get("is_high_formal", False)
+    formal_pct = domain_data.get("formal_percent", 0.0)
+
+    # Multi-segment stacked bar HTML
+    bar_segments = []
+    for d in DOMAINS:
+        info = domains_dict.get(d, {})
+        pct = info.get("percent", 0.0)
+        cnt = info.get("count", 0)
+        if pct > 0:
+            cfg = DOMAIN_CONFIG.get(d, {})
+            color = cfg.get("color", "#6366F1")
+            bar_segments.append(
+                f'<div style="width: {pct}%; height: 100%; background: {color};" title="{cfg.get("emoji","")} {d}: {pct}% ({cnt} words)"></div>'
+            )
+
+    bar_html = "".join(bar_segments)
+
+    # Badges row
+    badges_html = []
+    for d in DOMAINS:
+        info = domains_dict.get(d, {})
+        pct = info.get("percent", 0.0)
+        cnt = info.get("count", 0)
+        if cnt > 0:
+            cfg = DOMAIN_CONFIG.get(d, {})
+            color = cfg.get("color", "#94A3B8")
+            bg = cfg.get("bg", "rgba(148, 163, 184, 0.15)")
+            border = cfg.get("border", "rgba(148, 163, 184, 0.3)")
+            emoji = cfg.get("emoji", "")
+            badges_html.append(
+                f'<span style="background: {bg}; color: {color}; border: 1px solid {border}; padding: 3px 9px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">'
+                f'{emoji} {d}: <b>{pct}%</b> <small style="opacity: 0.8;">({cnt})</small>'
+                f'</span>'
+            )
+
+    all_badges_html = " ".join(badges_html)
+
+    # Educational Note if high formal (all in clean English)
+    edu_note_html = ""
+    if is_high_formal:
+        edu_note_html = (
+            f'<div style="background: rgba(59, 130, 246, 0.09); border-left: 4px solid #3B82F6; border-radius: 8px; padding: 10px 14px; margin-top: 10px; font-size: 0.88rem; color: #BFDBFE; line-height: 1.55;">'
+            f'💡 <b>ESL Learning Context Note:</b><br>'
+            f'This song embeds a notable concentration of <b>Business & Society ({formal_pct}%)</b> vocabulary. '
+            f'These formal terms are woven into a musical story to make them easier to remember and use in professional workplaces and interviews.'
+            f'</div>'
+        )
+
+    if compact:
+        box_html = (
+            f'<div style="background: rgba(15, 23, 42, 0.55); border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 10px; padding: 10px 14px; margin: 10px 0;">'
+            f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">'
+            f'<span style="font-size: 0.85rem; font-weight: 700; color: #F1F5F9;">{title}</span>'
+            f'<span style="font-size: 0.78rem; font-weight: 700; color: {DOMAIN_CONFIG.get(primary_domain, {}).get("color", "#38BDF8")};">'
+            f'Primary: {DOMAIN_CONFIG.get(primary_domain, {}).get("emoji", "")} {primary_domain} ({primary_pct}%)'
+            f'</span>'
+            f'</div>'
+            f'<div style="width: 100%; height: 8px; border-radius: 6px; overflow: hidden; display: flex; background: rgba(51, 65, 85, 0.5); margin-bottom: 8px;">'
+            f'{bar_html}'
+            f'</div>'
+            f'<div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">'
+            f'{all_badges_html}'
+            f'</div>'
+            f'{edu_note_html}'
+            f'</div>'
+        )
+        st.markdown(box_html, unsafe_allow_html=True)
+    else:
+        box_html = (
+            f'<div style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(148, 163, 184, 0.22); border-radius: 12px; padding: 14px 18px; margin: 12px 0 16px 0;">'
+            f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">'
+            f'<span style="font-size: 0.95rem; font-weight: 700; color: #F8FAFC;">{title}</span>'
+            f'<span style="background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(129, 140, 248, 0.4); padding: 3px 10px; border-radius: 12px; font-size: 0.82rem; font-weight: 700; color: #C7D2FE;">'
+            f'🎯 Dominant Register: {DOMAIN_CONFIG.get(primary_domain, {}).get("emoji", "")} <b>{primary_domain}</b> ({primary_pct}%)'
+            f'</span>'
+            f'</div>'
+            f'<div style="width: 100%; height: 10px; border-radius: 8px; overflow: hidden; display: flex; background: rgba(51, 65, 85, 0.6); margin-bottom: 10px;">'
+            f'{bar_html}'
+            f'</div>'
+            f'<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">'
+            f'{all_badges_html}'
+            f'</div>'
+            f'{edu_note_html}'
+            f'</div>'
+        )
+        st.markdown(box_html, unsafe_allow_html=True)
+
+
 # Cached spaCy loader
 @st.cache_resource(show_spinner="Loading NLP Models...")
 def load_nlp():
@@ -816,6 +990,9 @@ if "custom_concept" not in st.session_state:
 if "commit_success_message" not in st.session_state:
     st.session_state.commit_success_message = None
 
+if "selected_domain" not in st.session_state:
+    st.session_state.selected_domain = persisted_session.get("selected_domain", "All Domains")
+
 
 def sync_active_session():
     """Sync current studio batch and musical direction to SQLite for F5 persistence."""
@@ -829,7 +1006,8 @@ def sync_active_session():
             master_prompt=st.session_state.get("master_prompt", ""),
             suno_prompt=st.session_state.get("studio_suno_prompt", ""),
             poster_prompt=st.session_state.get("studio_poster_prompt", ""),
-            vocalist=st.session_state.get("selected_vocalist", "Male")
+            vocalist=st.session_state.get("selected_vocalist", "Male"),
+            selected_domain=st.session_state.get("selected_domain", "All Domains")
         )
     else:
         db.clear_active_batch_state()
@@ -909,6 +1087,56 @@ with st.sidebar:
         unsafe_allow_html=True
     )
 
+    # 3.5. Domain Remaining Breakdown Widget (Persistent in Sidebar)
+    sb_dom_stats = db.get_domain_detailed_stats()
+    sb_total_unused = sum(d["unused"] for d in sb_dom_stats.values())
+
+    domain_rows_html = []
+    for d_name in DOMAINS:
+        cfg = DOMAIN_CONFIG.get(d_name, {})
+        d_data = sb_dom_stats.get(d_name, {"total": 0, "used": 0, "unused": 0, "percent_used": 0.0})
+        d_tot = d_data["total"]
+        d_usd = d_data["used"]
+        d_uns = d_data["unused"]
+        pct_usd = d_data["percent_used"]
+        pct_uns = (d_uns / d_tot * 100) if d_tot > 0 else 0.0
+        color = cfg.get("color", "#38BDF8")
+        bg = cfg.get("bg", "rgba(56,189,248,0.15)")
+        border = cfg.get("border", "rgba(56,189,248,0.3)")
+        emoji = cfg.get("emoji", "🎯")
+
+        row_html = (
+            f'<div class="sb-domain-row">'
+            f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">'
+            f'<span style="font-weight: 700; font-size: 0.76rem; color: #F1F5F9; display: flex; align-items: center; gap: 5px;">'
+            f'<span>{emoji}</span> <span>{d_name}</span>'
+            f'</span>'
+            f'<span style="font-size: 0.69rem; font-weight: 800; color: {color}; background: {bg}; border: 1px solid {border}; padding: 1px 6px; border-radius: 6px;">'
+            f'{pct_uns:.0f}% Left'
+            f'</span>'
+            f'</div>'
+            f'<div class="sb-domain-bar-bg" style="margin-bottom: 3px;">'
+            f'<div class="sb-domain-bar-fill" style="width: {min(pct_usd, 100):.1f}%; background: {color};" title="{d_name}: {d_usd:,} used ({pct_usd:.1f}%), {d_uns:,} remaining ({pct_uns:.1f}%)"></div>'
+            f'</div>'
+            f'<div style="display: flex; justify-content: space-between; font-size: 0.68rem; color: #94A3B8; font-family: monospace;">'
+            f'<span><b style="color: #34D399;">{d_uns:,}</b> <span style="color: #64748B;">/ {d_tot:,}</span></span>'
+            f'<span style="color: #64748B;">{d_usd:,} used <small>({pct_usd:.1f}%)</small></span>'
+            f'</div>'
+            f'</div>'
+        )
+        domain_rows_html.append(row_html)
+
+    sb_domain_card_html = (
+        f'<div class="sb-domain-card">'
+        f'<div class="sb-domain-header">'
+        f'<span class="sb-domain-title">💎 Unused by Domain</span>'
+        f'<span class="sb-domain-total">{sb_total_unused:,} Pool</span>'
+        f'</div>'
+        f'{"".join(domain_rows_html)}'
+        f'</div>'
+    )
+    st.markdown(sb_domain_card_html, unsafe_allow_html=True)
+
     # 4. Songs Produced Counter Banner
     st.markdown(
         f"""
@@ -986,10 +1214,44 @@ with tab1:
     fraction = (stats['used'] / stats['total']) if stats['total'] > 0 else 0.0
     st.progress(fraction, text=f"Coverage Progress: {stats['used']} / {stats['total']} words ({stats['percent']}%)")
 
+    # 4-Domain Corpus Breakdown Cards (Total + Remaining Unused + Used)
+    domain_stats = db.get_domain_detailed_stats()
+    dom_total_corpus = sum(d["total"] for d in domain_stats.values()) or 1
+    d_cols = st.columns(4)
+    for idx, d_name in enumerate(DOMAINS):
+        cfg = DOMAIN_CONFIG.get(d_name, {})
+        data = domain_stats.get(d_name, {"total": 0, "used": 0, "unused": 0, "percent_used": 0.0})
+        d_tot = data["total"]
+        d_usd = data["used"]
+        d_uns = data["unused"]
+        pct_used = data["percent_used"]
+        corpus_share = (d_tot / dom_total_corpus * 100)
+        with d_cols[idx]:
+            card_html = (
+                f'<div style="background: rgba(30, 41, 59, 0.7); border: 1px solid {cfg.get("border", "rgba(148,163,184,0.3)")}; '
+                f'border-radius: 12px; padding: 14px 12px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.18);">'
+                f'<div style="font-size: 1.4rem; margin-bottom: 4px;">{cfg.get("emoji", "")}</div>'
+                f'<div style="font-size: 0.82rem; font-weight: 800; color: #F8FAFC; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">{d_name}</div>'
+                f'<div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(52, 211, 153, 0.3); border-radius: 8px; padding: 8px 6px; margin-bottom: 10px;">'
+                f'<div style="font-size: 1.45rem; font-weight: 800; color: #34D399; font-family: monospace; line-height: 1.1;">{d_uns:,}</div>'
+                f'<div style="font-size: 0.72rem; font-weight: 700; color: #A7F3D0; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 3px;">Remaining Words</div>'
+                f'</div>'
+                f'<div style="width: 100%; height: 6px; background: rgba(51, 65, 85, 0.75); border-radius: 4px; overflow: hidden; margin-bottom: 6px;">'
+                f'<div style="width: {pct_used:.1f}%; height: 100%; background: {cfg.get("color", "#38BDF8")};"></div>'
+                f'</div>'
+                f'<div style="font-size: 0.72rem; color: #94A3B8; margin-bottom: 10px;">{pct_used:.1f}% Mastered</div>'
+                f'<div style="display: flex; justify-content: space-between; font-size: 0.74rem; color: #94A3B8; border-top: 1px solid rgba(148,163,184,0.15); padding-top: 8px;">'
+                f'<span>Total: <b style="color: #F1F5F9;">{d_tot:,}</b> <small>({corpus_share:.0f}%)</small></span>'
+                f'<span>Used: <b style="color: {cfg.get("color", "#38BDF8")};">{d_usd:,}</b></span>'
+                f'</div>'
+                f'</div>'
+            )
+            st.markdown(card_html, unsafe_allow_html=True)
+
     st.markdown("---")
     
-    # Tables
-    col_ngsl, col_extra = st.columns([1.3, 1])
+    # Tables (Symmetrically aligned layout)
+    col_ngsl, col_extra = st.columns([1.35, 1])
     
     with col_ngsl:
         st.markdown("#### 📖 NGSL Dictionary")
@@ -1000,13 +1262,15 @@ with tab1:
             ngsl_df["Status"] = ngsl_df["usage_count"].apply(lambda c: "✅ Used" if c > 0 else "⏳ Unused")
             
             # Filters
-            f_col1, f_col2, f_col3 = st.columns(3)
+            f_col1, f_col2, f_col3, f_col4 = st.columns(4)
             with f_col1:
-                pos_filter = st.selectbox("Filter POS", ["All", "Noun", "Verb", "Adjective", "Other"])
+                pos_filter = st.selectbox("Filter POS", ["All", "Noun", "Verb", "Adjective", "Other"], key="filter_pos")
             with f_col2:
-                status_filter = st.selectbox("Filter Status", ["All", "Used", "Unused"])
+                status_filter = st.selectbox("Filter Status", ["All", "Used", "Unused"], key="filter_status")
             with f_col3:
-                search_word = st.text_input("Search Word", placeholder="Type word...")
+                domain_filter = st.selectbox("Filter Domain", ["All"] + DOMAINS, key="filter_domain")
+            with f_col4:
+                search_word = st.text_input("Search Word", placeholder="Type word...", key="filter_search_ngsl")
 
             filtered_df = ngsl_df.copy()
             if pos_filter != "All":
@@ -1015,13 +1279,16 @@ with tab1:
                 filtered_df = filtered_df[filtered_df["usage_count"] > 0]
             elif status_filter == "Unused":
                 filtered_df = filtered_df[filtered_df["usage_count"] == 0]
+            if domain_filter != "All":
+                filtered_df = filtered_df[filtered_df["domain"] == domain_filter]
             if search_word:
                 filtered_df = filtered_df[filtered_df["word"].str.contains(search_word.strip().lower(), case=False, na=False)]
 
             st.dataframe(
-                filtered_df[["word", "pos_type", "Status", "usage_count", "lemma_family"]],
+                filtered_df[["word", "domain", "pos_type", "Status", "usage_count", "lemma_family"]],
                 column_config={
                     "word": "Headword",
+                    "domain": "Semantic Domain",
                     "pos_type": "POS Type",
                     "Status": "Status",
                     "usage_count": "Times Used",
@@ -1034,11 +1301,29 @@ with tab1:
             st.info("Database is empty. Please run `python build_db.py` to ingest the vocabulary.")
 
     with col_extra:
-        st.markdown("#### 🌟 Extra Words (Non-NGSL In Approved Songs)")
+        st.markdown("#### 🌟 Extra Words (Non-NGSL In Songs)")
         extra_df = db.get_extra_words()
+        
+        # Symmetrical Toolbar to perfectly align vertically with NGSL Dictionary
+        ef_col1, ef_col2 = st.columns([1.3, 1])
+        with ef_col1:
+            search_extra = st.text_input("Search Extra Word", placeholder="Type word...", key="filter_search_extra")
+        with ef_col2:
+            sort_extra = st.selectbox("Sort By", ["Most Frequent", "A-Z", "First Seen Song"], key="filter_sort_extra")
+
         if not extra_df.empty:
+            filtered_extra = extra_df.copy()
+            if search_extra:
+                filtered_extra = filtered_extra[filtered_extra["word"].str.contains(search_extra.strip().lower(), case=False, na=False)]
+            if sort_extra == "Most Frequent":
+                filtered_extra = filtered_extra.sort_values(by="occurrence_count", ascending=False)
+            elif sort_extra == "A-Z":
+                filtered_extra = filtered_extra.sort_values(by="word", ascending=True)
+            elif sort_extra == "First Seen Song":
+                filtered_extra = filtered_extra.sort_values(by="first_seen_in_song", ascending=True)
+
             st.dataframe(
-                extra_df[["word", "occurrence_count", "first_seen_in_song"]],
+                filtered_extra[["word", "occurrence_count", "first_seen_in_song"]],
                 column_config={
                     "word": "Extra Word",
                     "occurrence_count": "Total Occurrences",
@@ -1127,12 +1412,70 @@ with tab2:
                     st.rerun()
 
 
+    # ─── Domain Filter Selector ───────────────────────────────────────
+    studio_dom_stats = db.get_domain_detailed_stats()
+    total_uns_all = sum(d["unused"] for d in studio_dom_stats.values())
+    all_dom_label = f"🌐 All Domains ({total_uns_all:,} Remaining - General Draw)"
+
+    domain_options = [all_dom_label] + [
+        f"{DOMAIN_CONFIG[d]['emoji']} {d} ({studio_dom_stats.get(d, {}).get('unused', 0):,} remaining / {studio_dom_stats.get(d, {}).get('total', 0):,})"
+        for d in DOMAINS
+    ]
+    domain_key_map = {all_dom_label: "All Domains"}
+    domain_label_from_key = {"All Domains": all_dom_label}
+    for d in DOMAINS:
+        lbl = f"{DOMAIN_CONFIG[d]['emoji']} {d} ({studio_dom_stats.get(d, {}).get('unused', 0):,} remaining / {studio_dom_stats.get(d, {}).get('total', 0):,})"
+        domain_key_map[lbl] = d
+        domain_label_from_key[d] = lbl
+
+    current_selected_domain = st.session_state.get("selected_domain", "All Domains")
+    default_domain_label = domain_label_from_key.get(current_selected_domain, all_dom_label)
+    default_idx = domain_options.index(default_domain_label) if default_domain_label in domain_options else 0
+
+    col_filter_ui, col_filter_badge = st.columns([2.2, 1.2], vertical_alignment="center")
+    with col_filter_ui:
+        chosen_domain_label = st.selectbox(
+            "🎯 Filter by Vocabulary Domain:",
+            options=domain_options,
+            index=default_idx,
+            key="studio_domain_selector",
+            help="Select a specific domain to pull words exclusively from that category, or select All Domains for general random draw."
+        )
+        new_domain_val = domain_key_map[chosen_domain_label]
+        if new_domain_val != st.session_state.selected_domain:
+            st.session_state.selected_domain = new_domain_val
+            sync_active_session()
+            st.rerun()
+
+    with col_filter_badge:
+        if new_domain_val == "All Domains":
+            badge_html = (
+                f'<div style="margin-top: 12px; font-size: 0.82rem; color: #94A3B8; background: rgba(148,163,184,0.1); '
+                f'border: 1px solid rgba(148,163,184,0.25); border-radius: 8px; padding: 7px 12px;">'
+                f'🎲 <b>{total_uns_all:,}</b> unused words remaining across all domains'
+                f'</div>'
+            )
+            st.markdown(badge_html, unsafe_allow_html=True)
+        else:
+            cfg = DOMAIN_CONFIG.get(new_domain_val, {})
+            cur_uns = studio_dom_stats.get(new_domain_val, {}).get('unused', 0)
+            cur_tot = studio_dom_stats.get(new_domain_val, {}).get('total', 0)
+            badge_html = (
+                f'<div style="margin-top: 12px; font-size: 0.82rem; color: {cfg.get("color", "#38BDF8")}; '
+                f'background: {cfg.get("bg", "rgba(56,189,248,0.1)")}; border: 1px solid {cfg.get("border", "rgba(56,189,248,0.3)")}; '
+                f'border-radius: 8px; padding: 7px 12px; font-weight: 700;">'
+                f'{cfg.get("emoji", "")} <b>{cur_uns:,}</b> words remaining out of <b>{cur_tot:,}</b>'
+                f'</div>'
+            )
+            st.markdown(badge_html, unsafe_allow_html=True)
+
     col_actions, col_status = st.columns([2.5, 1])
     with col_actions:
         b_col1, b_col2, b_col3, b_col4 = st.columns([1.1, 1.3, 1, 0.9])
         with b_col1:
             if st.button("🎲 Random 20", type="secondary", use_container_width=True, help="Randomly pull 20 unused words (10 N, 6 V, 4 A) directly from SQLite."):
-                new_batch = db.pull_20_words()
+                active_domain = st.session_state.get("selected_domain", "All Domains")
+                new_batch = db.pull_20_words(domain=active_domain)
                 if len(new_batch) == 20:
                     st.session_state.target_batch = new_batch
                     st.session_state.mood_analysis = None
@@ -1140,7 +1483,8 @@ with tab2:
                     st.session_state.studio_suno_prompt = ""
                     st.session_state.custom_concept = ""
                     sync_active_session()
-                    st.success("Pulled 20 random unused words (10 Nouns, 6 Verbs, 4 Adjectives)!")
+                    dom_tag = f" from {active_domain}" if active_domain != "All Domains" else ""
+                    st.success(f"Pulled 20 random unused words (10 Nouns, 6 Verbs, 4 Adjectives){dom_tag}!")
                     st.rerun()
                 elif len(new_batch) > 0:
                     st.session_state.target_batch = new_batch
@@ -1154,8 +1498,15 @@ with tab2:
 
         with b_col2:
             if st.button("🧠 Smart Thematic Pull", type="primary", use_container_width=True, help="Gemini analyzes 140 candidate unused words and selects 20 words (10 N, 6 V, 4 A) that share natural chemistry and relate to an authentic everyday life scenario."):
-                with st.spinner("🧠 Gemini is curating a cohesive 20-word batch from 140 candidate unused words..."):
-                    candidate_pool = db.pull_candidate_pool_for_thematic_curation(nouns_limit=70, verbs_limit=40, adjs_limit=30)
+                active_domain = st.session_state.get("selected_domain", "All Domains")
+                dom_spin = f" within {active_domain}" if active_domain != "All Domains" else ""
+                with st.spinner(f"🧠 Gemini is curating a cohesive 20-word batch{dom_spin}..."):
+                    candidate_pool = db.pull_candidate_pool_for_thematic_curation(
+                        nouns_limit=70,
+                        verbs_limit=40,
+                        adjs_limit=30,
+                        domain=active_domain
+                    )
                     candidate_nouns = [w["word"] for w in candidate_pool["Noun"]]
                     candidate_verbs = [w["word"] for w in candidate_pool["Verb"]]
                     candidate_adjs = [w["word"] for w in candidate_pool["Adjective"]]
@@ -1163,7 +1514,8 @@ with tab2:
                     curation_res = gemini_client.curate_thematic_vocabulary_batch(
                         candidate_nouns=candidate_nouns,
                         candidate_verbs=candidate_verbs,
-                        candidate_adjs=candidate_adjs
+                        candidate_adjs=candidate_adjs,
+                        domain_focus=active_domain
                     )
                     
                     curated_batch = db.build_curated_batch_from_words(
@@ -1194,7 +1546,8 @@ with tab2:
 
         with b_col3:
             if st.button("🔄 Cancel & Redraw", use_container_width=True):
-                new_batch = db.pull_20_words()
+                active_domain = st.session_state.get("selected_domain", "All Domains")
+                new_batch = db.pull_20_words(domain=active_domain)
                 st.session_state.target_batch = new_batch
                 st.session_state.mood_analysis = None
                 st.session_state.master_prompt = ""
@@ -1244,6 +1597,10 @@ with tab2:
             )
         with col_batch_actions:
             render_copy_words_toolbar(current_words)
+
+        # Active Batch Domain Breakdown
+        batch_domain_data = db.compute_domain_breakdown(current_words)
+        render_domain_breakdown_section(batch_domain_data, title="📊 Active 20-Word Batch Domain Balance", compact=True)
 
         # 4 columns of 5 words
         cols = st.columns(4)
@@ -1584,6 +1941,15 @@ with tab3:
         m_col3.metric("🔵 Bonus Hits (New)", f"{len(blue_list)}")
         m_col4.metric("⚪ Previously Covered", f"{len(reused_list)}")
         m_col5.metric("🟡 Extra Words", f"{len(yellow_list)}")
+
+        # 🎯 Song Vocabulary Domain Register Breakdown
+        song_all_ngsl = list(set(green_list + blue_list + reused_list))
+        song_domain_data = db.compute_domain_breakdown(song_all_ngsl)
+        render_domain_breakdown_section(
+            song_domain_data,
+            title="🎯 Song Vocabulary Domain Register",
+            compact=False
+        )
 
         st.info("Uncheck any word below if you do NOT want it counted towards the database counters.")
 
@@ -1947,6 +2313,14 @@ with tab4:
             reused_list = [w.strip() for w in reused_words_raw.split(",") if w.strip()]
             extra_list = [w.strip() for w in extra_words_raw.split(",") if w.strip()]
 
+            # 🎯 Compute domain breakdown across all NGSL words used in song (Target + Bonus + Reused)
+            song_all_ngsl = list(set(target_list + bonus_list + reused_list))
+            song_domain_data = db.compute_domain_breakdown(song_all_ngsl)
+            primary_dom = song_domain_data.get("primary_domain", "Street & Daily Life")
+            primary_pct = song_domain_data.get("primary_percent", 0.0)
+            primary_cfg = DOMAIN_CONFIG.get(primary_dom, {})
+            primary_emoji = primary_cfg.get("emoji", "🎵")
+
             # Parse mood breakdown
             mood_dict = {}
             if mood_raw:
@@ -1959,7 +2333,7 @@ with tab4:
             total_new_words = len(target_list) + len(bonus_list)
 
             with st.expander(
-                f"🎵 #{row_num} — **{song_title}** ｜ 🔥 **+{total_new_words} New NGSL** (🟢 {len(target_list)} + 🔵 {len(bonus_list)}) ｜ ⚪ {len(reused_list)} Reused  🟡 {len(extra_list)} Extra ｜ 📅 {display_time}",
+                f"🎵 #{row_num} — **{song_title}** ｜ 🔥 **+{total_new_words} New NGSL** (🟢 {len(target_list)} + 🔵 {len(bonus_list)}) ｜ ⚪ {len(reused_list)} Reused ｜ {primary_emoji} **{primary_dom}** ({primary_pct}%) ｜ 📅 {display_time}",
                 expanded=(loop_idx == 0)
             ):
                 # Modern Meta & Stats Header Bar
@@ -1975,6 +2349,9 @@ with tab4:
                             <span class="stat-badge stat-badge-bonus">🔵 {len(bonus_list)} Bonus</span>
                             <span class="stat-badge stat-badge-reused">⚪ {len(reused_list)} Reused</span>
                             <span class="stat-badge stat-badge-extra">🟡 {len(extra_list)} Extra</span>
+                            <span class="stat-badge" style="background: {primary_cfg.get('bg', 'rgba(16,185,129,0.15)')}; color: {primary_cfg.get('color', '#34D399')}; border: 1px solid {primary_cfg.get('border', 'rgba(52,211,153,0.4)')}; font-weight: 700;">
+                                {primary_emoji} {primary_dom} ({primary_pct}%)
+                            </span>
                         </div>
                     </div>
                     """,
@@ -2009,6 +2386,13 @@ with tab4:
                         st.markdown(f"<div style='margin-top: 8px;'><b>🟡 Extra Words ({len(extra_list)}):</b></div>", unsafe_allow_html=True)
                         extra_html = " ".join(f'<span class="extra-pill">{w}</span>' for w in extra_list)
                         st.markdown(extra_html, unsafe_allow_html=True)
+
+                    # 5. 🎯 Domain Distribution & Educational Context Note
+                    render_domain_breakdown_section(
+                        song_domain_data,
+                        title="🎯 Song Vocabulary Domain Register",
+                        compact=False
+                    )
 
                 with info_col2:
                     st.metric(

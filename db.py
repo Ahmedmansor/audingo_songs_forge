@@ -48,6 +48,13 @@ def init_db(db_path: Path = DB_PATH) -> None:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ngsl_usage ON ngsl_words(usage_count);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ngsl_pos ON ngsl_words(pos_type);")
 
+        # Migration: ensure domain column exists in ngsl_words
+        cursor.execute("PRAGMA table_info(ngsl_words)")
+        existing_ngsl_cols = {row["name"] for row in cursor.fetchall()}
+        if "domain" not in existing_ngsl_cols:
+            cursor.execute("ALTER TABLE ngsl_words ADD COLUMN domain TEXT DEFAULT NULL")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ngsl_domain ON ngsl_words(domain);")
+
         # 2. extra_words table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS extra_words (
@@ -183,7 +190,7 @@ def get_all_ngsl_words(db_path: Path = DB_PATH) -> pd.DataFrame:
     """Retrieve all NGSL words as a pandas DataFrame."""
     with get_connection(db_path) as conn:
         df = pd.read_sql_query(
-            "SELECT id, word, pos_type, usage_count, lemma_family FROM ngsl_words ORDER BY word ASC",
+            "SELECT id, word, domain, pos_type, usage_count, lemma_family FROM ngsl_words ORDER BY word ASC",
             conn
         )
         return df
@@ -224,12 +231,119 @@ def get_progress_stats(db_path: Path = DB_PATH) -> Dict[str, Any]:
         }
 
 
-def pull_20_words(db_path: Path = DB_PATH) -> List[Dict[str, Any]]:
+def get_domain_counts(db_path: Path = DB_PATH) -> Dict[str, int]:
+    """Return count of words in each domain."""
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT domain, COUNT(*) FROM ngsl_words WHERE domain IS NOT NULL GROUP BY domain")
+        return {row[0]: row[1] for row in cursor.fetchall()}
+
+
+def get_domain_detailed_stats(db_path: Path = DB_PATH) -> Dict[str, Dict[str, Any]]:
+    """
+    Return detailed statistics per domain:
+    total words, used words (usage_count > 0), unused/remaining words (usage_count == 0),
+    and percentage used.
+    """
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT 
+                domain,
+                COUNT(*) as total,
+                SUM(CASE WHEN usage_count > 0 THEN 1 ELSE 0 END) as used,
+                SUM(CASE WHEN usage_count = 0 THEN 1 ELSE 0 END) as unused
+            FROM ngsl_words 
+            WHERE domain IS NOT NULL 
+            GROUP BY domain
+        """)
+        rows = cursor.fetchall()
+        result = {}
+        for r in rows:
+            dom = r["domain"]
+            tot = r["total"] or 0
+            usd = r["used"] or 0
+            uns = r["unused"] or 0
+            pct_used = (usd / tot * 100) if tot > 0 else 0.0
+            result[dom] = {
+                "total": tot,
+                "used": usd,
+                "unused": uns,
+                "percent_used": round(pct_used, 1)
+            }
+        return result
+
+
+
+def get_words_domains(words: List[str], db_path: Path = DB_PATH) -> Dict[str, str]:
+    """Bulk lookup domain for a list of words."""
+    if not words:
+        return {}
+    cleaned = list({w.strip().lower() for w in words if w.strip()})
+    if not cleaned:
+        return {}
+    placeholders = ",".join("?" * len(cleaned))
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"SELECT word, domain FROM ngsl_words WHERE LOWER(word) IN ({placeholders})",
+            cleaned
+        )
+        return {row["word"].lower(): (row["domain"] or "Street & Daily Life") for row in cursor.fetchall()}
+
+
+def compute_domain_breakdown(words: List[str], db_path: Path = DB_PATH) -> Dict[str, Any]:
+    """
+    Given a list of words (e.g. target + bonus + reused words in a song),
+    computes the percentage and count distribution across the 4 core domains.
+    """
+    from constants import DOMAINS
+    domain_map = get_words_domains(words, db_path=db_path)
+
+    breakdown = {
+        d: {"count": 0, "percent": 0.0, "words": []} for d in DOMAINS
+    }
+
+    classified_count = 0
+    for w in words:
+        w_clean = w.strip().lower()
+        dom = domain_map.get(w_clean, "Street & Daily Life")
+        if dom not in breakdown:
+            dom = "Street & Daily Life"
+        breakdown[dom]["count"] += 1
+        breakdown[dom]["words"].append(w.strip())
+        classified_count += 1
+
+    # Calculate percentages
+    primary_domain = DOMAINS[0]
+    max_pct = 0.0
+    for d, data in breakdown.items():
+        pct = round((data["count"] / classified_count * 100), 1) if classified_count > 0 else 0.0
+        data["percent"] = pct
+        if pct > max_pct:
+            max_pct = pct
+            primary_domain = d
+
+    formal_pct = breakdown.get("Business & Career", {}).get("percent", 0.0) + breakdown.get("Society, Law & Deep Ideas", {}).get("percent", 0.0)
+    is_high_formal = formal_pct >= 25.0
+
+    return {
+        "total_words": classified_count,
+        "domains": breakdown,
+        "primary_domain": primary_domain,
+        "primary_percent": max_pct,
+        "is_high_formal": is_high_formal,
+        "formal_percent": round(formal_pct, 1)
+    }
+
+
+def pull_20_words(domain: Optional[str] = None, db_path: Path = DB_PATH) -> List[Dict[str, Any]]:
     """
     Randomly select 20 words where usage_count = 0 according to ratio:
     - 50% Nouns (10 words)
     - 30% Verbs (6 words)
     - 20% Adjectives (4 words)
+    If domain is specified, filters words by domain with graceful fallback.
     """
     targets = [
         ("Noun", 10),
@@ -238,20 +352,30 @@ def pull_20_words(db_path: Path = DB_PATH) -> List[Dict[str, Any]]:
     ]
     
     selected_words: List[Dict[str, Any]] = []
+    use_domain = domain if (domain and domain != "All Domains" and "الكل" not in domain and "All" not in domain) else None
     
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
         for pos, count in targets:
-            cursor.execute(
+            if use_domain:
+                query = """
+                    SELECT id, word, lemma_family, pos_type, usage_count, domain
+                    FROM ngsl_words
+                    WHERE usage_count = 0 AND pos_type = ? AND domain = ?
+                    ORDER BY RANDOM()
+                    LIMIT ?
                 """
-                SELECT id, word, lemma_family, pos_type, usage_count
-                FROM ngsl_words
-                WHERE usage_count = 0 AND pos_type = ?
-                ORDER BY RANDOM()
-                LIMIT ?
-                """,
-                (pos, count)
-            )
+                params = (pos, use_domain, count)
+            else:
+                query = """
+                    SELECT id, word, lemma_family, pos_type, usage_count, domain
+                    FROM ngsl_words
+                    WHERE usage_count = 0 AND pos_type = ?
+                    ORDER BY RANDOM()
+                    LIMIT ?
+                """
+                params = (pos, count)
+            cursor.execute(query, params)
             rows = cursor.fetchall()
             for r in rows:
                 selected_words.append({
@@ -259,41 +383,61 @@ def pull_20_words(db_path: Path = DB_PATH) -> List[Dict[str, Any]]:
                     "word": r["word"],
                     "lemma_family": r["lemma_family"],
                     "pos_type": r["pos_type"],
-                    "usage_count": r["usage_count"]
+                    "usage_count": r["usage_count"],
+                    "domain": r["domain"] if "domain" in r.keys() else "Street & Daily Life"
                 })
                 
-        # If any category had fewer words than needed, fill the remainder with any unused words
+        # If any category had fewer words than needed, fill the remainder
         if len(selected_words) < 20:
             existing_ids = [w["id"] for w in selected_words]
             needed = 20 - len(selected_words)
-            if existing_ids:
-                placeholders = ",".join("?" * len(existing_ids))
+            placeholders = ",".join("?" * len(existing_ids)) if existing_ids else ""
+            
+            # First try within the same domain if specified
+            if use_domain:
+                id_clause = f"AND id NOT IN ({placeholders})" if existing_ids else ""
                 query = f"""
-                    SELECT id, word, lemma_family, pos_type, usage_count
+                    SELECT id, word, lemma_family, pos_type, usage_count, domain
                     FROM ngsl_words
-                    WHERE usage_count = 0 AND id NOT IN ({placeholders})
+                    WHERE usage_count = 0 AND domain = ? {id_clause}
                     ORDER BY RANDOM()
                     LIMIT ?
                 """
-                params = existing_ids + [needed]
-            else:
-                query = """
-                    SELECT id, word, lemma_family, pos_type, usage_count
+                params = [use_domain] + existing_ids + [needed] if existing_ids else [use_domain, needed]
+                cursor.execute(query, params)
+                for r in cursor.fetchall():
+                    selected_words.append({
+                        "id": r["id"],
+                        "word": r["word"],
+                        "lemma_family": r["lemma_family"],
+                        "pos_type": r["pos_type"],
+                        "usage_count": r["usage_count"],
+                        "domain": r["domain"] if "domain" in r.keys() else "Street & Daily Life"
+                    })
+            
+            # If still under 20, fill from any domain
+            if len(selected_words) < 20:
+                existing_ids = [w["id"] for w in selected_words]
+                needed = 20 - len(selected_words)
+                id_clause = f"WHERE usage_count = 0 AND id NOT IN ({','.join('?' * len(existing_ids))})" if existing_ids else "WHERE usage_count = 0"
+                params = existing_ids + [needed] if existing_ids else [needed]
+                query = f"""
+                    SELECT id, word, lemma_family, pos_type, usage_count, domain
                     FROM ngsl_words
-                    WHERE usage_count = 0
+                    {id_clause}
                     ORDER BY RANDOM()
                     LIMIT ?
                 """
-                params = [needed]
-            cursor.execute(query, params)
-            for r in cursor.fetchall():
-                selected_words.append({
-                    "id": r["id"],
-                    "word": r["word"],
-                    "lemma_family": r["lemma_family"],
-                    "pos_type": r["pos_type"],
-                    "usage_count": r["usage_count"]
-                })
+                cursor.execute(query, params)
+                for r in cursor.fetchall():
+                    selected_words.append({
+                        "id": r["id"],
+                        "word": r["word"],
+                        "lemma_family": r["lemma_family"],
+                        "pos_type": r["pos_type"],
+                        "usage_count": r["usage_count"],
+                        "domain": r["domain"] if "domain" in r.keys() else "Street & Daily Life"
+                    })
 
     return selected_words
 
@@ -302,6 +446,7 @@ def pull_candidate_pool_for_thematic_curation(
     nouns_limit: int = 70,
     verbs_limit: int = 40,
     adjs_limit: int = 30,
+    domain: Optional[str] = None,
     db_path: Path = DB_PATH
 ) -> Dict[str, List[Dict[str, Any]]]:
     """
@@ -311,6 +456,7 @@ def pull_candidate_pool_for_thematic_curation(
     - 40 Verbs
     - 30 Adjectives
     Total: 140 candidate words.
+    If domain is specified, filters words within that domain with graceful fallback.
     """
     candidate_targets = [
         ("Noun", nouns_limit),
@@ -322,27 +468,68 @@ def pull_candidate_pool_for_thematic_curation(
         "Verb": [],
         "Adjective": []
     }
+    use_domain = domain if (domain and domain != "All Domains" and "الكل" not in domain and "All" not in domain) else None
+
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
         for pos, count in candidate_targets:
-            cursor.execute(
-                """
-                SELECT id, word, lemma_family, pos_type, usage_count
-                FROM ngsl_words
-                WHERE usage_count = 0 AND pos_type = ?
-                ORDER BY RANDOM()
-                LIMIT ?
-                """,
-                (pos, count)
-            )
+            if use_domain:
+                cursor.execute(
+                    """
+                    SELECT id, word, lemma_family, pos_type, usage_count, domain
+                    FROM ngsl_words
+                    WHERE usage_count = 0 AND pos_type = ? AND domain = ?
+                    ORDER BY RANDOM()
+                    LIMIT ?
+                    """,
+                    (pos, use_domain, count)
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT id, word, lemma_family, pos_type, usage_count, domain
+                    FROM ngsl_words
+                    WHERE usage_count = 0 AND pos_type = ?
+                    ORDER BY RANDOM()
+                    LIMIT ?
+                    """,
+                    (pos, count)
+                )
             for r in cursor.fetchall():
                 pool[pos].append({
                     "id": r["id"],
                     "word": r["word"],
                     "lemma_family": r["lemma_family"],
                     "pos_type": r["pos_type"],
-                    "usage_count": r["usage_count"]
+                    "usage_count": r["usage_count"],
+                    "domain": r["domain"] if "domain" in r.keys() else "Street & Daily Life"
                 })
+
+            # If that domain didn't have enough candidates, top up from other domains so Gemini has ample choices
+            if use_domain and len(pool[pos]) < count:
+                existing_ids = [w["id"] for w in pool[pos]]
+                needed = count - len(pool[pos])
+                placeholders = ",".join("?" * len(existing_ids)) if existing_ids else ""
+                id_clause = f"AND id NOT IN ({placeholders})" if existing_ids else ""
+                topup_query = f"""
+                    SELECT id, word, lemma_family, pos_type, usage_count, domain
+                    FROM ngsl_words
+                    WHERE usage_count = 0 AND pos_type = ? {id_clause}
+                    ORDER BY RANDOM()
+                    LIMIT ?
+                """
+                params = [pos] + existing_ids + [needed] if existing_ids else [pos, needed]
+                cursor.execute(topup_query, params)
+                for r in cursor.fetchall():
+                    pool[pos].append({
+                        "id": r["id"],
+                        "word": r["word"],
+                        "lemma_family": r["lemma_family"],
+                        "pos_type": r["pos_type"],
+                        "usage_count": r["usage_count"],
+                        "domain": r["domain"] if "domain" in r.keys() else "Street & Daily Life"
+                    })
+
     return pool
 
 
@@ -1059,6 +1246,7 @@ def save_active_batch_state(
     suno_prompt: str = "",
     poster_prompt: str = "",
     vocalist: str = "Male",
+    selected_domain: str = "All Domains",
     db_path: Path = DB_PATH
 ) -> None:
     """Save active studio batch state to app_state table in SQLite for persistence across browser refreshes."""
@@ -1071,7 +1259,8 @@ def save_active_batch_state(
         "master_prompt": master_prompt,
         "suno_prompt": suno_prompt,
         "poster_prompt": poster_prompt,
-        "selected_vocalist": vocalist
+        "selected_vocalist": vocalist,
+        "selected_domain": selected_domain
     }
     with get_connection(db_path) as conn:
         cursor = conn.cursor()

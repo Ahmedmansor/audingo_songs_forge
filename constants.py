@@ -49,11 +49,51 @@ MOOD_CATEGORIES = [
 # Priority 2: Gemini 3.5 Flash Lite / 2.5 Flash Lite
 # Priority 3: Gemini 3.1 Flash Lite Preview
 GEMINI_MODEL_CANDIDATES = [
-    "models/gemini-3-flash-preview",      # Choice 1: Gemini 3 Flash
-    "models/gemini-3.5-flash-lite",       # Choice 2: Gemini 3.5 Flash Lite
-    "models/gemini-3.1-flash-lite-preview", # Choice 3: Gemini 3.1 Flash Lite
+    "models/gemini-3.6-flash",
+    "models/gemini-3.5-flash-lite",
+    "models/gemini-flash-latest",
+    "models/gemini-flash-lite-latest",
+    "models/gemini-3.7-flash",
     "models/gemini-3.1-flash-lite",
-    "models/gemini-2.5-flash",
-    "models/gemini-2.5-flash-lite",
 ]
+
+# 4 Core NGSL Vocabulary Domains
+DOMAINS = [
+    "Street & Daily Life",
+    "Emotions & Relationships",
+    "Business & Career",
+    "Society, Law & Deep Ideas"
+]
+
+DOMAIN_CONFIG = {
+    "Street & Daily Life": {
+        "emoji": "🏙️",
+        "color": "#10B981",
+        "bg": "rgba(16, 185, 129, 0.15)",
+        "border": "rgba(52, 211, 153, 0.4)",
+        "label_ar": "الشارع واليوميات"
+    },
+    "Emotions & Relationships": {
+        "emoji": "❤️",
+        "color": "#F43F5E",
+        "bg": "rgba(244, 63, 94, 0.15)",
+        "border": "rgba(251, 113, 133, 0.4)",
+        "label_ar": "المشاعر والقلب"
+    },
+    "Business & Career": {
+        "emoji": "💼",
+        "color": "#3B82F6",
+        "bg": "rgba(59, 130, 246, 0.15)",
+        "border": "rgba(96, 165, 250, 0.4)",
+        "label_ar": "العمل والبيزنس"
+    },
+    "Society, Law & Deep Ideas": {
+        "emoji": "🏛️",
+        "color": "#8B5CF6",
+        "bg": "rgba(139, 92, 246, 0.15)",
+        "border": "rgba(167, 139, 250, 0.4)",
+        "label_ar": "المجتمع والقانون والفكر"
+    }
+}
+
 
