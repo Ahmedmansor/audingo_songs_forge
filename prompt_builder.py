@@ -97,11 +97,11 @@ def generate_master_prompt(
 
 """
 
-    prompt = f"""# 🎵 MASTER SONGWRITING & SUNO PROMPT (REAL-LIFE & PRACTICAL VOCABULARY)
+    prompt = f"""# 🎵 MASTER SONGWRITING & SUNO PROMPT (STREET SMALL-TALK & CATCHY RHYMES)
 
-You are a world-class ESL pedagogy expert and scriptwriter who produces hit songs.
+You are a Grammy-winning songwriter and world-class ESL pedagogy specialist who produces modern, radio-ready hits.
 
-Your mission is to write a catchy, highly relatable, and radio-ready song that naturally weaves 20 specific target vocabulary words into authentic, practical real-life scenarios (e.g., social gatherings, friendships, travel, relationships, hobbies, home life, or everyday human decisions), while ensuring the lyrics remain conversational, highly useful for language learners, and optimized for crystal-clear vocal delivery.
+Your mission is to write a catchy, highly relatable, and musical song that naturally weaves 20 specific target vocabulary words into authentic, everyday street-level situations (hanging out with friends, relationships, daily errands, moving places, late-night phone calls, road trips, personal struggles), while keeping the lyrics effortless, conversational, and packed with natural rhymes and great rhythmic cadence.
 
 ---
 
@@ -112,37 +112,55 @@ Your mission is to write a catchy, highly relatable, and radio-ready song that n
 
 {avoidance_section}---
 
-### 🎨 Creative Direction & Practical Vibe:
+### 🎨 Creative Direction & Musical Vibe:
 - **Genre & Style:** {genre} (clean, warm, rhythm-driven, and highly relatable)
 - **Song Structure:** {song_structure}
 - **Emotional Mood Profile:** {mood_str if mood_str else "Casual & Conversational: 70%, Reflective: 30%"}
 - **Core Concept / Story:** {concept_text}
-- **STRICT RULE:** Absolutely NO metaphors, NO poetic imagery, NO abstract concepts, and NO surreal or illogical causality. Every single sentence MUST be a literal, practical phrase (Lexical Chunk / Idiom) that a real person would naturally use in daily life, friendly conversations, casual banter, or real-world social interactions. Actions and causes MUST match physical reality — never force an illogical sentence just to fit a target word or a rhyme (**Logic > Rhyme**). Use the target words in their most common, literal collocations (e.g., "foreign language/currency" not "foreign dream", "ten percent discount" not "percent of courage").
-- **CHORUS STRICT RULE:** The Chorus is the most repeated and memorized part of the song. It MUST be composed of 100% natural, highly practical phrases that a native speaker would use in daily life. Sacrifice rhymes if necessary, but NEVER sacrifice natural sentence structure in the Chorus.
+
+---
+
+### 🎤 CRITICAL SONGWRITING RULES (RHYME, METER & STREET SMALL-TALK):
+
+1. **STRICT RHYME SCHEME (AABB or ABAB) — NO PROSE, NO FREE VERSE:**
+   - Every single section ([Verse], [Chorus], [Bridge], [Outro]) MUST have a clear, pleasant, and natural end-rhyme scheme (AABB or ABAB).
+   - Rhyme effortlessly with common, everyday words (e.g., *night / light, car / far, street / meet, head / bed, door / floor, say / way, town / down, dust / must, clear / year, phone / alone*).
+   - NEVER write unrhymed, blank prose sentences. A song MUST sing and rhyme!
+
+2. **RHYTHMIC METER & LINE LENGTH (6 to 9 Words / 8 to 11 Syllables Per Line):**
+   - Song lines must fit a natural musical beat!
+   - STRICT LIMIT: Keep lines concise (typically 6 to 9 words, or 8 to 11 syllables).
+   - NEVER write long, run-on prose sentences (e.g., do NOT write: *"Saw the job ad online three weeks ago, some global company, didn't think twice"* — that is prose, not a song!). Break thoughts into punchy, rhythmic, rhymed song lines that breathe with the music.
+
+3. **AUTHENTIC STREET SMALL-TALK (100% Conversational, 0% Corporate/Academic):**
+   - Write like a real person talking to a close friend over coffee or on a late-night drive.
+   - Use natural conversational idioms and phrasal verbs: *grab my keys, hit the road, call it a day, out of the blue, brush it off, no big deal, hang in there, take it easy, back on my feet, running late, figure it out*.
+   - **STRICTLY FORBIDDEN:** Academic, clinical, essay, or corporate jargon (e.g., NEVER use phrases like: *"honest assessment"*, *"situate"*, *"complexity"*, *"the latter"*, *"detect"*, *"necessity more than choice"*, *"felt like an investment"*, *"launch a chapter"*). Talk like everyday life, NOT an HR performance review!
+
+4. **EARWORM CHORUS:**
+   - The Chorus is the most memorable part of the song. Make it catchy, punchy, rhymed, and relatable, with a memorable hook that people can't stop singing.
 
 ---
 
 ### 🎚️ Suno Audio & Clarity Instructions:
 - **BPM Limit:** Strict mid-tempo range between **110 to 118 BPM** to ensure a relaxed rhythm where words can be articulated naturally.
-- **Vocal Production Directives:** Explicitly format the Suno style prompt to prioritize upfront, clear, warm, and conversational vocals with a clean mix (no heavy distortion masking the words).
+- **Vocal Production Directives:** Explicitly format the Suno style prompt to prioritize upfront, clear, warm, and conversational vocals with a clean mix.
 
 ---
 
 ### 📝 Generation Instructions:
 1. **Title:** Propose a catchy, down-to-earth song title related to everyday life or personal growth.
 2. **Suno Style Prompt (under 120 chars):** Provide a dense, keyword-rich Suno prompt optimized for clarity and a modern vibe (e.g., `Indie pop, 114 bpm, warm clear male vocals, acoustic rhythm, catchy chorus, clean mix`).
-3. **Internal Quality Gate (Self-Correction & Reality Filter):**
-   - Before outputting the final lyrics, you MUST silently draft the song internally.
-   - For every single line you write, act as a strict Native English Editor and rate its "Natural Conversational Accuracy" from 0% to 100%.
-   - **LOGIC & CAUSALITY CHECK (Logic > Rhyme):** Ensure physical actions and causes strictly match their real-world effects. Do NOT write surreal, nonsensical, or illogical sentences (e.g., "a word ruins a building", "a coffee called my name") just to force-fit a target word or catch a rhyme. **Real-world Logic ALWAYS trumps rhyming.**
-   - If a line sounds like a forced rhyme, poetic fantasy, illogical statement, or awkward construction, it scores below 90%.
-   - You MUST rewrite any line that scores below 95% until it reaches 100% realistic, natural native phrasing that a real person would genuinely say.
-   - ONLY output the final, 100% perfected lyrics. Do not show your internal scoring process.
+3. **Internal Quality Gate (The Earworm & Rhyme Test):**
+   - Before outputting, sing each line internally to an acoustic/pop beat.
+   - Does every line rhyme naturally in an AABB or ABAB pattern?
+   - Is every line short, punchy, and singable (6-9 words)?
+   - Does it sound like authentic, street-level spoken English?
+   - If any line sounds like a textbook, corporate memo, or unrhymed prose, rewrite it immediately!
 4. **Full Lyrics:**
    - Follow the structure: `{song_structure}`.
    - Label each section clearly: `[Verse 1]`, `[Chorus]`, `[Verse 2]`, `[Bridge]`, `[Outro]`, etc.
    - **Bold** every target word when it appears in the lyrics so it is easy to verify (e.g. **{target_words[0] if target_words else "word"}**).
-   - Ensure the sentences are structured closely to natural spoken English so the learner can actually internalize useful phrases and sentence structures.
-   - AVOID forced rhymes, poetry cliches, or robotic phrasing. It must feel like a modern song about real life!
+   - Ensure the song tells a vivid, authentic real-life story that learners will love to sing along with!
 """
     return prompt
