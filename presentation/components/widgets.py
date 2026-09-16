@@ -285,8 +285,8 @@ def render_domain_breakdown_section(
         edu_note_html = (
             f'<div style="background: rgba(59, 130, 246, 0.09); border-left: 4px solid #3B82F6; border-radius: 8px; padding: 10px 14px; margin-top: 10px; font-size: 0.88rem; color: #BFDBFE; line-height: 1.55;">'
             f'💡 <b>ESL Learning Context Note:</b><br>'
-            f'This song embeds a notable concentration of <b>Business & Society ({formal_pct}%)</b> vocabulary. '
-            f'These formal terms are woven into a musical story to make them easier to remember and use in professional workplaces and interviews.'
+            f'This song embeds a notable concentration of <b>Professional & Academic ({formal_pct}%)</b> vocabulary. '
+            f'These formal terms are woven into a musical story to make them easier to remember and use in professional workplaces, academia, and interviews.'
             f'</div>'
         )
 

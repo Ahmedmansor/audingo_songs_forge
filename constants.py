@@ -57,15 +57,38 @@ GEMINI_MODEL_CANDIDATES = [
     "models/gemini-3.1-flash-lite",
 ]
 
-# 4 Core NGSL Vocabulary Domains
+# 6 Core NGSL Vocabulary Domains (COCA Frequency Based)
 DOMAINS = [
-    "Street & Daily Life",
+    "Basic / Neutral",
+    "Science, Tech & Academia",
     "Emotions & Relationships",
-    "Business & Career",
-    "Society, Law & Deep Ideas"
+    "Street & Daily Life",
+    "Law, Politics & Society",
+    "Business & Career"
 ]
 
 DOMAIN_CONFIG = {
+    "Basic / Neutral": {
+        "emoji": "🃏",
+        "color": "#F59E0B",
+        "bg": "rgba(245, 158, 11, 0.15)",
+        "border": "rgba(245, 158, 11, 0.4)",
+        "label_ar": "الجوكر (كلمات عامة وأساسية)"
+    },
+    "Science, Tech & Academia": {
+        "emoji": "🔬",
+        "color": "#06B6D4",
+        "bg": "rgba(6, 182, 212, 0.15)",
+        "border": "rgba(6, 182, 212, 0.4)",
+        "label_ar": "العلوم والتقنية والأكاديميا"
+    },
+    "Emotions & Relationships": {
+        "emoji": "❤️",
+        "color": "#F43F5E",
+        "bg": "rgba(244, 63, 94, 0.15)",
+        "border": "rgba(251, 113, 133, 0.4)",
+        "label_ar": "المشاعر والروايات"
+    },
     "Street & Daily Life": {
         "emoji": "🏙️",
         "color": "#10B981",
@@ -73,12 +96,12 @@ DOMAIN_CONFIG = {
         "border": "rgba(52, 211, 153, 0.4)",
         "label_ar": "الشارع واليوميات"
     },
-    "Emotions & Relationships": {
-        "emoji": "❤️",
-        "color": "#F43F5E",
-        "bg": "rgba(244, 63, 94, 0.15)",
-        "border": "rgba(251, 113, 133, 0.4)",
-        "label_ar": "المشاعر والقلب"
+    "Law, Politics & Society": {
+        "emoji": "🏛️",
+        "color": "#8B5CF6",
+        "bg": "rgba(139, 92, 246, 0.15)",
+        "border": "rgba(167, 139, 250, 0.4)",
+        "label_ar": "القانون والسياسة والمجتمع"
     },
     "Business & Career": {
         "emoji": "💼",
@@ -86,13 +109,6 @@ DOMAIN_CONFIG = {
         "bg": "rgba(59, 130, 246, 0.15)",
         "border": "rgba(96, 165, 250, 0.4)",
         "label_ar": "العمل والبيزنس"
-    },
-    "Society, Law & Deep Ideas": {
-        "emoji": "🏛️",
-        "color": "#8B5CF6",
-        "bg": "rgba(139, 92, 246, 0.15)",
-        "border": "rgba(167, 139, 250, 0.4)",
-        "label_ar": "المجتمع والقانون والفكر"
     }
 }
 

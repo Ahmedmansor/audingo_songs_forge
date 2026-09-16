@@ -108,7 +108,7 @@ def render_tab_studio():
     default_domain_label = domain_label_from_key.get(current_selected_domain, all_dom_label)
     default_idx = domain_options.index(default_domain_label) if default_domain_label in domain_options else 0
 
-    col_filter_ui, col_filter_badge = st.columns([2.2, 1.2], vertical_alignment="center")
+    col_filter_ui, col_joker_toggle, col_filter_badge = st.columns([1.6, 1.1, 1.3], vertical_alignment="center")
     with col_filter_ui:
         chosen_domain_label = st.selectbox(
             "🎯 Filter by Vocabulary Domain:",
@@ -123,6 +123,27 @@ def render_tab_studio():
             sync_active_session()
             st.rerun()
 
+    with col_joker_toggle:
+        if new_domain_val not in ("All Domains", "Basic / Neutral"):
+            blend_joker = st.checkbox(
+                "🃏 دمج الجوكر (50% Joker)",
+                value=st.session_state.get("blend_joker", True),
+                key="chk_blend_joker",
+                help="عند التفعيل: يتم دمج 50% من كلمات المجال مع 50% من كلمات الجوكر (Basic / Neutral) لضمان تماسك الأغنية. عند الإلغاء: يتم سحب 100% من كلمات المجال المختار حصراً."
+            )
+            if blend_joker != st.session_state.get("blend_joker", True):
+                st.session_state.blend_joker = blend_joker
+                st.rerun()
+        else:
+            st.markdown(
+                '<div style="margin-top: 10px; font-size: 0.78rem; color: #94A3B8; font-style: italic;">'
+                '🃏 الجوكر مدمج تلقائياً'
+                '</div>',
+                unsafe_allow_html=True
+            )
+            blend_joker = True
+            st.session_state.blend_joker = True
+
     with col_filter_badge:
         if new_domain_val == "All Domains":
             badge_html = (
@@ -132,15 +153,29 @@ def render_tab_studio():
                 f'</div>'
             )
             st.markdown(badge_html, unsafe_allow_html=True)
-        else:
+        elif new_domain_val == "Basic / Neutral":
             cfg = DOMAIN_CONFIG.get(new_domain_val, {})
             cur_uns = studio_dom_stats.get(new_domain_val, {}).get('unused', 0)
             cur_tot = studio_dom_stats.get(new_domain_val, {}).get('total', 0)
             badge_html = (
+                f'<div style="margin-top: 12px; font-size: 0.82rem; color: {cfg.get("color", "#F59E0B")}; '
+                f'background: {cfg.get("bg", "rgba(245,158,11,0.1)")}; border: 1px solid {cfg.get("border", "rgba(245,158,11,0.3)")}; '
+                f'border-radius: 8px; padding: 7px 12px; font-weight: 700;">'
+                f'{cfg.get("emoji", "🃏")} <b>{cur_uns:,}</b> words left &nbsp;•&nbsp; 🃏 Pure Joker Draw (100% Neutral)'
+                f'</div>'
+            )
+            st.markdown(badge_html, unsafe_allow_html=True)
+        else:
+            cfg = DOMAIN_CONFIG.get(new_domain_val, {})
+            cur_uns = studio_dom_stats.get(new_domain_val, {}).get('unused', 0)
+            cur_tot = studio_dom_stats.get(new_domain_val, {}).get('total', 0)
+            current_blend = st.session_state.get("blend_joker", True)
+            mode_label = "🃏 50% Joker Blended" if current_blend else "🎯 100% Pure Domain"
+            badge_html = (
                 f'<div style="margin-top: 12px; font-size: 0.82rem; color: {cfg.get("color", "#38BDF8")}; '
                 f'background: {cfg.get("bg", "rgba(56,189,248,0.1)")}; border: 1px solid {cfg.get("border", "rgba(56,189,248,0.3)")}; '
                 f'border-radius: 8px; padding: 7px 12px; font-weight: 700;">'
-                f'{cfg.get("emoji", "")} <b>{cur_uns:,}</b> words remaining out of <b>{cur_tot:,}</b>'
+                f'{cfg.get("emoji", "")} <b>{cur_uns:,}</b> left &nbsp;•&nbsp; {mode_label}'
                 f'</div>'
             )
             st.markdown(badge_html, unsafe_allow_html=True)
@@ -151,7 +186,8 @@ def render_tab_studio():
         with b_col1:
             if st.button("🎲 Random 20", type="secondary", use_container_width=True, help="Randomly pull 20 unused words (10 N, 6 V, 4 A) directly from SQLite."):
                 active_domain = st.session_state.get("selected_domain", "All Domains")
-                new_batch = db.pull_20_words(domain=active_domain)
+                active_blend = st.session_state.get("blend_joker", True)
+                new_batch = db.pull_20_words(domain=active_domain, blend_joker=active_blend)
                 if len(new_batch) == 20:
                     st.session_state.target_batch = new_batch
                     st.session_state.mood_analysis = None
@@ -159,7 +195,13 @@ def render_tab_studio():
                     st.session_state.studio_suno_prompt = ""
                     st.session_state.custom_concept = ""
                     sync_active_session()
-                    dom_tag = f" from {active_domain}" if active_domain != "All Domains" else ""
+                    if active_domain not in ("All Domains", "Basic / Neutral"):
+                        mode_str = " (50% Domain + 50% Joker blend)" if active_blend else " (100% Pure Domain)"
+                        dom_tag = f" from {active_domain}{mode_str}"
+                    elif active_domain == "Basic / Neutral":
+                        dom_tag = " from Basic / Neutral (Joker)"
+                    else:
+                        dom_tag = ""
                     st.success(f"Pulled 20 random unused words (10 Nouns, 6 Verbs, 4 Adjectives){dom_tag}!")
                     st.rerun()
                 elif len(new_batch) > 0:
@@ -175,13 +217,15 @@ def render_tab_studio():
         with b_col2:
             if st.button("🧠 Smart Thematic Pull", type="primary", use_container_width=True, help="Gemini analyzes 140 candidate unused words and selects 20 words (10 N, 6 V, 4 A) that share natural chemistry and relate to an authentic everyday life scenario."):
                 active_domain = st.session_state.get("selected_domain", "All Domains")
+                active_blend = st.session_state.get("blend_joker", True)
                 dom_spin = f" within {active_domain}" if active_domain != "All Domains" else ""
                 with st.spinner(f"🧠 Gemini is curating a cohesive 20-word batch{dom_spin}..."):
                     candidate_pool = db.pull_candidate_pool_for_thematic_curation(
                         nouns_limit=70,
                         verbs_limit=40,
                         adjs_limit=30,
-                        domain=active_domain
+                        domain=active_domain,
+                        blend_joker=active_blend
                     )
                     candidate_nouns = [w["word"] for w in candidate_pool["Noun"]]
                     candidate_verbs = [w["word"] for w in candidate_pool["Verb"]]
@@ -223,7 +267,8 @@ def render_tab_studio():
         with b_col3:
             if st.button("🔄 Cancel & Redraw", use_container_width=True):
                 active_domain = st.session_state.get("selected_domain", "All Domains")
-                new_batch = db.pull_20_words(domain=active_domain)
+                active_blend = st.session_state.get("blend_joker", True)
+                new_batch = db.pull_20_words(domain=active_domain, blend_joker=active_blend)
                 st.session_state.target_batch = new_batch
                 st.session_state.mood_analysis = None
                 st.session_state.master_prompt = ""

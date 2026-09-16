@@ -79,7 +79,7 @@ def render_tab_library():
 
             song_all_ngsl = list(set(target_list + bonus_list + reused_list))
             song_domain_data = db.compute_domain_breakdown(song_all_ngsl)
-            primary_dom = song_domain_data.get("primary_domain", "Street & Daily Life")
+            primary_dom = song_domain_data.get("primary_domain", "Basic / Neutral")
             primary_pct = song_domain_data.get("primary_percent", 0.0)
             primary_cfg = DOMAIN_CONFIG.get(primary_dom, {})
             primary_emoji = primary_cfg.get("emoji", "🎵")

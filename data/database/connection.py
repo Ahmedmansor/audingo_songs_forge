@@ -41,13 +41,25 @@ def init_db(db_path: Path = DB_PATH) -> None:
                 lemma_family TEXT NOT NULL,
                 pos_type TEXT NOT NULL,
                 usage_count INTEGER DEFAULT 0,
-                domain TEXT DEFAULT NULL
+                domain TEXT DEFAULT NULL,
+                domain_coca TEXT DEFAULT NULL,
+                coca_top_pct REAL DEFAULT NULL
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ngsl_word ON ngsl_words(word);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ngsl_usage ON ngsl_words(usage_count);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ngsl_pos ON ngsl_words(pos_type);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ngsl_domain ON ngsl_words(domain);")
+
+        # Migration: ensure domain_coca and coca_top_pct exist in ngsl_words
+        cursor.execute("PRAGMA table_info(ngsl_words)")
+        existing_ngsl_cols = {row["name"] for row in cursor.fetchall()}
+        if "domain_coca" not in existing_ngsl_cols:
+            cursor.execute("ALTER TABLE ngsl_words ADD COLUMN domain_coca TEXT DEFAULT NULL")
+        if "coca_top_pct" not in existing_ngsl_cols:
+            cursor.execute("ALTER TABLE ngsl_words ADD COLUMN coca_top_pct REAL DEFAULT NULL")
+
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ngsl_domain_coca ON ngsl_words(domain_coca);")
 
         # 2. extra_words table
         cursor.execute("""

@@ -26,10 +26,10 @@ def render_tab_dictionary():
     fraction = (stats['used'] / stats['total']) if stats['total'] > 0 else 0.0
     st.progress(fraction, text=f"Coverage Progress: {stats['used']} / {stats['total']} words ({stats['percent']}%)")
 
-    # 4-Domain Corpus Breakdown Cards
+    # 6-Domain Corpus Breakdown Cards
     domain_stats = db.get_domain_detailed_stats()
     dom_total_corpus = sum(d["total"] for d in domain_stats.values()) or 1
-    d_cols = st.columns(4)
+    d_cols = st.columns(len(DOMAINS))
     for idx, d_name in enumerate(DOMAINS):
         cfg = DOMAIN_CONFIG.get(d_name, {})
         data = domain_stats.get(d_name, {"total": 0, "used": 0, "unused": 0, "percent_used": 0.0})
@@ -38,27 +38,32 @@ def render_tab_dictionary():
         d_uns = data["unused"]
         pct_used = data["percent_used"]
         corpus_share = (d_tot / dom_total_corpus * 100)
-        with d_cols[idx]:
-            card_html = (
-                f'<div style="background: rgba(30, 41, 59, 0.7); border: 1px solid {cfg.get("border", "rgba(148,163,184,0.3)")}; '
-                f'border-radius: 12px; padding: 14px 12px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.18);">'
-                f'<div style="font-size: 1.4rem; margin-bottom: 4px;">{cfg.get("emoji", "")}</div>'
-                f'<div style="font-size: 0.82rem; font-weight: 800; color: #F8FAFC; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">{d_name}</div>'
-                f'<div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(52, 211, 153, 0.3); border-radius: 8px; padding: 8px 6px; margin-bottom: 10px;">'
-                f'<div style="font-size: 1.45rem; font-weight: 800; color: #34D399; font-family: monospace; line-height: 1.1;">{d_uns:,}</div>'
-                f'<div style="font-size: 0.72rem; font-weight: 700; color: #A7F3D0; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 3px;">Remaining Words</div>'
-                f'</div>'
-                f'<div style="width: 100%; height: 6px; background: rgba(51, 65, 85, 0.75); border-radius: 4px; overflow: hidden; margin-bottom: 6px;">'
-                f'<div style="width: {pct_used:.1f}%; height: 100%; background: {cfg.get("color", "#38BDF8")};"></div>'
-                f'</div>'
-                f'<div style="font-size: 0.72rem; color: #94A3B8; margin-bottom: 10px;">{pct_used:.1f}% Mastered</div>'
-                f'<div style="display: flex; justify-content: space-between; font-size: 0.74rem; color: #94A3B8; border-top: 1px solid rgba(148,163,184,0.15); padding-top: 8px;">'
-                f'<span>Total: <b style="color: #F1F5F9;">{d_tot:,}</b> <small>({corpus_share:.0f}%)</small></span>'
-                f'<span>Used: <b style="color: {cfg.get("color", "#38BDF8")};">{d_usd:,}</b></span>'
-                f'</div>'
-                f'</div>'
-            )
-            st.markdown(card_html, unsafe_allow_html=True)
+        if idx < len(d_cols):
+            with d_cols[idx]:
+                card_html = (
+                    f'<div style="background: rgba(30, 41, 59, 0.7); border: 1px solid {cfg.get("border", "rgba(148,163,184,0.3)")}; '
+                    f'border-radius: 12px; padding: 12px 8px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.18); min-height: 220px; display: flex; flex-direction: column; justify-content: space-between;">'
+                    f'<div>'
+                    f'<div style="font-size: 1.35rem; margin-bottom: 3px;">{cfg.get("emoji", "")}</div>'
+                    f'<div style="font-size: 0.76rem; font-weight: 800; color: #F8FAFC; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 8px; min-height: 2.2em; display: flex; align-items: center; justify-content: center;">{d_name}</div>'
+                    f'</div>'
+                    f'<div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(52, 211, 153, 0.3); border-radius: 8px; padding: 6px 4px; margin-bottom: 8px;">'
+                    f'<div style="font-size: 1.3rem; font-weight: 800; color: #34D399; font-family: monospace; line-height: 1.1;">{d_uns:,}</div>'
+                    f'<div style="font-size: 0.68rem; font-weight: 700; color: #A7F3D0; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px;">Remaining</div>'
+                    f'</div>'
+                    f'<div>'
+                    f'<div style="width: 100%; height: 5px; background: rgba(51, 65, 85, 0.75); border-radius: 4px; overflow: hidden; margin-bottom: 5px;">'
+                    f'<div style="width: {pct_used:.1f}%; height: 100%; background: {cfg.get("color", "#38BDF8")};"></div>'
+                    f'</div>'
+                    f'<div style="font-size: 0.69rem; color: #94A3B8; margin-bottom: 8px;">{pct_used:.1f}% Mastered</div>'
+                    f'<div style="display: flex; justify-content: space-between; font-size: 0.70rem; color: #94A3B8; border-top: 1px solid rgba(148,163,184,0.15); padding-top: 6px;">'
+                    f'<span>Tot: <b style="color: #F1F5F9;">{d_tot:,}</b> <small>({corpus_share:.0f}%)</small></span>'
+                    f'<span>Used: <b style="color: {cfg.get("color", "#38BDF8")};">{d_usd:,}</b></span>'
+                    f'</div>'
+                    f'</div>'
+                    f'</div>'
+                )
+                st.markdown(card_html, unsafe_allow_html=True)
 
     st.markdown("---")
     
@@ -95,10 +100,11 @@ def render_tab_dictionary():
                 filtered_df = filtered_df[filtered_df["word"].str.contains(search_word.strip().lower(), case=False, na=False)]
 
             st.dataframe(
-                filtered_df[["word", "domain", "pos_type", "Status", "usage_count", "lemma_family"]],
+                filtered_df[["word", "domain", "coca_top_pct", "pos_type", "Status", "usage_count", "lemma_family"]],
                 column_config={
                     "word": "Headword",
-                    "domain": "Semantic Domain",
+                    "domain": "COCA Domain",
+                    "coca_top_pct": st.column_config.NumberColumn("Dominance %", format="%.1f%%"),
                     "pos_type": "POS Type",
                     "Status": "Status",
                     "usage_count": "Times Used",

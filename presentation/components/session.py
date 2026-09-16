@@ -56,6 +56,9 @@ def init_session_state():
     if "selected_domain" not in st.session_state:
         st.session_state.selected_domain = persisted_session.get("selected_domain", "All Domains")
 
+    if "blend_joker" not in st.session_state:
+        st.session_state.blend_joker = True
+
 
 def sync_active_session():
     """Sync current studio batch and musical direction to SQLite for F5 persistence."""
