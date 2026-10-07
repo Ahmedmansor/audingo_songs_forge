@@ -42,7 +42,8 @@ def generate_master_prompt(
     song_structure: str,
     mood_analysis: Dict[str, Any],
     creative_concept: str = "",
-    previously_used_words: Optional[List[str]] = None
+    previously_used_words: Optional[List[str]] = None,
+    selected_domain: str = "Street & Daily Life"
 ) -> str:
     """
     Format a complete, production-ready Master Prompt ready to be copied into Claude / GPT-4o.
@@ -65,11 +66,12 @@ def generate_master_prompt(
 
     avoidance_section = ""
 
-    prompt = f"""# 🎵 MASTER SONGWRITING & SUNO PROMPT (STREET SMALL-TALK & CATCHY RHYMES)
+    prompt = f"""# 🎵 MASTER SONGWRITING & SUNO PROMPT
 
 You are a Grammy-winning songwriter and world-class ESL pedagogy specialist who produces modern, radio-ready hits.
 
-Your mission is to write a catchy, highly relatable, and musical song that naturally weaves 20 specific target vocabulary words into authentic, everyday street-level situations (hanging out with friends, relationships, daily errands, moving places, late-night phone calls, road trips, personal struggles), while keeping the lyrics effortless, conversational, and packed with natural rhymes and great rhythmic cadence.
+Your mission is to write a catchy, highly relatable, and musical song that naturally weaves 20 specific target vocabulary words into a story centered around the theme of: **{selected_domain}**.
+The lyrics MUST be 100% authentic to how real native speakers talk in this specific context (e.g., if it's Academia/Science, use realistic professional framing but keep it musically engaging; if it's Street/Daily Life, use casual conversational slang). Keep the lyrics effortless, naturally phrased, and packed with great rhythmic cadence.
 
 ---
 
@@ -89,7 +91,7 @@ Your mission is to write a catchy, highly relatable, and musical song that natur
 ---
 
 ### ⚡ Critical ESL Songwriting Rules:
-1. **Natural Colloquial Phrasing:** The lyrics must sound like modern fluent speech put to melody.
+1. **Contextually Authentic Phrasing:** The lyrics must sound exactly like modern fluent speech used in the real-world context of '{selected_domain}'. Never robotic, never awkwardly forced.
 2. **Rhyme & Cadence:** Use crisp, satisfying end-rhymes (AABB, ABAB) with bounce and flow.
 3. **No Fluff / Fillers:** Avoid archaic words, awkward inversions, or artificial metaphors.
 4. **Pedagogical Anchoring:** Every target word must be embedded in a context where its meaning is instantly graspable.

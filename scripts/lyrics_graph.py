@@ -30,18 +30,22 @@ class GraphState(TypedDict):
     is_completed: bool
     final_report: Optional[Dict[str, Any]]
     active_model_index: int
+    total_requests: int
+    models_used_history: List[str]
+    permanently_dropped_words: List[str]
 
 
 def python_inspector_node(state: GraphState) -> GraphState:
     """Agent 1: Python Inspector (Counts words and line lengths)."""
     draft = state["draft_lyrics"]
-    target_words = state["target_words"]
+    dropped = state.get("permanently_dropped_words", [])
+    active_target_words = [w for w in state["target_words"] if w not in dropped]
     
     # Simple lemmatization check using regex boundaries. 
     # For a real project, we'd use spaCy or NLTK. Here we do a smart regex.
     draft_lower = draft.lower()
     missing_words = []
-    for word in target_words:
+    for word in active_target_words:
         # Check base word + common suffixes like s, es, ed, ing
         pattern = r'\b' + re.escape(word.lower()) + r'(s|es|ed|ing|d|er)?\b'
         if not re.search(pattern, draft_lower):
@@ -51,11 +55,18 @@ def python_inspector_node(state: GraphState) -> GraphState:
     if missing_words:
         validation_errors.append(f"Missing target words: {', '.join(missing_words)}")
         
+    tags = [line for line in draft.split('\n') if line.strip().startswith('[')]
+    if not tags:
+        validation_errors.append("CRITICAL ERROR: All structural tags (e.g. [Verse 1], [Chorus]) are missing! You must restore the song structure.")
+
     lines = [line.strip() for line in draft.split('\n') if line.strip() and not line.startswith('[')]
     for i, line in enumerate(lines):
         word_count = len(line.split())
+        char_count = len(line)
         if word_count > 8: # Tightened for maximum singability
             validation_errors.append(f"Line too long ({word_count} words). Max is 8: '{line}'")
+        elif char_count > 48:
+            validation_errors.append(f"Line visually too long/heavy ({char_count} characters). Max is 48 chars to ensure singability: '{line}'")
             
     state["validation_errors"] = validation_errors
     return state
@@ -82,6 +93,7 @@ def authenticity_critic_node(state: GraphState) -> tuple[GraphState, Dict[str, A
     Evaluate if each line is an authentic, natural sentence that perfectly fits the 'Core Story/Concept' and 'Theme'.
     If a line feels robotic, forced, or awkward just to rhyme or fit a target word, mark it as rejected.
     If a line sounds like a written poem (e.g. "amidst the shadows"), mark it as rejected. The language MUST be 100% authentic to how native speakers actually talk in real-life situations related to the Theme '{theme}'. (e.g. if the theme is Science, use realistic professional/lab conversation; if Street, use casual daily speech. Never robotic, never forced).
+    Also evaluate RHYME and RHYTHM: If a line destroys the natural rhyme scheme or feels awkwardly long to sing, mark it as ⚠️ or ❌.
     If a target word completely destroys the realism of the scene (e.g. a political word in a romantic story), you MUST recommend dropping that word entirely.
     Additionally, review the SYSTEM PRE-ANALYSIS REPORT below. If the Python inspector flagged a line as 'too long', you must mark that line as ❌ and instruct the Editor to shorten it to 5-8 words.
 
@@ -119,6 +131,25 @@ def authenticity_critic_node(state: GraphState) -> tuple[GraphState, Dict[str, A
         state["models_used"].append(MASTER_FALLBACK_CHAIN[new_model_idx])
         
         critic_report = json.loads(raw_response)
+        
+        # Log this request
+        if "execution_log" not in state:
+            state["execution_log"] = []
+        state["execution_log"].append({
+            "request_num": state["total_requests"],
+            "loop": state.get("iterations", 1),
+            "agent": "Critic Agent (الناقد)",
+            "model": MASTER_FALLBACK_CHAIN[new_model_idx],
+            "action": f"Scored lyrics: {critic_report.get('overall_score', 0)}% (Checked {len(critic_report.get('lines_review', []))} lines)"
+        })
+        
+        new_drops = critic_report.get("dropped_words", [])
+        if "permanently_dropped_words" not in state:
+            state["permanently_dropped_words"] = []
+        for w in new_drops:
+            if w not in state["permanently_dropped_words"]:
+                state["permanently_dropped_words"].append(w)
+                
         return state, critic_report
     except Exception as e:
         logger.error(f"Critic node failed: {e}")
@@ -135,10 +166,11 @@ def editor_refiner_node(state: GraphState, critic_report: Dict[str, Any]) -> Gra
     draft = state["draft_lyrics"]
     errors = state["validation_errors"]
     
-    rejected_lines = [r for r in critic_report.get("lines_review", []) if r.get("status") in ["❌", "🗑️"]]
-    dropped_words = critic_report.get("dropped_words", [])
+    critical_rejections = [r for r in critic_report.get("lines_review", []) if r.get("status") in ["❌", "🗑️"]]
+    minor_warnings = [r for r in critic_report.get("lines_review", []) if r.get("status") == "⚠️"]
+    dropped_words = state.get("permanently_dropped_words", [])
     
-    prompt = f"""You are a master songwriter fixing a flawed draft.
+    prompt = f"""You are a master songwriter performing SURGICAL REPAIRS on song lyrics.
     Theme: {theme}
     Genre: {genre}
     Core Story: {concept}
@@ -146,19 +178,24 @@ def editor_refiner_node(state: GraphState, critic_report: Dict[str, Any]) -> Gra
     Current Draft:
     {draft}
     
-    Python Inspector Errors:
+    Python Inspector Errors (Length / Missing Words):
     {json.dumps(errors)}
     
-    Critic Rejected Lines to Fix:
-    {json.dumps(rejected_lines)}
+    CRITICAL FLAWED LINES (Must be rewritten - Status ❌ / 🗑️):
+    {json.dumps(critical_rejections)}
+    
+    MINOR LINES (Only tweak if it can be done effortlessly - Status ⚠️):
+    {json.dumps(minor_warnings)}
     
     Words to permanently drop (do not try to include these):
     {json.dumps(dropped_words)}
     
-    TASK: Rewrite ONLY the flawed parts to fix the inspector errors and the critic's rejections. 
-    - PRIORITY 1 (Authentic Real-Life Speech): Every line must sound EXACTLY like authentic, modern native speech specific to the Theme '{theme}'. (e.g. realistic professional conversation for Science/Academia, casual daily speech for Street). Every single line must be practical for an ESL student to memorize and use in real life! NO poetry, NO archaic words.
-    - PRIORITY 2 (Rhythm): Keep the lines short (5-8 words).
-    - PRIORITY 3 (Structure): DO NOT remove any structural tags like [Verse 1] or [Chorus].
+    SURGICAL REPAIR RULES:
+    - RULE 1 (PRESERVE VERIFIED LINES): DO NOT alter or rewrite lines that scored ✅. Keep them intact!
+    - RULE 2 (KILL FORCED RHYMES): Lines marked ❌ contain awkward forced rhymes (e.g. 'seal our deal', 'just look how'). Replace them with 100% natural, everyday spoken English.
+    - RULE 3 (NATURAL SPEECH OVER RHYME): If a rhyme feels slightly unnatural, prioritize authentic emotional conversation over forcing a rhyme.
+    - RULE 4 (Rhythm): Keep lines short (5-8 words).
+    - RULE 5 (Structure): Maintain all structural tags like [Verse 1], [Chorus], [Bridge], [Outro].
     
     Return ONLY the complete updated song lyrics text (no markdown, no extra chat).
     """
@@ -174,6 +211,17 @@ def editor_refiner_node(state: GraphState, critic_report: Dict[str, Any]) -> Gra
         state["models_used"].append(MASTER_FALLBACK_CHAIN[new_model_idx])
         
         state["draft_lyrics"] = raw_response
+        
+        # Log this request
+        if "execution_log" not in state:
+            state["execution_log"] = []
+        state["execution_log"].append({
+            "request_num": state["total_requests"],
+            "loop": state.get("iterations", 1),
+            "agent": "Editor Agent (المحرر)",
+            "model": MASTER_FALLBACK_CHAIN[new_model_idx],
+            "action": f"Rewrote flawed parts ({len(critical_rejections)} critical rejections targeted)"
+        })
     except Exception as e:
         logger.error(f"Editor node failed: {e}")
         
@@ -195,7 +243,9 @@ def run_refinement_graph(draft: str, target_words: List[str], theme: str, genre:
         "final_report": None,
         "active_model_index": 0,
         "total_requests": 0,
-        "models_used": []
+        "models_used": [],
+        "execution_log": [],
+        "permanently_dropped_words": []
     }
     
     max_iterations = 5
@@ -217,7 +267,8 @@ def run_refinement_graph(draft: str, target_words: List[str], theme: str, genre:
         score = critic_report.get("overall_score", 0)
         has_rejected = any(r.get("status") in ["❌", "🗑️"] for r in critic_report.get("lines_review", []))
         
-        if not state["validation_errors"] and not has_rejected and score >= 98:
+        # Stop early when all inspector errors are fixed, no ❌ rejections remain, and score is high (>= 85%)
+        if not state["validation_errors"] and not has_rejected and score >= 85:
             state["is_completed"] = True
             break
             
@@ -228,18 +279,19 @@ def run_refinement_graph(draft: str, target_words: List[str], theme: str, genre:
     # Final Report Generation
     state["is_completed"] = True
     
-    final_words_found = [w for w in target_words if w not in (last_critic_report.get("dropped_words", []) if last_critic_report else [])]
+    final_words_found = [w for w in target_words if w not in state.get("permanently_dropped_words", [])]
     
     state["final_report"] = {
         "final_lyrics": state["draft_lyrics"],
         "overall_score": last_critic_report.get("overall_score", 0) if last_critic_report else 0,
         "words_kept": final_words_found,
-        "words_dropped": last_critic_report.get("dropped_words", []) if last_critic_report else [],
+        "words_dropped": state.get("permanently_dropped_words", []),
         "line_breakdown": last_critic_report.get("lines_review", []) if last_critic_report else [],
         "iterations_used": state["iterations"],
         "final_model_used": MASTER_FALLBACK_CHAIN[state["active_model_index"]],
         "total_requests": state.get("total_requests", 0),
-        "models_used": list(dict.fromkeys(state.get("models_used", []))) # deduplicate while preserving order
+        "models_used": list(dict.fromkeys(state.get("models_used", []))), # deduplicate while preserving order
+        "execution_log": state.get("execution_log", [])
     }
     
     return state
