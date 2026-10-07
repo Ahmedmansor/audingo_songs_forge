@@ -68,6 +68,7 @@ def authenticity_critic_node(state: GraphState) -> tuple[GraphState, Dict[str, A
     concept = state["core_concept"]
     master_prompt = state["master_prompt"]
     draft = state["draft_lyrics"]
+    errors = state.get("validation_errors", [])
     
     prompt = f"""You are an elite linguistic critic and quality assurance agent.
     Review the following song lyrics line by line. 
@@ -77,15 +78,14 @@ def authenticity_critic_node(state: GraphState) -> tuple[GraphState, Dict[str, A
     - Musical Genre: "{genre}"
     - Core Story/Concept: "{concept}"
     
-    ORIGINAL SONGWRITING INSTRUCTIONS (For deep context):
-    ---
-    {master_prompt}
-    ---
-    
     TASK:
     Evaluate if each line is an authentic, natural sentence that perfectly fits the 'Core Story/Concept' and 'Theme'.
     If a line feels robotic, forced, or awkward just to rhyme or fit a target word, mark it as rejected.
     If a target word completely destroys the realism of the scene (e.g. a political word in a romantic story), you MUST recommend dropping that word entirely.
+    Additionally, review the SYSTEM PRE-ANALYSIS REPORT below. If the Python inspector flagged a line as 'too long', you must mark that line as ❌ and instruct the Editor to shorten it to 5-8 words.
+
+    SYSTEM PRE-ANALYSIS REPORT (Python word-count & missing words):
+    {json.dumps(errors, indent=2)}
     
     SONG LYRICS:
     {draft}
@@ -137,11 +137,6 @@ def editor_refiner_node(state: GraphState, critic_report: Dict[str, Any]) -> Gra
     Theme: {theme}
     Genre: {genre}
     Core Story: {concept}
-    
-    ORIGINAL SONGWRITING INSTRUCTIONS (For deep context):
-    ---
-    {master_prompt}
-    ---
     
     Current Draft:
     {draft}

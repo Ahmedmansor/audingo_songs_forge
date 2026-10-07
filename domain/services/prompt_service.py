@@ -93,6 +93,7 @@ Your mission is to write a catchy, highly relatable, and musical song that natur
 2. **Rhyme & Cadence:** Use crisp, satisfying end-rhymes (AABB, ABAB) with bounce and flow.
 3. **No Fluff / Fillers:** Avoid archaic words, awkward inversions, or artificial metaphors.
 4. **Pedagogical Anchoring:** Every target word must be embedded in a context where its meaning is instantly graspable.
+5. **Line Length & Rhythm (CRITICAL):** Keep lines relatively short and highly rhythmic (approx. 5 to 8 words per line). Overly long lines ruin the musical phrasing and pacing in Suno.
 
 ---
 
