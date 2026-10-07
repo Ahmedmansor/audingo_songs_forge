@@ -1,0 +1,7 @@
+[server]
+runOnSave = true
+fileWatcherType = "watchdog"
+headless = false
+
+[client]
+toolbarMode = "developer"

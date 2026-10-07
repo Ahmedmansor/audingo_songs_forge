@@ -89,13 +89,15 @@ def authenticity_critic_node(state: GraphState) -> tuple[GraphState, Dict[str, A
     - Musical Genre: "{genre}"
     - Core Story/Concept: "{concept}"
     
-    TASK:
-    Evaluate if each line is an authentic, natural sentence that perfectly fits the 'Core Story/Concept' and 'Theme'.
-    If a line feels robotic, forced, or awkward just to rhyme or fit a target word, mark it as rejected.
-    If a line sounds like a written poem (e.g. "amidst the shadows"), mark it as rejected. The language MUST be 100% authentic to how native speakers actually talk in real-life situations related to the Theme '{theme}'. (e.g. if the theme is Science, use realistic professional/lab conversation; if Street, use casual daily speech. Never robotic, never forced).
-    Also evaluate RHYME and RHYTHM: If a line destroys the natural rhyme scheme or feels awkwardly long to sing, mark it as ⚠️ or ❌.
-    If a target word completely destroys the realism of the scene (e.g. a political word in a romantic story), you MUST recommend dropping that word entirely.
-    Additionally, review the SYSTEM PRE-ANALYSIS REPORT below. If the Python inspector flagged a line as 'too long', you must mark that line as ❌ and instruct the Editor to shorten it to 5-8 words.
+    TASK & COHERENCE CHECK (flag as ⚠️ or ❌ if violated):
+    1. THEMATIC CONSISTENCY: Every line must stay inside the song's theme ('{theme}') and central story ('{concept}'). Do not introduce topics or characters that drift away from the central conflict.
+    2. SETTING CONTINUITY: Every line must stay inside the song's established location/time (e.g., a diner at 3 AM). Any sudden new location or scene (hill, beach, street, etc.) without a clear transition must be flagged as ⚠️ or ❌.
+    3. PRACTICAL USABILITY: Evaluate if each line is an authentic, natural sentence that an ESL learner can actually reuse in real life. Prefer everyday spoken conversational English over poetic or literary phrasing.
+    4. NO FORCED RHYME: Does the line exist only to rhyme with its pair, without adding meaning to the story? If removing it would not hurt the narrative (filler line), flag it as ⚠️ or ❌.
+    5. RHYME & RHYTHM: If a line destroys the natural rhyme scheme or feels awkwardly long to sing, mark it as ⚠️ or ❌.
+    6. ACTIONABLE CRITIQUE: In the 'comment', state which rule failed (e.g., 'Violates setting continuity: sudden hill reference', 'Forced rhyme filler') and suggest a fix that stays inside the song's world.
+    7. TARGET WORD REALISM: If a target word completely destroys the realism of the scene (e.g. a political word in a romantic story), you MUST recommend dropping that word entirely in 'dropped_words'.
+    8. LENGTH INSPECTOR: Additionally, review the SYSTEM PRE-ANALYSIS REPORT below. If the Python inspector flagged a line as 'too long', you must mark that line as ❌ and instruct the Editor to shorten it to 5-8 words.
 
     SYSTEM PRE-ANALYSIS REPORT (Python word-count & missing words):
     {json.dumps(errors, indent=2)}
@@ -131,6 +133,13 @@ def authenticity_critic_node(state: GraphState) -> tuple[GraphState, Dict[str, A
         state["models_used"].append(MASTER_FALLBACK_CHAIN[new_model_idx])
         
         critic_report = json.loads(raw_response)
+        
+        # Calculate true mathematical average from line reviews to ensure accuracy
+        lines_review = critic_report.get("lines_review", [])
+        if lines_review:
+            valid_scores = [l.get("score") for l in lines_review if isinstance(l.get("score"), (int, float))]
+            if valid_scores:
+                critic_report["overall_score"] = round(sum(valid_scores) / len(valid_scores))
         
         # Log this request
         if "execution_log" not in state:
@@ -195,7 +204,8 @@ def editor_refiner_node(state: GraphState, critic_report: Dict[str, Any]) -> Gra
     - RULE 2 (KILL FORCED RHYMES): Lines marked ❌ contain awkward forced rhymes (e.g. 'seal our deal', 'just look how'). Replace them with 100% natural, everyday spoken English.
     - RULE 3 (NATURAL SPEECH OVER RHYME): If a rhyme feels slightly unnatural, prioritize authentic emotional conversation over forcing a rhyme.
     - RULE 4 (Rhythm): Keep lines short (5-8 words).
-    - RULE 5 (Structure): Maintain all structural tags like [Verse 1], [Chorus], [Bridge], [Outro].
+    - RULE 5 (SETTING CONTINUITY): Stay strictly inside the song's established location/time (e.g. diner at 3 AM). Never introduce random disconnected places (hill, beach, trees) just to rhyme.
+    - RULE 6 (Structure): Maintain all structural tags like [Verse 1], [Chorus], [Bridge], [Outro].
     
     Return ONLY the complete updated song lyrics text (no markdown, no extra chat).
     """
@@ -267,8 +277,11 @@ def run_refinement_graph(draft: str, target_words: List[str], theme: str, genre:
         score = critic_report.get("overall_score", 0)
         has_rejected = any(r.get("status") in ["❌", "🗑️"] for r in critic_report.get("lines_review", []))
         
-        # Stop early when all inspector errors are fixed, no ❌ rejections remain, and score is high (>= 85%)
-        if not state["validation_errors"] and not has_rejected and score >= 85:
+        # Structural or length errors (excluding optional missing words)
+        structural_or_length_errors = [e for e in state.get("validation_errors", []) if not e.startswith("Missing target words")]
+        
+        # Stop early when no ❌ rejections remain, no structural/length errors exist, and score is high (>= 85%)
+        if not structural_or_length_errors and not has_rejected and score >= 85:
             state["is_completed"] = True
             break
             

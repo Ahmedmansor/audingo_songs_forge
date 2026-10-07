@@ -108,22 +108,155 @@ def render_tab_refinement():
             st.info(f"🤖 **Models Active:** `{'` | `'.join(models_list)}`")
             
             with st.expander("📝 Final Polished Lyrics", expanded=True):
+                lyrics_text = current_report.get("final_lyrics", "")
                 lyrics_html = f"""<div style="white-space: pre-wrap; font-family: 'Consolas', 'Courier New', monospace; background: #0F172A; color: #F8FAFC; padding: 18px; border-radius: 8px; font-size: 1.02rem; border: 1px solid #334155; line-height: 1.65; box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);">
-{current_report.get("final_lyrics", "")}
+{lyrics_text}
 </div>"""
                 st.markdown(lyrics_html, unsafe_allow_html=True)
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
                     if st.button("📥 نقل الكلمات تلقائياً للمسودة", use_container_width=True, help="ضغطة واحدة تنقل هذه الكلمات فوراً لخانة الإدخال على اليسار لبدء تحسين جديد"):
-                        polished = current_report.get("final_lyrics", "")
+                        polished = lyrics_text
                         st.session_state["pending_draft_update"] = polished
                         db.save_refinement_state(polished, current_report)
                         st.rerun()
                 with col_btn2:
                     if st.button("🚀 إرسال لمعمل الاعتماد (Commit Lab)", use_container_width=True, help="إرسال الكلمات المصقولة مباشرة إلى Tab 4 لحفظها واعتمادها"):
-                        st.session_state["raw_lyrics_input"] = current_report.get("final_lyrics", "")
+                        st.session_state["raw_lyrics_input"] = lyrics_text
                         st.toast("🚀 تم الإرسال إلى Commit Lab! افتح Tab 4 لحفظ الأغنية.")
+
+            # External AI Surgical Prompt Exporter (Collapsed by default)
+            with st.expander("🛠️ برومبت التعديل الخارجي (External AI Surgical Prompt)", expanded=False, key="ext_prompt_expander_closed"):
+                st.markdown("""<div style="font-size: 0.88rem; color: #CBD5E1; margin-bottom: 12px; line-height: 1.5;">
+خذ هذا البرومبت الجاهز وانسخه بضغطة زر إلى أي ذكاء اصطناعي خارجي (مثل <strong>Claude 3.5 Sonnet</strong> أو <strong>ChatGPT 4o</strong>). البرومبت مصمم جراحياً ليحتوي على الأسطر التي تحتاج تعديلاً فقط مع القواعد الصارمة لحماية الأسطر الخضراء.
+</div>""", unsafe_allow_html=True)
+                
+                theme_val = st.session_state.get("synced_theme", "Street & Daily Life")
+                genre_val = st.session_state.get("synced_genre", "Cinematic / Ballad")
+                concept_val = st.session_state.get("synced_concept", "")
+                
+                # Fetch target words list from session state or current report
+                target_words_list = []
+                if st.session_state.get("target_batch"):
+                    target_words_list = [w["word"] for w in st.session_state.target_batch]
+                elif current_report.get("words_kept"):
+                    target_words_list = current_report.get("words_kept", [])
+                words_joined = ", ".join(target_words_list) if target_words_list else "None specified"
+                
+                lines_breakdown = current_report.get("line_breakdown", [])
+                passed_lines = [l for l in lines_breakdown if l.get("status") == "✅"]
+                critical_lines = [l for l in lines_breakdown if l.get("status") in ["❌", "🗑️"]]
+                warning_lines = [l for l in lines_breakdown if l.get("status") == "⚠️"]
+                
+                crit_text = "\n".join([f'- Line: "{l.get("line", "")}"\n  Score: {l.get("score", 0)}%\n  Critique: {l.get("comment", "")}' for l in critical_lines]) if critical_lines else "None (All lines passed critical checks!)"
+                warn_text = "\n".join([f'- Line: "{l.get("line", "")}"\n  Score: {l.get("score", 0)}%\n  Critique: {l.get("comment", "")}' for l in warning_lines]) if warning_lines else "None"
+                passed_text = "\n".join([f'- "{l.get("line", "")}"' for l in passed_lines]) if passed_lines else "None"
+                
+                # Build explicitly tagged lyrics where each line tells the external AI its exact status
+                status_dict = {}
+                for l in lines_breakdown:
+                    raw_txt = l.get("line", "").strip().lower()
+                    if raw_txt:
+                        status_dict[raw_txt] = l.get("status", "✅")
+                
+                annotated_lines = []
+                for raw_l in lyrics_text.splitlines():
+                    cleaned = raw_l.strip().lower().strip(",").strip(".")
+                    if not raw_l.strip() or raw_l.strip().startswith("["):
+                        annotated_lines.append(raw_l)
+                    else:
+                        match_status = None
+                        for k, line_status in status_dict.items():
+                            if k in cleaned or cleaned in k:
+                                match_status = line_status
+                                break
+                        if match_status in ["❌", "🗑️"]:
+                            annotated_lines.append(f"[🚨 REWRITE REQUIRED ❌] {raw_l}")
+                        elif match_status == "⚠️":
+                            annotated_lines.append(f"[⚠️ OPTIONAL POLISH] {raw_l}")
+                        else:
+                            annotated_lines.append(f"[🔒 LOCKED ✅ - DO NOT TOUCH] {raw_l}")
+                annotated_lyrics_block = "\n".join(annotated_lines)
+                
+                external_prompt = f"""You are a Grammy-winning songwriter and elite ESL dialogue specialist.
+Your mission is to perform SURGICAL REPAIRS on the song lyrics below.
+
+CRITICAL PEDAGOGICAL MISSION:
+This song is an educational song built around a strict list of target vocabulary words.
+Every single target word that is currently in the lyrics MUST BE 100% PRESERVED.
+Dropping, omitting, or replacing any target word with a synonym is a CRITICAL FAILURE.
+
+CONTEXTUAL ANCHORS:
+- Theme: "{theme_val}"
+- Musical Genre: "{genre_val}"
+- Core Story / Setting / Concept: "{concept_val}"
+
+🎯 MANDATORY TARGET VOCABULARY ({len(target_words_list)} Words - DO NOT REMOVE ANY OF THESE):
+{words_joined}
+
+🔒 VERIFIED GREEN LINES ({len(passed_lines)} Lines - 100% LOCKED, DO NOT CHANGE):
+{passed_text}
+
+🚨 CRITICAL FLAWED LINES (Must be rewritten - Status ❌):
+{crit_text}
+
+⚠️ MINOR WARNING LINES (Only tweak if it improves flow - Status ⚠️):
+{warn_text}
+
+---
+CURRENT ANNOTATED SONG LYRICS (Follow the tags next to each line):
+{annotated_lyrics_block}
+---
+
+=== SURGICAL REPAIR INSTRUCTIONS (OVERRIDE ANY CONFLICT ABOVE) ===
+
+A. GREEN LINES (🔒) ARE LOCKED IN THE LYRICS OUTPUT.
+   Never delete, reorder, merge, split, or reword them in Part 1. Treat them as fixed anchors. Every green line must appear in the output exactly once per place it appears now, in the same position.
+
+B. EDIT SCOPE: Edit ONLY the ⚠️ (yellow) and ❌ (red) lines. If none are red, do not invent problems. A yellow line may be kept unchanged if no real improvement exists.
+
+C. TARGET WORDS & TONE:
+   - Every target word currently in the lyrics must remain intact.
+   - Do NOT replace any target word with a synonym.
+   - Do NOT add new profanity or crude vulgarities in edited lines. Existing coarse language inside green lines is intentional (street-life realism) and must not be treated as an error.
+
+D. IMPROVEMENT GOALS FOR EDITED LINES (priority order):
+   1. THEMATIC CONSISTENCY & SETTING CONTINUITY: Every edited line must stay inside the song's theme ("{theme_val}") and established setting / story ("{concept_val}"). Do not introduce new locations, characters, or topics that drift away from the central story. If a line does not serve the core story, rewrite it.
+   2. PRACTICAL USABILITY: an ESL learner who memorizes the line should be able to say it naturally in real life. Prefer everyday spoken English over poetic or literary phrasing.
+   3. NO FORCED RHYME: a line must add real narrative meaning, not exist only to rhyme.
+   4. NO REPETITION: avoid repeating the same opening word or key noun in nearby lines.
+   5. FLOW & MELODY: keep syllable count (±1) and rhyme scheme so the melody still fits.
+   6. LENGTH: 5 to 8 words per edited line.
+
+E. FINAL SELF-CHECK (execute silently before outputting):
+   - Count green lines: none missing, none changed, none repositioned.
+   - Verify all target words are still present.
+   - Ensure each edited line passes goals 1 to 5.
+   - If a yellow line cannot be improved, keep it as is.
+
+F. OUTPUT FORMAT:
+   Part 1: The complete clean lyrics (without any [🔒], [🚨], or [⚠️] tags), ready to paste.
+   Part 2: Change log, one line per edited line:
+   "Original line" → "New line" | Reason for change
+   (If nothing was edited, write "No edits needed".)
+   
+   === REVIEW ===
+   Part 3: GREEN LINE REVIEW (suggestions only, NOT applied to Part 1).
+   Check the green lines against goals D1 to D5, plus:
+   - Flag any green line that breaks thematic consistency or setting continuity.
+   - Is the line natural spoken English a learner can reuse in daily life?
+   - Is the register (rude, formal, poetic, profane) flagged for the learner?
+   - Is there weak coherence, forced rhyme, or repetition across the whole song?
+   - Does any green line clash with an edit made in Part 1?
+   Only mention a green line if you have a REAL, specific improvement. Do not pad the list. For each one give:
+   "Original → Suggested | reason | priority (high / medium / low)"
+   If nothing is worth changing, write "Green lines are solid, no suggestions."
+   Finish with a verdict: overall coherence, educational value, and whether the song is ready to publish.
+
+G. NEVER apply Part 3 suggestions to Part 1 unless the user explicitly approves them in the next message."""
+                
+                st.code(external_prompt, language="markdown")
                 
             with st.expander("📊 Word Integration Report", expanded=False):
                 kept = current_report.get("words_kept", [])
@@ -208,27 +341,60 @@ def render_tab_refinement():
             warn_lines = sum(1 for l in lines if l.get("status") not in ["✅", "❌", "🗑️"])
             flagged_lines = sum(1 for l in lines if l.get("status") in ["❌", "🗑️"])
             
-            header_html = f"""<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-top: 10px; margin-bottom: 16px; gap: 12px;">
-    <div>
-        <h3 style="margin: 0; color: #F8FAFC; font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em;">
-            🔍 Critic's Line-by-Line Breakdown
-        </h3>
-        <p style="margin: 4px 0 0 0; color: #94A3B8; font-size: 0.92rem;">
-            Full evaluation of every lyric line scored for authenticity, natural delivery, and story coherence.
-        </p>
-    </div>
-    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-        <span style="background: rgba(255,255,255,0.06); color: #CBD5E1; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(255,255,255,0.1);">
-            Total: {total_lines} Lines
-        </span>
-        <span style="background: rgba(16, 185, 129, 0.15); color: #6EE7B7; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.3);">
-            ✅ {passed_lines} Passed
-        </span>
-        {f'<span style="background: rgba(245, 158, 11, 0.15); color: #FDE68A; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(245, 158, 11, 0.3);">⚠️ {warn_lines} Polished</span>' if warn_lines else ''}
-        {f'<span style="background: rgba(239, 68, 68, 0.15); color: #FCA5A5; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(239, 68, 68, 0.3);">❌ {flagged_lines} Flagged</span>' if flagged_lines else ''}
-    </div>
+            # Prepare full copyable breakdown text for external AI
+            theme_val = st.session_state.get("synced_theme", "Street & Daily Life")
+            genre_val = st.session_state.get("synced_genre", "Cinematic / Ballad")
+            concept_val = st.session_state.get("synced_concept", "")
+            
+            breakdown_lines_export = [
+                f"# 🔍 CRITIC EVALUATION BREAKDOWN (Total: {total_lines} | ✅ {passed_lines} | ⚠️ {warn_lines} | ❌ {flagged_lines})",
+                f"- Theme: {theme_val} | Genre: {genre_val}",
+                f"- Story: {concept_val}\n",
+                "## 📜 Line-by-Line Scores & Feedback:"
+            ]
+            for idx, line_data in enumerate(lines, 1):
+                s_icon = line_data.get("status", "❓")
+                l_txt = line_data.get("line", "")
+                l_sc = line_data.get("score", 0)
+                l_cm = line_data.get("comment", "")
+                breakdown_lines_export.append(f'{idx}. [{s_icon} {l_sc}%] "{l_txt}"\n   ↳ Note: {l_cm}')
+            
+            full_breakdown_text = "\n".join(breakdown_lines_export)
+
+            if flagged_lines > 0:
+                flagged_badge = f'<span style="background: rgba(239, 68, 68, 0.15); color: #FCA5A5; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(239, 68, 68, 0.3);">❌ {flagged_lines} Flagged</span>'
+            else:
+                flagged_badge = '<span style="background: rgba(16, 185, 129, 0.12); color: #6EE7B7; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.25);">✨ 0 Flagged (Clean!)</span>'
+
+            warn_badge = f'<span style="background: rgba(245, 158, 11, 0.15); color: #FDE68A; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(245, 158, 11, 0.3);">⚠️ {warn_lines} Polished</span>' if warn_lines else ''
+
+            col_title, col_copy = st.columns([3.2, 1.3])
+            with col_title:
+                header_html = f"""<div style="margin-top: 10px; margin-bottom: 8px;">
+<h3 style="margin: 0; color: #F8FAFC; font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em;">
+🔍 Critic's Line-by-Line Breakdown
+</h3>
+<p style="margin: 4px 0 10px 0; color: #94A3B8; font-size: 0.92rem;">
+Full evaluation of every lyric line scored for authenticity, natural delivery, and story coherence.
+</p>
+<div style="display: flex; gap: 8px; flex-wrap: wrap;">
+<span style="background: rgba(255,255,255,0.06); color: #CBD5E1; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(255,255,255,0.1);">
+Total: {total_lines} Lines
+</span>
+<span style="background: rgba(16, 185, 129, 0.15); color: #6EE7B7; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.3);">
+✅ {passed_lines} Passed
+</span>
+{warn_badge}
+{flagged_badge}
+</div>
 </div>"""
-            st.markdown(header_html, unsafe_allow_html=True)
+                st.markdown(header_html, unsafe_allow_html=True)
+            with col_copy:
+                st.write("")
+                with st.popover("📋 نسخ التقرير بالتفاصيل", use_container_width=True):
+                    st.markdown("**تقرير التقييم الشامل (السطور + السكور + التعليقات):**")
+                    st.caption("اضغط أيقونة النسخ في الركن الأيمن لنسخ التقرير بالكامل وإرساله للذكاء الاصطناعي الخارجي:")
+                    st.code(full_breakdown_text, language="markdown")
             
             grid_html = "<div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 14px; width: 100%; margin-bottom: 30px;'>"
             for line_data in lines:
