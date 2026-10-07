@@ -252,11 +252,14 @@ def render_domain_breakdown_section(
         info = domains_dict.get(d, {})
         pct = info.get("percent", 0.0)
         cnt = info.get("count", 0)
+        words = sorted(list(set(info.get("words", []))))
         if pct > 0:
             cfg = DOMAIN_CONFIG.get(d, {})
             color = cfg.get("color", "#6366F1")
+            words_preview = ", ".join(words[:15]) + ("..." if len(words) > 15 else "")
+            title_attr = f"{cfg.get('emoji','')} {d}: {pct}% ({cnt} words) &#10;Words: {words_preview}"
             bar_segments.append(
-                f'<div style="width: {pct}%; height: 100%; background: {color};" title="{cfg.get("emoji","")} {d}: {pct}% ({cnt} words)"></div>'
+                f'<div style="width: {pct}%; height: 100%; background: {color};" title="{title_attr}"></div>'
             )
 
     bar_html = "".join(bar_segments)
@@ -266,14 +269,19 @@ def render_domain_breakdown_section(
         info = domains_dict.get(d, {})
         pct = info.get("percent", 0.0)
         cnt = info.get("count", 0)
+        words = sorted(list(set(info.get("words", []))))
         if cnt > 0:
             cfg = DOMAIN_CONFIG.get(d, {})
             color = cfg.get("color", "#94A3B8")
             bg = cfg.get("bg", "rgba(148, 163, 184, 0.15)")
             border = cfg.get("border", "rgba(148, 163, 184, 0.3)")
             emoji = cfg.get("emoji", "")
+            
+            words_preview = ", ".join(words[:25]) + (f" ... (+{len(words)-25} more)" if len(words) > 25 else "")
+            tooltip_str = f"{emoji} {d} ({cnt} words): {words_preview}"
+            
             badges_html.append(
-                f'<span style="background: {bg}; color: {color}; border: 1px solid {border}; padding: 3px 9px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">'
+                f'<span title="{tooltip_str}" style="background: {bg}; color: {color}; border: 1px solid {border}; padding: 3px 9px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; cursor: help;">'
                 f'{emoji} {d}: <b>{pct}%</b> <small style="opacity: 0.8;">({cnt})</small>'
                 f'</span>'
             )
@@ -328,6 +336,57 @@ def render_domain_breakdown_section(
             f'</div>'
         )
         st.markdown(box_html, unsafe_allow_html=True)
+
+    # Render interactive words inventory grouped by domain
+    active_domains = [d for d in DOMAINS if domains_dict.get(d, {}).get("count", 0) > 0]
+    if active_domains:
+        expander_label = "🔍 حصر وتفصيل كلمات كل مجال (View Words by Domain)" if not compact else "🔍 حصر كلمات القائمة حسب المجال"
+        with st.expander(expander_label, expanded=False):
+            # Sort: specialized domains first (ordered by word count descending), then Basic / Neutral
+            sorted_domains = sorted(
+                active_domains,
+                key=lambda x: (1 if x == "Basic / Neutral" else 0, -domains_dict.get(x, {}).get("count", 0))
+            )
+
+            cols = st.columns(2) if not compact else [st.container()]
+            for idx, d in enumerate(sorted_domains):
+                col = cols[idx % len(cols)] if not compact else cols[0]
+                info = domains_dict.get(d, {})
+                cnt = info.get("count", 0)
+                pct = info.get("percent", 0.0)
+                words = sorted(list(set(info.get("words", []))))
+                cfg = DOMAIN_CONFIG.get(d, {})
+                color = cfg.get("color", "#94A3B8")
+                bg = cfg.get("bg", "rgba(148, 163, 184, 0.08)")
+                border = cfg.get("border", "rgba(148, 163, 184, 0.25)")
+                emoji = cfg.get("emoji", "")
+                label_ar = cfg.get("label_ar", d)
+
+                chips_html = " ".join([
+                    f'<span style="background: rgba(15, 23, 42, 0.75); color: #F1F5F9; border: 1px solid {border}; '
+                    f'border-radius: 6px; padding: 2px 8px; font-size: 0.8rem; font-family: monospace; display: inline-block;">'
+                    f'{w}'
+                    f'</span>'
+                    for w in words
+                ])
+
+                card_html = f"""
+                <div style="background: {bg}; border: 1px solid {border}; border-left: 4px solid {color}; border-radius: 8px; padding: 9px 12px; margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 0.86rem; font-weight: 700; color: {color};">
+                            {emoji} {d} <small style="opacity: 0.75; font-weight: normal;">({label_ar})</small>
+                        </span>
+                        <span style="background: rgba(0, 0, 0, 0.3); color: {color}; font-size: 0.76rem; font-weight: 700; padding: 1px 7px; border-radius: 10px; border: 1px solid {border};">
+                            {cnt} words · {pct}%
+                        </span>
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                        {chips_html}
+                    </div>
+                </div>
+                """
+                with col:
+                    st.markdown(card_html, unsafe_allow_html=True)
 
 
 @st.cache_resource(show_spinner="Loading NLP Models...")

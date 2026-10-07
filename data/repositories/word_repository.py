@@ -159,11 +159,11 @@ def compute_domain_breakdown(words: List[str], db_path: Path = DB_PATH) -> Dict[
         classified_count += 1
 
     # Determine primary domain:
-    # Check specialized (non-neutral) domains first.
-    # In case of a tie with Basic / Neutral (e.g. 50/50 blend), prefer the specialized domain!
+    # Basic / Neutral is the background canvas (common functional/connective words).
+    # The true thematic identity of a song is determined by the highest specialized domain!
+    specialized_domains = [d for d in DOMAINS if d != "Basic / Neutral"]
     primary_domain = "Basic / Neutral"
     max_pct = 0.0
-    specialized_domains = [d for d in DOMAINS if d != "Basic / Neutral"]
 
     for d in specialized_domains:
         data = breakdown[d]
@@ -173,19 +173,15 @@ def compute_domain_breakdown(words: List[str], db_path: Path = DB_PATH) -> Dict[
             max_pct = pct
             primary_domain = d
 
-    # Calculate Basic / Neutral percentage
+    # Calculate Basic / Neutral percentage for the breakdown bar
     neutral_data = breakdown.get("Basic / Neutral", {"count": 0, "percent": 0.0, "words": []})
     neutral_pct = round((neutral_data["count"] / classified_count * 100), 1) if classified_count > 0 else 0.0
     neutral_data["percent"] = neutral_pct
     
-    # If no specialized domain had any words, primary is Basic / Neutral
-    if max_pct == 0.0 and neutral_pct > 0.0:
-        max_pct = neutral_pct
+    # Only if there are ZERO specialized words does the song become Basic / Neutral
+    if max_pct == 0.0:
         primary_domain = "Basic / Neutral"
-    elif neutral_pct > max_pct:
-        # If neutral strictly surpasses all other domains (e.g. 70% Neutral, 30% Street)
         max_pct = neutral_pct
-        primary_domain = "Basic / Neutral"
 
     formal_pct = breakdown.get("Business & Career", {}).get("percent", 0.0) + \
                  breakdown.get("Law, Politics & Society", {}).get("percent", 0.0) + \

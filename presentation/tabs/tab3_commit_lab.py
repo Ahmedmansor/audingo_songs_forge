@@ -8,6 +8,7 @@ import db
 import pipeline
 import prompt_builder
 import gemini_client
+from constants import DOMAIN_CONFIG
 from presentation.components.widgets import (
     render_domain_breakdown_section,
     load_nlp,
@@ -173,6 +174,13 @@ def render_tab_commit_lab():
             compact=False
         )
 
+        # Build word -> domain map for display badges
+        word_domain_map = {}
+        if song_domain_data and "domains" in song_domain_data:
+            for d_name, d_info in song_domain_data["domains"].items():
+                for w_item in d_info.get("words", []):
+                    word_domain_map[w_item.lower()] = d_name
+
         st.info("Uncheck any word below if you do NOT want it counted towards the database counters.")
 
         with st.form("approval_form"):
@@ -191,7 +199,11 @@ def render_tab_commit_lab():
                 checked_green = []
                 if green_list:
                     for w in green_list:
-                        if st.checkbox(f"🟢 {w}", value=True, key=f"chk_green_{w}"):
+                        w_dom = word_domain_map.get(w.lower(), "Basic / Neutral")
+                        dom_cfg = DOMAIN_CONFIG.get(w_dom, {})
+                        dom_emoji = dom_cfg.get("emoji", "")
+                        label = f"🟢 {w}  ({dom_emoji} {w_dom})"
+                        if st.checkbox(label, value=True, key=f"chk_green_{w}"):
                             checked_green.append(w)
                 else:
                     st.caption("No target words detected in the lyrics.")
@@ -225,13 +237,25 @@ def render_tab_commit_lab():
                 checked_blue = []
                 if blue_list:
                     for w in blue_list:
-                        if st.checkbox(f"🔵 {w}", value=True, key=f"chk_blue_{w}"):
+                        w_dom = word_domain_map.get(w.lower(), "Basic / Neutral")
+                        dom_cfg = DOMAIN_CONFIG.get(w_dom, {})
+                        dom_emoji = dom_cfg.get("emoji", "")
+                        label = f"🔵 {w}  ({dom_emoji} {w_dom})"
+                        if st.checkbox(label, value=True, key=f"chk_blue_{w}"):
                             checked_blue.append(w)
                 else:
                     st.caption("No newly introduced NGSL words found.")
 
                 if reused_list:
-                    reused_pills = " ".join(f'<span class="reused-pill">{w}</span>' for w in reused_list)
+                    reused_pills_list = []
+                    for w in reused_list:
+                        w_dom = word_domain_map.get(w.lower(), "Basic / Neutral")
+                        dom_cfg = DOMAIN_CONFIG.get(w_dom, {})
+                        dom_emoji = dom_cfg.get("emoji", "")
+                        reused_pills_list.append(
+                            f'<span class="reused-pill" title="{dom_emoji} {w_dom}">{w} <small style="opacity: 0.75;">{dom_emoji}</small></span>'
+                        )
+                    reused_pills = " ".join(reused_pills_list)
                     st.markdown(
                         f"""
                         <div style="background: rgba(148, 163, 184, 0.08); border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
