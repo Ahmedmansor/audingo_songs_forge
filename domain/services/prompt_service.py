@@ -64,21 +64,6 @@ def generate_master_prompt(
     )
 
     avoidance_section = ""
-    if previously_used_words:
-        used_words_str = ", ".join(previously_used_words)
-        avoidance_section = f"""---
-
-### 🚫 Mindful Vocabulary Diversity (Smart Repetition Avoidance):
-- **Previously Covered Thematic Vocabulary to Avoid/Minimize (Where Practical):**
-{used_words_str}
-
-- **Core Pedagogy & Goal:** To help the ESL learner discover fresh vocabulary and avoid repetitive themes across songs, make a conscious effort to steer away from the previously covered content words listed above. When drafting lyrics, explore fresh situations, synonyms, or new imagery that introduces diverse vocabulary.
-- **CRITICAL SMART GUIDELINES (Conversational Naturalness > Word Avoidance):**
-  - This is a **mindful pedagogical guideline**, NOT a rigid, artificial ban.
-  - **100% UNCONDITIONAL EXEMPTIONS:** All structural grammar glue, pronouns (*I, you, we, they, me, us*), prepositions (*in, on, at, with, about, for*), conjunctions (*and, but, because, so*), and indispensable everyday conversational verbs and words (*be, have, do, go, get, see, know, think, take, make, come, say, want, look, feel, good, time, way, day, life, friend, home, etc.*) are completely exempt and MUST be used freely to maintain natural English.
-  - **GOLDEN RULE:** Conversational realism, emotional authenticity, and musical rhythm ALWAYS take priority. Under NO circumstances should you sacrifice natural phrasing or write awkward, robotic lines just to dodge a previously covered word!
-
-"""
 
     prompt = f"""# 🎵 MASTER SONGWRITING & SUNO PROMPT (STREET SMALL-TALK & CATCHY RHYMES)
 
@@ -93,7 +78,7 @@ Your mission is to write a catchy, highly relatable, and musical song that natur
 
 *(Note: Inflected forms like plurals, verb tenses, etc. are allowed. You have full permission to use natural derivatives or alter the word class slightly if it prevents awkward phrasing. For example, use "every day" as two words if it fits better than the adjective "everyday", or use a plural/past-tense form if it sounds more natural in context.)*
 
-{avoidance_section}---
+---
 
 ### 🎨 Creative Direction & Musical Vibe:
 - **Genre & Style:** {genre} (clean, warm, rhythm-driven, and highly relatable)

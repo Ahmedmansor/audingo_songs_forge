@@ -60,6 +60,7 @@ def render_tab_studio():
                         st.session_state.studio_suno_prompt = ""
                         st.session_state.studio_poster_prompt = ""
                         st.session_state.custom_concept = ""
+                        st.session_state.graph_report = None
                         sync_active_session()
                         st.success("✅ Word batch restored from draft!")
                         st.rerun()
@@ -74,6 +75,7 @@ def render_tab_studio():
                         st.session_state.studio_suno_prompt = _draft_payload.get("suno_prompt", "")
                         st.session_state.studio_poster_prompt = _draft_payload.get("poster_prompt", "")
                         st.session_state.custom_concept = _draft_payload.get("custom_concept", "")
+                        st.session_state.graph_report = None
                         st.session_state.selected_genre = _draft_payload.get("selected_genre", st.session_state.selected_genre)
                         st.session_state.selected_structure = _draft_payload.get("selected_structure", st.session_state.selected_structure)
                         st.session_state.selected_vocalist = _draft_payload.get("selected_vocalist", st.session_state.selected_vocalist)
@@ -194,6 +196,7 @@ def render_tab_studio():
                     st.session_state.master_prompt = ""
                     st.session_state.studio_suno_prompt = ""
                     st.session_state.custom_concept = ""
+                    st.session_state.graph_report = None
                     sync_active_session()
                     if active_domain not in ("All Domains", "Basic / Neutral"):
                         mode_str = " (50% Domain + 50% Joker blend)" if active_blend else " (100% Pure Domain)"
@@ -208,6 +211,7 @@ def render_tab_studio():
                     st.session_state.target_batch = new_batch
                     st.session_state.custom_concept = ""
                     st.session_state.studio_suno_prompt = ""
+                    st.session_state.graph_report = None
                     sync_active_session()
                     st.warning(f"Only {len(new_batch)} unused words available in database.")
                     st.rerun()
@@ -251,6 +255,7 @@ def render_tab_studio():
                         st.session_state.master_prompt = ""
                         st.session_state.studio_suno_prompt = ""
                         st.session_state.custom_concept = curation_res.get("theme_description", "")
+                        st.session_state.graph_report = None
                         sync_active_session()
                         theme_title = curation_res.get("theme_name", "Curated Storyline")
                         st.success(f"✨ Curated 20 thematic words for '{theme_title}' (10 Nouns, 6 Verbs, 4 Adjectives)!")
@@ -258,6 +263,7 @@ def render_tab_studio():
                     elif len(curated_batch) > 0:
                         st.session_state.target_batch = curated_batch
                         st.session_state.custom_concept = curation_res.get("theme_description", "")
+                        st.session_state.graph_report = None
                         sync_active_session()
                         st.warning(f"Curated {len(curated_batch)} words.")
                         st.rerun()
@@ -274,6 +280,7 @@ def render_tab_studio():
                 st.session_state.master_prompt = ""
                 st.session_state.studio_suno_prompt = ""
                 st.session_state.custom_concept = ""
+                st.session_state.graph_report = None
                 sync_active_session()
                 st.info("Batch redrawn.")
                 st.rerun()
@@ -285,6 +292,7 @@ def render_tab_studio():
                 st.session_state.master_prompt = ""
                 st.session_state.studio_suno_prompt = ""
                 st.session_state.custom_concept = ""
+                st.session_state.graph_report = None
                 db.clear_active_batch_state()
                 st.rerun()
 
@@ -343,6 +351,7 @@ def render_tab_studio():
                             st.session_state.target_batch[idx] = swapped
                             st.session_state.master_prompt = ""
                             st.session_state.studio_suno_prompt = ""
+                            st.session_state.graph_report = None
                             sync_active_session()
                             st.success(f"Swapped '{word_item['word']}' → '{swapped['word']}'")
                             st.rerun()

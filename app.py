@@ -27,8 +27,9 @@ from presentation.components.session import init_session_state
 from presentation.components.sidebar import render_sidebar
 from presentation.tabs.tab1_dictionary import render_tab_dictionary
 from presentation.tabs.tab2_studio import render_tab_studio
-from presentation.tabs.tab3_commit_lab import render_tab_commit_lab
-from presentation.tabs.tab4_library import render_tab_library
+from presentation.tabs.tab3_refinement import render_tab_refinement
+from presentation.tabs.tab4_commit_lab import render_tab_commit_lab
+from presentation.tabs.tab5_library import render_tab_library
 
 # 1. Apply UI theme & styles
 apply_custom_styles()
@@ -44,9 +45,10 @@ st.markdown('<div class="main-header">Audingo Songs Forge</div>', unsafe_allow_h
 st.markdown('<div class="sub-header">NGSL Vocabulary Targeting, AI Prompt Crafting, and Lyric Review Pipeline</div>', unsafe_allow_html=True)
 
 # 5. Primary Feature Tabs
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 Dictionary & Analytics",
     "🎧 Studio (Word Selection & Prompt)",
+    "✨ AI Graph Refinement",
     "🧪 Commit Lab (Review & Approval)",
     "🎵 Songs Library"
 ])
@@ -58,7 +60,10 @@ with tab2:
     render_tab_studio()
 
 with tab3:
-    render_tab_commit_lab()
+    render_tab_refinement()
 
 with tab4:
+    render_tab_commit_lab()
+
+with tab5:
     render_tab_library()
