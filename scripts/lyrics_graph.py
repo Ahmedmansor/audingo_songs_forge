@@ -54,8 +54,8 @@ def python_inspector_node(state: GraphState) -> GraphState:
     lines = [line.strip() for line in draft.split('\n') if line.strip() and not line.startswith('[')]
     for i, line in enumerate(lines):
         word_count = len(line.split())
-        if word_count > 10: # Assuming 10 is the max safe length
-            validation_errors.append(f"Line too long ({word_count} words): '{line}'")
+        if word_count > 8: # Tightened for maximum singability
+            validation_errors.append(f"Line too long ({word_count} words). Max is 8: '{line}'")
             
     state["validation_errors"] = validation_errors
     return state
@@ -81,6 +81,7 @@ def authenticity_critic_node(state: GraphState) -> tuple[GraphState, Dict[str, A
     TASK:
     Evaluate if each line is an authentic, natural sentence that perfectly fits the 'Core Story/Concept' and 'Theme'.
     If a line feels robotic, forced, or awkward just to rhyme or fit a target word, mark it as rejected.
+    If a line sounds like a written poem (e.g. "amidst the shadows"), mark it as rejected. The language MUST be 100% authentic to how native speakers actually talk in real-life situations related to the Theme '{theme}'. (e.g. if the theme is Science, use realistic professional/lab conversation; if Street, use casual daily speech. Never robotic, never forced).
     If a target word completely destroys the realism of the scene (e.g. a political word in a romantic story), you MUST recommend dropping that word entirely.
     Additionally, review the SYSTEM PRE-ANALYSIS REPORT below. If the Python inspector flagged a line as 'too long', you must mark that line as ❌ and instruct the Editor to shorten it to 5-8 words.
 
@@ -113,6 +114,10 @@ def authenticity_critic_node(state: GraphState) -> tuple[GraphState, Dict[str, A
             require_json=True
         )
         state["active_model_index"] = new_model_idx
+        state["total_requests"] = state.get("total_requests", 0) + 1
+        if "models_used" not in state: state["models_used"] = []
+        state["models_used"].append(MASTER_FALLBACK_CHAIN[new_model_idx])
+        
         critic_report = json.loads(raw_response)
         return state, critic_report
     except Exception as e:
@@ -151,7 +156,10 @@ def editor_refiner_node(state: GraphState, critic_report: Dict[str, Any]) -> Gra
     {json.dumps(dropped_words)}
     
     TASK: Rewrite ONLY the flawed parts to fix the inspector errors and the critic's rejections. 
-    Ensure perfect natural phrasing and preserve the rhyme scheme.
+    - PRIORITY 1 (Authentic Real-Life Speech): Every line must sound EXACTLY like authentic, modern native speech specific to the Theme '{theme}'. (e.g. realistic professional conversation for Science/Academia, casual daily speech for Street). Every single line must be practical for an ESL student to memorize and use in real life! NO poetry, NO archaic words.
+    - PRIORITY 2 (Rhythm): Keep the lines short (5-8 words).
+    - PRIORITY 3 (Structure): DO NOT remove any structural tags like [Verse 1] or [Chorus].
+    
     Return ONLY the complete updated song lyrics text (no markdown, no extra chat).
     """
     
@@ -161,6 +169,10 @@ def editor_refiner_node(state: GraphState, critic_report: Dict[str, Any]) -> Gra
             start_index=state["active_model_index"]
         )
         state["active_model_index"] = new_model_idx
+        state["total_requests"] = state.get("total_requests", 0) + 1
+        if "models_used" not in state: state["models_used"] = []
+        state["models_used"].append(MASTER_FALLBACK_CHAIN[new_model_idx])
+        
         state["draft_lyrics"] = raw_response
     except Exception as e:
         logger.error(f"Editor node failed: {e}")
@@ -181,7 +193,9 @@ def run_refinement_graph(draft: str, target_words: List[str], theme: str, genre:
         "iterations": 0,
         "is_completed": False,
         "final_report": None,
-        "active_model_index": 0
+        "active_model_index": 0,
+        "total_requests": 0,
+        "models_used": []
     }
     
     max_iterations = 5
@@ -203,7 +217,7 @@ def run_refinement_graph(draft: str, target_words: List[str], theme: str, genre:
         score = critic_report.get("overall_score", 0)
         has_rejected = any(r.get("status") in ["❌", "🗑️"] for r in critic_report.get("lines_review", []))
         
-        if not state["validation_errors"] and not has_rejected and score >= 90:
+        if not state["validation_errors"] and not has_rejected and score >= 98:
             state["is_completed"] = True
             break
             
@@ -223,7 +237,9 @@ def run_refinement_graph(draft: str, target_words: List[str], theme: str, genre:
         "words_dropped": last_critic_report.get("dropped_words", []) if last_critic_report else [],
         "line_breakdown": last_critic_report.get("lines_review", []) if last_critic_report else [],
         "iterations_used": state["iterations"],
-        "final_model_used": MASTER_FALLBACK_CHAIN[state["active_model_index"]]
+        "final_model_used": MASTER_FALLBACK_CHAIN[state["active_model_index"]],
+        "total_requests": state.get("total_requests", 0),
+        "models_used": list(dict.fromkeys(state.get("models_used", []))) # deduplicate while preserving order
     }
     
     return state
