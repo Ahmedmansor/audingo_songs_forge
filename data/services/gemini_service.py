@@ -69,14 +69,26 @@ CRITICAL DIRECTIVE 2: DIVERSE GENRE MATCHING (BREAK THE ACOUSTIC / INDIE-POP MON
   * Relaxed, mellow, introspective, everyday coffee shop -> "Lo-Fi / Chillhop", "Melodic Chill Electronic", "Jazz / Bossa Nova", "Reggae / Tropical Pop"
   * Rootsy storytelling, everyday blue-collar struggles, journey -> "Country / Americana", "Acoustic / Folk"
 
-CRITICAL STORY CONCEPT INSTRUCTIONS:
-- Ground the story in a vivid, relatable slice-of-life scenario with real spoken dialogue and human stakes.
-- Explore diverse domains:
-  * Emotional turning points: Packing bags for a move, an emotional late-night phone call, a difficult confession, parting ways at an airport, returning to a childhood hometown.
-  * Relationships: First date jitters, apologizing after a misunderstanding, quiet reassurance during tough times, celebrating an anniversary.
-  * Daily life & struggles: Overcoming burnout, a tough shift, budgeting for rent, fixing up a beat-up car, preparing for a life-changing interview.
-  * Friendship & fun: Impromptu diner conversations, laughing through mistakes, road-tripping with the radio on, a bustling weekend market.
-- NO corporate cubicle monotony, NO abstract surreal metaphors. Keep it conversational, cinematic, and genuinely human.
+CRITICAL STORY CONCEPT INSTRUCTIONS (SPECIFIC, HIGH-FIDELITY STORYLINE ROADMAP):
+The creative story concept must be CONCRETE, VIVID, and SPECIFIC — NEVER generic or vague.
+It serves as the narrative anchor for both the lyricist and the vocabulary audit.
+In "creative_concept", construct a rich, highly specific 3-4 sentence scenario that explicitly defines:
+1. Specific Characters & Relationship:
+   - Concrete roles or identities and their dynamic (e.g. "Two childhood friends, Maya and Liam, packing up their shared apartment before Liam moves across the country", "A junior technician and her retired mentor troubleshooting a stalled workshop engine before dawn", "A young line cook facing a tough evening rush while trying to reconcile with his brother").
+2. Tangible Physical Setting & Sensory Atmosphere:
+   - Anchor the scene in a concrete time, place, and sensory environment (e.g. "A rainy Tuesday night around a crowded kitchen table with taped cardboard boxes", "The counter of a late-night diner with cooling cups of black coffee as headlights sweep past the window").
+3. Core Human Stakes & Dramatic Tension:
+   - Identify the immediate emotional or practical dilemma (e.g. "A hard unspoken truth about why one of them is leaving", "Fear of failing the upcoming trade exam coupled with mutual reassurance", "A sudden unexpected expense forcing a difficult family compromise").
+4. Clear Narrative Progression:
+   - Opening Situation: The immediate setting and action where characters talk.
+   - Turning Point: The pivotal realization or honest conversation that shifts the mood.
+   - Resolution / Outlook: The quiet decision or shared determination they reach.
+5. Real Spoken Dialogue Anchors:
+   - The scene must naturally inspire everyday spoken American English lines that an ESL learner could memorize and use in real life ("We don't have to figure it all out tonight", "Can I ask you something honest?", "Let's take it one step at a time").
+- STRICT PROHIBITIONS:
+  * NO vague one-liners like "Someone faces challenges in life and finds hope".
+  * NO corporate textbook clichés or abstract surreal fantasies.
+  * Make the scenario so vivid and specific that any songwriter instantly sees the entire scene unfold like a movie scene.
 
 Return a valid JSON object with the following exact schema:
 {{
@@ -85,7 +97,7 @@ Return a valid JSON object with the following exact schema:
     }},
     "genre": "Exact match from Available Genres",
     "song_structure": "Exact match from Available Song Structures",
-    "creative_concept": "1-2 sentences describing an engaging, authentic real-life scenario or human storyline that weaves these words naturally into spoken dialogue and realistic actions."
+    "creative_concept": "A specific, vivid 3-4 sentence narrative scenario explicitly defining characters, concrete setting, core tension, and narrative progression, designed to anchor natural spoken dialogue."
 }}
 """
 
@@ -413,39 +425,51 @@ PRIMARY THEMATIC DOMAIN FOCUS:
 - Ensure the curated theme, story concept, and 20 words are deeply anchored in the world of {domain_focus}.
 """
 
-    prompt = f"""You are an elite ESL vocabulary curator and hit songwriter.
+    prompt = f"""You are an elite ESL vocabulary curator, master curriculum director, and hit songwriter for Audingo.
 
-TASK: From the provided pools of candidate unused English words, curate a cohesive, highly relatable set of EXACTLY 20 target vocabulary words:
+AUDINGO EDUCATIONAL MISSION:
+Songs in Audingo are engineered so English language learners can memorize ANY lyric line and use it as natural, authentic spoken English in real life.
+The 20 target words must not be a random grab-bag; they must share **exceptional semantic chemistry**, high conversational collocability, and deep natural synergy around a single, relatable slice-of-life scenario.
+
+TASK: From the candidate pools of unused English words below, curate an extraordinarily cohesive batch of EXACTLY 20 target words:
 - Exactly 10 Nouns (chosen ONLY from Candidate Nouns below)
 - Exactly 6 Verbs (chosen ONLY from Candidate Verbs below)
 - Exactly 4 Adjectives (chosen ONLY from Candidate Adjectives below)
 {domain_instruction}
-CANDIDATE NOUNS (Pick 10):
+CANDIDATE NOUNS ({len(candidate_nouns)} available):
 {nouns_str}
 
-CANDIDATE VERBS (Pick 6):
+CANDIDATE VERBS ({len(candidate_verbs)} available):
 {verbs_str}
 
-CANDIDATE ADJECTIVES (Pick 4):
+CANDIDATE ADJECTIVES ({len(candidate_adjs)} available):
 {adjs_str}
 
-CRITICAL SELECTION CRITERIA:
-1. THEMATIC CHEMISTRY & COHESION:
-   - Do NOT pick disjointed, random words.
-   - Choose 20 words that naturally fit together in an authentic everyday real-life scenario.
-2. CONVERSATIONAL UTILITY:
-   - Prioritize words that are practical, expressive, and useful for English language learners in daily small talk.
-3. EXACT COUNT & STRICT MEMBERSHIP:
-   - You MUST select words that appear verbatim in the candidate lists.
-   - Exactly 10 Nouns, 6 Verbs, 4 Adjectives. Total: 20 words.
+INTELLIGENT SELECTION METHODOLOGY:
+1. SCENARIO FIRST (Anchor the Scene):
+   - First, scan the candidate words to discover a concrete, relatable, everyday human scenario that connects the highest quality candidates together (e.g. resolving a misunderstanding with a friend, an overdue late-night conversation, fixing something broken around the house, preparing for a high-stakes job interview, moving into a new neighborhood).
+2. HIGH MUTUAL COLLOCABILITY & NATURAL CHEMISTRY:
+   - The chosen 20 words must feel like they naturally belong in the same conversation, room, and storyline.
+   - When native English speakers discuss this scenario, these words naturally roll off the tongue together:
+     * Verbs (6): Active, conversational actions the characters actually take or experience (e.g. explain, notice, decide, listen, call, wait). Avoid stiff or awkward verbs.
+     * Nouns (10): The physical objects, people, locations, or emotional stakes in this scene (e.g. door, table, message, friend, plan, morning, trouble).
+     * Adjectives (4): Relatable emotional states or concrete sensory qualities (e.g. quiet, tired, ready, clear).
+3. ESL CONVERSATIONAL PRACTICALITY:
+   - Select words that are useful, frequent, and natural in real-life spoken American English.
+   - REJECT words that are hyper-technical, archaic, overly academic, or awkward to use in a song without forcing weird rhymes or distorted word order ("من غير ما نحشر كلمة بالعافية").
+4. DOMAIN & GENERAL BALANCE:
+   - When a domain focus is specified, anchor the core scenario in that world, while pairing specialized words with universal daily words so the song sounds like real people talking in that environment, not an encyclopedia.
+5. STRICT MEMBERSHIP & EXACT COUNTS:
+   - Every single selected word MUST be chosen verbatim from the candidate lists provided above.
+   - Exactly 10 Nouns, Exactly 6 Verbs, Exactly 4 Adjectives. Total = 20 words.
 
 Return a valid JSON object with the following exact schema:
 {{
+    "theme_name": "A short, catchy, evocative 2-4 word theme name",
+    "theme_description": "2-3 vivid, specific sentences describing the concrete real-life scenario and how the characters interact.",
     "selected_nouns": ["noun1", "noun2", "noun3", "noun4", "noun5", "noun6", "noun7", "noun8", "noun9", "noun10"],
     "selected_verbs": ["verb1", "verb2", "verb3", "verb4", "verb5", "verb6"],
-    "selected_adjectives": ["adj1", "adj2", "adj3", "adj4"],
-    "theme_name": "Short, catchy 2-4 word theme name",
-    "theme_description": "1-2 vivid, practical sentences describing the real-life scenario."
+    "selected_adjectives": ["adj1", "adj2", "adj3", "adj4"]
 }}
 """
 
@@ -460,7 +484,7 @@ Return a valid JSON object with the following exact schema:
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
-                    temperature=0.85,
+                    temperature=0.45,
                 ),
             )
             raw = response.text.strip()
@@ -513,20 +537,39 @@ Therefore, each line in the song must:
 
 INPUT DATA:
 - Story / Creative Scenario:
-  "{story_concept}"
+\"\"\"
+{story_concept}
+\"\"\"
 
 - 20 Target Vocabulary Words to Audit:
-  [{words_str}]
+[{words_str}]
 
-CRITICAL AUDITING RULES:
-1. BASIC & NEUTRAL WORDS EXEMPTION:
-   - Common, basic, or neutral words (e.g., words commonly used across diverse everyday topics like "time", "day", "door", "friend", "water", "walk", "call", "talk", "happy", "look", "car", "wait", "listen", "home", etc.) naturally fit into almost ANY daily life scenario or dialogue.
-   - You MUST NEVER flag basic or neutral words as "out of context" or "forced"!
-2. WHAT YOU MUST AUDIT & FLAG:
-   - Severe Thematic Clash: Words that belong to a jarringly distant or technical domain (e.g. specialized medical, nautical, political, or industrial jargon) that make zero sense in this specific slice-of-life scene, forcing awkward dialogue.
-   - Overly Formal, Academic, or Obscure Words: Words that native speakers would never use in casual spoken dialogue in this scenario, forcing an artificial, warped sentence structure just to squeeze them in.
-3. REASONING:
-   - For any flagged word, provide a concise, constructive 1-sentence explanation of why it feels forced or out of context for this specific scenario and everyday dialogue.
+CRITICAL AUDITING PHILOSOPHY: FAIRNESS, REALISTIC DIALOGUE & CONTEXTUAL PLAUSIBILITY (منصف ومحدد في احتمالية التوافق):
+1. PRINCIPLE OF FAIRNESS & PLURALITY (الإنصاف والمرونة السياقية):
+   - A song is an authentic human narrative and living spoken dialogue, NOT a narrow dictionary article or technical specification.
+   - In ANY real-world scene, characters naturally speak about:
+     * Physical Setting & Environment: Objects, rooms, weather, time, tools (e.g. table, door, chair, rain, window, car, night, morning).
+     * Human Emotions, Attitudes & Reactions: How people feel, wonder, or respond (e.g. fear, hope, tired, proud, doubt, calm, sure).
+     * Everyday Actions & Conversational Exchanges: Normal human actions and dialogue (e.g. wait, ask, listen, explain, call, check, step, notice).
+     * Common Conversational Idioms: Natural spoken phrases used in daily English.
+   - PLAUSIBILITY TEST: If a skilled songwriter can plausibly write a natural, authentic spoken sentence in this scene using the word — whether as spoken dialogue, a description of the scene, an action, or an emotional state — **IT IS A VALID FIT AND MUST PASS! DO NOT FLAG IT!**
+
+2. UNIVERSAL EXEMPTION FOR BASIC / NEUTRAL WORDS:
+   - Common, versatile everyday words (e.g. "time", "day", "door", "friend", "water", "walk", "call", "talk", "happy", "look", "car", "wait", "listen", "home", "step", "answer", "mind", "hold", "clear", etc.) naturally fit into virtually ANY human story or conversation.
+   - You MUST NEVER flag basic or neutral everyday words as "out of context" or "forced". They are the natural glue of all English communication.
+
+3. STRICT HIGH THRESHOLD FOR FLAGGING (ONLY FLAG GENUINE, INSURMOUNTABLE CLASHES):
+   - ONLY flag a word if it creates a severe, unbridgeable thematic or stylistic clash that would FORCE the songwriter to invent bizarre, artificial, or distorted sentences.
+   - Examples of genuine clashes:
+     * Extreme Technical / Domain Alienation: Hyper-specialized jargon (e.g. "photosynthesis", "subpoena", "mitochondria", "amortization") in an intimate emotional scene, casual small talk, or simple street setting where native speakers would never use such terms.
+     * Archaic or Obscure Register: Words so formal, stiff, or antiquated that no native speaker would ever utter them in spoken conversational dialogue in this scene.
+     * Severe Narrative Incoherence: A word whose literal meaning is completely irreconcilable with the characters, location, or conflict of the story.
+   - BENEFIT OF THE DOUBT: If you can imagine even one natural, realistic line of dialogue or setting description in this scene that uses the word naturally, IT PASSES.
+
+4. SPECIFIC & CONSTRUCTIVE FEEDBACK FOR FLAGGED WORDS (محدد ودقيق):
+   - For any word genuinely flagged, provide:
+     * Precise explanation: 1-2 clear, objective sentences explaining why this word cannot plausibly fit into natural spoken dialogue in this specific scene without sounding strained or artificial.
+     * Constructive guidance: Explicitly state whether swapping the word with a fresh unused word is recommended, or if there is a narrow specific angle to make it work.
 
 Return a valid JSON object matching this exact schema:
 {{
@@ -534,10 +577,11 @@ Return a valid JSON object matching this exact schema:
     "flagged_words": [
         {{
             "word": "exact_word_from_input",
-            "reason": "1 short punchy sentence explaining why this word clashes with the scenario or feels forced for natural everyday speech"
+            "reason": "1-2 specific, objective sentences explaining why this word cannot plausibly fit into natural spoken dialogue in this scene without forcing unnatural language.",
+            "suggestion": "Recommendation to swap or narrow context suggestion."
         }}
     ],
-    "summary": "1 concise sentence evaluating the overall thematic and conversational harmony of the batch."
+    "summary": "1-2 concise, balanced sentences summarizing the thematic coherence and conversational plausibility of the batch."
 }}
 """
 

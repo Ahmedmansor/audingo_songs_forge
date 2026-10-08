@@ -13,10 +13,39 @@ from presentation.components.widgets import (
     render_domain_breakdown_section,
 )
 from presentation.components.session import sync_active_session, set_target_batch
+from presentation.components.dialogs import confirm_studio_reset_dialog, execute_studio_action
+
+
+def is_active_song_in_progress() -> bool:
+    """
+    Returns True if user has an active song session in progress (target batch, lyrics, concept, prompt, etc.).
+    Protects against accidental reset/clear clicks.
+    """
+    has_batch = bool(st.session_state.get("target_batch"))
+    has_lyrics = any(
+        bool(st.session_state.get(k, "").strip())
+        for k in ("refine_draft", "commit_lyrics", "raw_lyrics_input")
+    )
+    has_title = any(
+        bool(st.session_state.get(k, "").strip())
+        for k in ("song_title_input", "commit_song_title_input_field")
+    )
+    has_concept_or_prompt = any(
+        bool(st.session_state.get(k, "").strip())
+        for k in ("custom_concept", "master_prompt", "studio_suno_prompt")
+    )
+    has_reports = any(
+        bool(st.session_state.get(k))
+        for k in ("graph_report", "critic_only_report", "word_fit_audit")
+    )
+    return has_batch or has_lyrics or has_title or has_concept_or_prompt or has_reports
 
 
 def render_tab_studio():
     """Renders the Target Word Selection, Batch Management, and AI Prompt Generator."""
+    if st.session_state.get("studio_toast_msg"):
+        st.toast(st.session_state.pop("studio_toast_msg"))
+
     st.subheader("Make room for your next idea.")
     st.caption("Choose your words, shape the mood, and craft your song.")
 
@@ -188,118 +217,34 @@ def render_tab_studio():
         b_col1, b_col2, b_col3, b_col4 = st.columns([1.1, 1.3, 1, 0.9])
         with b_col1:
             if st.button(":material/shuffle: Random 20", type="secondary", width="stretch", help="Randomly pull 20 unused words (10 N, 6 V, 4 A) directly from SQLite."):
-                active_domain = st.session_state.get("selected_domain", "All Domains")
-                active_blend = st.session_state.get("blend_joker", True)
-                new_batch = db.pull_20_words(domain=active_domain, blend_joker=active_blend)
-                if len(new_batch) == 20:
-                    set_target_batch(new_batch)
-                    st.session_state.mood_analysis = None
-                    st.session_state.master_prompt = ""
-                    st.session_state.studio_suno_prompt = ""
-                    st.session_state.custom_concept = ""
-                    st.session_state.graph_report = None
-                    sync_active_session()
-                    if active_domain not in ("All Domains", "Basic / Neutral"):
-                        mode_str = " (50% Domain + 50% Joker blend)" if active_blend else " (100% Pure Domain)"
-                        dom_tag = f" from {active_domain}{mode_str}"
-                    elif active_domain == "Basic / Neutral":
-                        dom_tag = " from Basic / Neutral (Joker)"
-                    else:
-                        dom_tag = ""
-                    st.success(f"Pulled 20 random unused words (10 Nouns, 6 Verbs, 4 Adjectives){dom_tag}!")
-                    st.rerun()
-                elif len(new_batch) > 0:
-                    set_target_batch(new_batch)
-                    st.session_state.custom_concept = ""
-                    st.session_state.studio_suno_prompt = ""
-                    st.session_state.graph_report = None
-                    sync_active_session()
-                    st.warning(f"Only {len(new_batch)} unused words available in database.")
-                    st.rerun()
+                if is_active_song_in_progress():
+                    st.session_state["pending_studio_reset_action"] = "random"
                 else:
-                    st.error("No unused words remaining in the database!")
+                    execute_studio_action("random")
 
         with b_col2:
             if st.button(":material/neurology: Smart Thematic Pull", type="primary", width="stretch", help="Gemini analyzes 140 candidate unused words and selects 20 words (10 N, 6 V, 4 A) that share natural chemistry and relate to an authentic everyday life scenario."):
-                active_domain = st.session_state.get("selected_domain", "All Domains")
-                active_blend = st.session_state.get("blend_joker", True)
-                dom_spin = f" within {active_domain}" if active_domain != "All Domains" else ""
-                with st.spinner(f"🧠 Gemini is curating a cohesive 20-word batch{dom_spin}..."):
-                    candidate_pool = db.pull_candidate_pool_for_thematic_curation(
-                        nouns_limit=70,
-                        verbs_limit=40,
-                        adjs_limit=30,
-                        domain=active_domain,
-                        blend_joker=active_blend
-                    )
-                    candidate_nouns = [w["word"] for w in candidate_pool["Noun"]]
-                    candidate_verbs = [w["word"] for w in candidate_pool["Verb"]]
-                    candidate_adjs = [w["word"] for w in candidate_pool["Adjective"]]
-                    
-                    curation_res = gemini_client.curate_thematic_vocabulary_batch(
-                        candidate_nouns=candidate_nouns,
-                        candidate_verbs=candidate_verbs,
-                        candidate_adjs=candidate_adjs,
-                        domain_focus=active_domain
-                    )
-                    
-                    curated_batch = db.build_curated_batch_from_words(
-                        selected_nouns=curation_res.get("selected_nouns", []),
-                        selected_verbs=curation_res.get("selected_verbs", []),
-                        selected_adjs=curation_res.get("selected_adjectives", []),
-                        candidate_pool=candidate_pool
-                    )
-                    
-                    if len(curated_batch) == 20:
-                        set_target_batch(curated_batch)
-                        st.session_state.mood_analysis = None
-                        st.session_state.master_prompt = ""
-                        st.session_state.studio_suno_prompt = ""
-                        st.session_state.custom_concept = curation_res.get("theme_description", "")
-                        st.session_state.graph_report = None
-                        st.session_state.word_fit_audit = None
-                        sync_active_session()
-                        theme_title = curation_res.get("theme_name", "Curated Storyline")
-                        st.success(f"✨ Curated 20 thematic words for '{theme_title}' (10 Nouns, 6 Verbs, 4 Adjectives)!")
-                        st.rerun()
-                    elif len(curated_batch) > 0:
-                        set_target_batch(curated_batch)
-                        st.session_state.custom_concept = curation_res.get("theme_description", "")
-                        st.session_state.graph_report = None
-                        st.session_state.word_fit_audit = None
-                        sync_active_session()
-                        st.warning(f"Curated {len(curated_batch)} words.")
-                        st.rerun()
-                    else:
-                        st.error("Could not curate a batch from unused words.")
+                if is_active_song_in_progress():
+                    st.session_state["pending_studio_reset_action"] = "smart_pull"
+                else:
+                    execute_studio_action("smart_pull")
 
         with b_col3:
             if st.button(":material/refresh: Cancel & Redraw", width="stretch"):
-                active_domain = st.session_state.get("selected_domain", "All Domains")
-                active_blend = st.session_state.get("blend_joker", True)
-                new_batch = db.pull_20_words(domain=active_domain, blend_joker=active_blend)
-                set_target_batch(new_batch)
-                st.session_state.mood_analysis = None
-                st.session_state.master_prompt = ""
-                st.session_state.studio_suno_prompt = ""
-                st.session_state.custom_concept = ""
-                st.session_state.graph_report = None
-                st.session_state.word_fit_audit = None
-                sync_active_session()
-                st.info("Batch redrawn.")
-                st.rerun()
+                if is_active_song_in_progress():
+                    st.session_state["pending_studio_reset_action"] = "redraw"
+                else:
+                    execute_studio_action("redraw")
 
         with b_col4:
             if st.button(":material/mop: Clear", width="stretch", help="Clear active target batch"):
-                set_target_batch([])
-                st.session_state.mood_analysis = None
-                st.session_state.master_prompt = ""
-                st.session_state.studio_suno_prompt = ""
-                st.session_state.custom_concept = ""
-                st.session_state.graph_report = None
-                st.session_state.word_fit_audit = None
-                db.clear_active_batch_state()
-                st.rerun()
+                if is_active_song_in_progress():
+                    st.session_state["pending_studio_reset_action"] = "clear"
+                else:
+                    execute_studio_action("clear")
+
+        if st.session_state.get("pending_studio_reset_action"):
+            confirm_studio_reset_dialog(st.session_state["pending_studio_reset_action"])
 
     # Display Active Batch
     if st.session_state.target_batch:

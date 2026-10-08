@@ -93,6 +93,10 @@ class WorkflowSyncTests(unittest.TestCase):
         self.assertIn("hand?", app.text_area(key="refine_draft").value)
         self.button(app, "Clear").click().run()
         self.assertFalse(app.exception)
+        # Safety confirmation modal prevents immediate loss of work:
+        self.assertNotEqual(app.session_state["target_batch"], [])
+        self.button(app, "OK").click().run()
+        self.assertFalse(app.exception)
         self.assertEqual(app.session_state["target_batch"], [])
         self.assertFalse(any(item.key in ("refine_draft", "commit_lyrics") for item in app.text_area))
         restored = AppTest.from_string(SCRIPT, default_timeout=20).run()
