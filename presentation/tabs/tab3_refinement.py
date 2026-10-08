@@ -1,5 +1,6 @@
 import streamlit as st
 import time
+import re
 import db
 from scripts.lyrics_graph import run_refinement_graph
 
@@ -10,6 +11,8 @@ def render_tab_refinement():
     # Load persistence state if available
     persisted_state = db.load_refinement_state()
     initial_draft = persisted_state.get("draft_input", "")
+    if not st.session_state.get("custom_concept") and persisted_state.get("concept"):
+        st.session_state["custom_concept"] = persisted_state.get("concept")
     
     # Bulletproof hydration: Get from session, fallback to DB
     current_report = st.session_state.get("graph_report")
@@ -41,6 +44,8 @@ def render_tab_refinement():
             help="The critic will judge authenticity against this specific story.",
             key="refine_concept"
         )
+        if concept_val:
+            st.session_state["custom_concept"] = concept_val
         
         master_prompt_val = st.session_state.get("master_prompt", "")
         
@@ -93,7 +98,7 @@ def render_tab_refinement():
                     st.session_state["graph_time"] = round(end_time - start_time, 1)
                     
                     # Persist state
-                    db.save_refinement_state(draft, final_state["final_report"])
+                    db.save_refinement_state(draft, final_state["final_report"], concept_val)
                     st.rerun()
             else:
                 st.error("Please provide a draft and ensure target words are selected in the Studio.")
@@ -127,7 +132,7 @@ def render_tab_refinement():
                     if st.button("📥 نقل الكلمات تلقائياً للمسودة", use_container_width=True, help="ضغطة واحدة تنقل هذه الكلمات فوراً لخانة الإدخال على اليسار لبدء تحسين جديد"):
                         polished = lyrics_text
                         st.session_state["pending_draft_update"] = polished
-                        db.save_refinement_state(polished, current_report)
+                        db.save_refinement_state(polished, current_report, concept_val)
                         st.rerun()
                 with col_btn2:
                     if st.button("🚀 إرسال لمعمل الاعتماد (Commit Lab)", use_container_width=True, help="إرسال الكلمات المصقولة مباشرة إلى Tab 4 لحفظها واعتمادها"):
@@ -140,9 +145,15 @@ def render_tab_refinement():
 خذ هذا البرومبت الجاهز وانسخه بضغطة زر إلى أي ذكاء اصطناعي خارجي (مثل <strong>Claude 3.5 Sonnet</strong> أو <strong>ChatGPT 4o</strong>). البرومبت مصمم جراحياً ليحتوي على الأسطر التي تحتاج تعديلاً فقط مع القواعد الصارمة لحماية الأسطر الخضراء.
 </div>""", unsafe_allow_html=True)
                 
-                theme_val = st.session_state.get("synced_theme", "Street & Daily Life")
-                genre_val = st.session_state.get("synced_genre", "Cinematic / Ballad")
-                concept_val = st.session_state.get("synced_concept", "")
+                theme_val = st.session_state.get("selected_domain", "Street & Daily Life")
+                genre_val = st.session_state.get("selected_genre", "Cinematic / Ballad")
+                concept_val = st.session_state.get("refine_concept") or st.session_state.get("custom_concept", "")
+                if not concept_val.strip():
+                    concept_val = "A relatable everyday story grounded in real human conversation and situations."
+                
+                # Normalize dialect in story text
+                concept_val = re.sub(r"\bmates\b", "friends", concept_val, flags=re.I)
+                concept_val = re.sub(r"\bmate\b", "friend", concept_val, flags=re.I)
                 
                 # Fetch target words list from session state or current report
                 target_words_list = []
@@ -153,9 +164,11 @@ def render_tab_refinement():
                 words_joined = ", ".join(target_words_list) if target_words_list else "None specified"
                 
                 lines_breakdown = current_report.get("line_breakdown", [])
-                passed_lines = [l for l in lines_breakdown if l.get("status") == "✅"]
-                critical_lines = [l for l in lines_breakdown if l.get("status") in ["❌", "🗑️"]]
-                warning_lines = [l for l in lines_breakdown if l.get("status") == "⚠️"]
+                
+                # Strict Green lock rule: score must be >= 90 AND status must be ✅
+                passed_lines = [l for l in lines_breakdown if l.get("status") == "✅" and l.get("score", 0) >= 90]
+                critical_lines = [l for l in lines_breakdown if l.get("status") in ["❌", "🗑️"] or l.get("score", 0) < 70]
+                warning_lines = [l for l in lines_breakdown if (l.get("status") == "⚠️") or (l.get("status") == "✅" and l.get("score", 0) < 90)]
                 
                 crit_text = "\n".join([f'- Line: "{l.get("line", "")}"\n  Score: {l.get("score", 0)}%\n  Critique: {l.get("comment", "")}' for l in critical_lines]) if critical_lines else "None (All lines passed critical checks!)"
                 warn_text = "\n".join([f'- Line: "{l.get("line", "")}"\n  Score: {l.get("score", 0)}%\n  Critique: {l.get("comment", "")}' for l in warning_lines]) if warning_lines else "None"
@@ -165,8 +178,16 @@ def render_tab_refinement():
                 status_dict = {}
                 for l in lines_breakdown:
                     raw_txt = l.get("line", "").strip().lower()
+                    score = l.get("score", 0)
+                    st_val = l.get("status", "✅")
+                    if st_val in ["❌", "🗑️"] or score < 70:
+                        eff_status = "❌"
+                    elif st_val == "⚠️" or score < 90:
+                        eff_status = "⚠️"
+                    else:
+                        eff_status = "✅"
                     if raw_txt:
-                        status_dict[raw_txt] = l.get("status", "✅")
+                        status_dict[raw_txt] = eff_status
                 
                 annotated_lines = []
                 for raw_l in lyrics_text.splitlines():
@@ -179,28 +200,32 @@ def render_tab_refinement():
                             if k in cleaned or cleaned in k:
                                 match_status = line_status
                                 break
-                        if match_status in ["❌", "🗑️"]:
+                        if match_status == "❌":
                             annotated_lines.append(f"[🚨 REWRITE REQUIRED ❌] {raw_l}")
                         elif match_status == "⚠️":
                             annotated_lines.append(f"[⚠️ OPTIONAL POLISH] {raw_l}")
-                        else:
+                        elif match_status == "✅":
                             annotated_lines.append(f"[🔒 LOCKED ✅ - DO NOT TOUCH] {raw_l}")
+                        else:
+                            annotated_lines.append(f"[⚠️ OPTIONAL POLISH] {raw_l}")
                 annotated_lyrics_block = "\n".join(annotated_lines)
                 
-                external_prompt = f"""You are a Grammy-winning songwriter and elite ESL dialogue specialist.
+                external_prompt = f"""You are an expert English linguist and a professional ESL teacher who edits song lyrics for learners.
 Your mission is to perform SURGICAL REPAIRS on the song lyrics below.
+
+THE GOAL: the learner should be able to memorize ANY single line and use it as-is in real life. Every line must be a natural sentence a native speaker would actually say, and it must make sense when read alone.
 
 CRITICAL PEDAGOGICAL MISSION:
 This song is an educational song built around a strict list of target vocabulary words.
-Every single target word that is currently in the lyrics MUST BE 100% PRESERVED.
-Dropping, omitting, or replacing any target word with a synonym is a CRITICAL FAILURE.
+Every target word that is currently in the lyrics MUST be preserved. Do not add target words that are missing. Dropping or replacing a present target word with a synonym is a critical failure.
 
 CONTEXTUAL ANCHORS:
 - Theme: "{theme_val}"
 - Musical Genre: "{genre_val}"
 - Core Story / Setting / Concept: "{concept_val}"
+- Dialect: American English (never mix dialects; replace British-only words like "mate" unless they are protected target words in a locked line)
 
-🎯 MANDATORY TARGET VOCABULARY ({len(target_words_list)} Words - DO NOT REMOVE ANY OF THESE):
+🎯 TARGET VOCABULARY (Preserve every target word currently in the lyrics; do not add missing ones):
 {words_joined}
 
 🔒 VERIFIED GREEN LINES ({len(passed_lines)} Lines - 100% LOCKED, DO NOT CHANGE):
@@ -225,22 +250,25 @@ A. GREEN LINES (🔒) ARE LOCKED IN THE LYRICS OUTPUT.
 B. EDIT SCOPE: Edit ONLY the ⚠️ (yellow) and ❌ (red) lines. If none are red, do not invent problems. A yellow line may be kept unchanged if no real improvement exists.
 
 C. TARGET WORDS & TONE:
-   - Every target word currently in the lyrics must remain intact.
-   - Do NOT replace any target word with a synonym.
+   - Every target word currently in the lyrics must remain intact. Do not add target words that are missing.
+   - Do NOT replace any present target word with a synonym.
    - Do NOT add new profanity or crude vulgarities in edited lines. Existing coarse language inside green lines is intentional (street-life realism) and must not be treated as an error.
 
 D. IMPROVEMENT GOALS FOR EDITED LINES (priority order):
    1. THEMATIC CONSISTENCY & SETTING CONTINUITY: Every edited line must stay inside the song's theme ("{theme_val}") and established setting / story ("{concept_val}"). Do not introduce new locations, characters, or topics that drift away from the central story. If a line does not serve the core story, rewrite it.
-   2. PRACTICAL USABILITY: an ESL learner who memorizes the line should be able to say it naturally in real life. Prefer everyday spoken English over poetic or literary phrasing.
-   3. NO FORCED RHYME: a line must add real narrative meaning, not exist only to rhyme.
-   4. NO REPETITION: avoid repeating the same opening word or key noun in nearby lines.
-   5. FLOW & MELODY: keep syllable count (±1) and rhyme scheme so the melody still fits.
-   6. LENGTH: 5 to 8 words per edited line.
+   2. PRACTICAL USABILITY:
+      - An ESL learner who memorizes the line should be able to say it naturally in real life. Prefer everyday spoken English over poetic or literary phrasing.
+      - Use natural contractions (I'm, don't, can't); avoid stiff forms.
+      - Standalone test: read alone, the line must be natural and useful.
+   3. NO FORCED RHYME: A line must add real narrative meaning, not exist only to rhyme.
+   4. NO REPETITION: Avoid repeating the same opening word or key noun in nearby lines.
+   5. FLOW & MELODY: Keep syllable count (±1) and rhyme scheme so the melody still fits.
+   6. LENGTH: 6 to 9 syllables per edited line (±1).
 
 E. FINAL SELF-CHECK (execute silently before outputting):
    - Count green lines: none missing, none changed, none repositioned.
-   - Verify all target words are still present.
-   - Ensure each edited line passes goals 1 to 5.
+   - Verify all present target words are still preserved.
+   - Ensure each edited line passes goals 1 to 6 (including Standalone test and 6-9 syllables).
    - If a yellow line cannot be improved, keep it as is.
 
 F. OUTPUT FORMAT:
@@ -251,7 +279,7 @@ F. OUTPUT FORMAT:
    
    === REVIEW ===
    Part 3: GREEN LINE REVIEW (suggestions only, NOT applied to Part 1).
-   Check the green lines against goals D1 to D5, plus:
+   Check the green lines against goals D1 to D6, plus:
    - Flag any green line that breaks thematic consistency or setting continuity.
    - Is the line natural spoken English a learner can reuse in daily life?
    - Is the register (rude, formal, poetic, profane) flagged for the learner?
@@ -350,9 +378,11 @@ G. NEVER apply Part 3 suggestions to Part 1 unless the user explicitly approves 
             flagged_lines = sum(1 for l in lines if l.get("status") in ["❌", "🗑️"])
             
             # Prepare full copyable breakdown text for external AI
-            theme_val = st.session_state.get("synced_theme", "Street & Daily Life")
-            genre_val = st.session_state.get("synced_genre", "Cinematic / Ballad")
-            concept_val = st.session_state.get("synced_concept", "")
+            theme_val = st.session_state.get("selected_domain", "Street & Daily Life")
+            genre_val = st.session_state.get("selected_genre", "Cinematic / Ballad")
+            concept_val = st.session_state.get("refine_concept") or st.session_state.get("custom_concept", "")
+            concept_val = re.sub(r"\bmates\b", "friends", concept_val, flags=re.I)
+            concept_val = re.sub(r"\bmate\b", "friend", concept_val, flags=re.I)
             
             breakdown_lines_export = [
                 f"# 🔍 CRITIC EVALUATION BREAKDOWN (Total: {total_lines} | ✅ {passed_lines} | ⚠️ {warn_lines} | ❌ {flagged_lines})",

@@ -167,8 +167,8 @@ def delete_studio_draft(draft_id: int, db_path: Path = DB_PATH) -> bool:
         conn.commit()
         return cursor.rowcount > 0
 
-def save_refinement_state(draft_input: str, graph_report: Optional[Dict[str, Any]], db_path: Path = DB_PATH) -> None:
-    payload = {'draft_input': draft_input, 'graph_report': graph_report}
+def save_refinement_state(draft_input: str, graph_report: Optional[Dict[str, Any]], concept: str = "", db_path: Path = DB_PATH) -> None:
+    payload = {'draft_input': draft_input, 'graph_report': graph_report, 'concept': concept}
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("INSERT INTO app_state (key, value) VALUES ('refinement_state', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (json.dumps(payload),))

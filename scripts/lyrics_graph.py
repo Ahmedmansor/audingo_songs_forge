@@ -81,30 +81,34 @@ def authenticity_critic_node(state: GraphState) -> tuple[GraphState, Dict[str, A
     draft = state["draft_lyrics"]
     errors = state.get("validation_errors", [])
     
-    prompt = f"""You are an elite linguistic critic and quality assurance agent.
-    Review the following song lyrics line by line. 
-    
+    prompt = f"""You are an expert English linguist and ESL quality critic.
+    Review the following song lyrics line by line.
+
+    THE GOAL: The learner should be able to memorize ANY single line and use it as-is in real life. Every line must be a natural sentence a native speaker would actually say, and it must make sense when read alone.
+
     CONTEXTUAL ANCHORS:
     - Broad Theme: "{theme}"
     - Musical Genre: "{genre}"
     - Core Story/Concept: "{concept}"
-    
+    - Dialect: American English (replace or flag British-only slang like 'mate', 'cheers' as ⚠️ or ❌ with score < 90)
+
     TASK & COHERENCE CHECK (flag as ⚠️ or ❌ if violated):
     1. THEMATIC CONSISTENCY: Every line must stay inside the song's theme ('{theme}') and central story ('{concept}'). Do not introduce topics or characters that drift away from the central conflict.
-    2. SETTING CONTINUITY: Every line must stay inside the song's established location/time (e.g., a diner at 3 AM). Any sudden new location or scene (hill, beach, street, etc.) without a clear transition must be flagged as ⚠️ or ❌.
-    3. PRACTICAL USABILITY: Evaluate if each line is an authentic, natural sentence that an ESL learner can actually reuse in real life. Prefer everyday spoken conversational English over poetic or literary phrasing.
-    4. NO FORCED RHYME: Does the line exist only to rhyme with its pair, without adding meaning to the story? If removing it would not hurt the narrative (filler line), flag it as ⚠️ or ❌.
-    5. RHYME & RHYTHM: If a line destroys the natural rhyme scheme or feels awkwardly long to sing, mark it as ⚠️ or ❌.
-    6. ACTIONABLE CRITIQUE: In the 'comment', state which rule failed (e.g., 'Violates setting continuity: sudden hill reference', 'Forced rhyme filler') and suggest a fix that stays inside the song's world.
-    7. TARGET WORD REALISM: If a target word completely destroys the realism of the scene (e.g. a political word in a romantic story), you MUST recommend dropping that word entirely in 'dropped_words'.
-    8. LENGTH INSPECTOR: Additionally, review the SYSTEM PRE-ANALYSIS REPORT below. If the Python inspector flagged a line as 'too long', you must mark that line as ❌ and instruct the Editor to shorten it to 5-8 words.
+    2. SETTING CONTINUITY: Every line must stay inside the song's established location/time (e.g., a diner at 3 AM). Any sudden new location or scene without a clear transition must be flagged as ⚠️ or ❌.
+    3. PRACTICAL USABILITY & STANDALONE TEST: Read alone, the line must be natural and useful. Prefer everyday conversational English with natural contractions (I'm, don't, can't) over stiff, poetic, or literary phrasing.
+    4. DIALECT CONSISTENCY: The target dialect is American English. Flag any British slang (such as 'mate', 'bloke', 'cheers') as ⚠️ or ❌ with score < 90 unless it is a required target word.
+    5. NO FORCED RHYME: Does the line exist only to rhyme with its pair, without adding meaning to the story? If removing it would not hurt the narrative (filler line), flag it as ⚠️ or ❌.
+    6. RHYME & RHYTHM: If a line destroys the natural rhyme scheme or feels awkwardly long to sing (target: 6-9 syllables), mark it as ⚠️ or ❌.
+    7. ACTIONABLE CRITIQUE: In the 'comment', state which rule failed and suggest a fix that stays inside the song's world.
+    8. TARGET WORD REALISM: If a target word completely destroys the realism of the scene, recommend dropping that word in 'dropped_words'.
+    9. LENGTH INSPECTOR: Review the SYSTEM PRE-ANALYSIS REPORT below. If a line is flagged as too long, mark it as ❌ and instruct the Editor to shorten it to 6-9 syllables.
 
     SYSTEM PRE-ANALYSIS REPORT (Python word-count & missing words):
     {json.dumps(errors, indent=2)}
-    
+
     SONG LYRICS:
     {draft}
-    
+
     OUTPUT JSON SCHEMA:
     {{
         "overall_score": 0-100,
@@ -113,7 +117,7 @@ def authenticity_critic_node(state: GraphState) -> tuple[GraphState, Dict[str, A
         "lines_review": [
             {{
                 "line": "the exact line text",
-                "status": "✅" (Perfect), "⚠️" (Acceptable but could be better), "❌" (Rejected/Awkward), "🗑️" (Drop the target word here),
+                "status": "✅" (Perfect, STRICTLY score >= 90%), "⚠️" (Acceptable but needs polish / score 70-89%), "❌" (Rejected/Awkward / score < 70%), "🗑️" (Drop the target word here),
                 "score": 0-100,
                 "comment": "Brief reason"
             }}
@@ -179,34 +183,39 @@ def editor_refiner_node(state: GraphState, critic_report: Dict[str, Any]) -> Gra
     minor_warnings = [r for r in critic_report.get("lines_review", []) if r.get("status") == "⚠️"]
     dropped_words = state.get("permanently_dropped_words", [])
     
-    prompt = f"""You are a master songwriter performing SURGICAL REPAIRS on song lyrics.
+    prompt = f"""You are an expert English linguist and a professional ESL teacher who edits song lyrics for learners.
+    Your mission is to perform SURGICAL REPAIRS on the song lyrics below.
+
+    THE GOAL: the learner should be able to memorize ANY single line and use it as-is in real life. Every line must be a natural sentence a native speaker would actually say, and it must make sense when read alone.
+
     Theme: {theme}
     Genre: {genre}
     Core Story: {concept}
-    
+    Dialect: American English (never mix dialects; replace British-only words like "mate" unless they are target words in locked lines)
+
     Current Draft:
     {draft}
-    
+
     Python Inspector Errors (Length / Missing Words):
     {json.dumps(errors)}
-    
+
     CRITICAL FLAWED LINES (Must be rewritten - Status ❌ / 🗑️):
     {json.dumps(critical_rejections)}
-    
+
     MINOR LINES (Only tweak if it can be done effortlessly - Status ⚠️):
     {json.dumps(minor_warnings)}
-    
+
     Words to permanently drop (do not try to include these):
     {json.dumps(dropped_words)}
-    
+
     SURGICAL REPAIR RULES:
     - RULE 1 (PRESERVE VERIFIED LINES): DO NOT alter or rewrite lines that scored ✅. Keep them intact!
-    - RULE 2 (KILL FORCED RHYMES): Lines marked ❌ contain awkward forced rhymes (e.g. 'seal our deal', 'just look how'). Replace them with 100% natural, everyday spoken English.
-    - RULE 3 (NATURAL SPEECH OVER RHYME): If a rhyme feels slightly unnatural, prioritize authentic emotional conversation over forcing a rhyme.
-    - RULE 4 (Rhythm): Keep lines short (5-8 words).
-    - RULE 5 (SETTING CONTINUITY): Stay strictly inside the song's established location/time (e.g. diner at 3 AM). Never introduce random disconnected places (hill, beach, trees) just to rhyme.
+    - RULE 2 (KILL FORCED RHYMES): Lines marked ❌ contain awkward forced rhymes. Replace them with 100% natural, everyday spoken English.
+    - RULE 3 (PRACTICAL USABILITY & CONTRACTIONS): Use natural contractions (I'm, don't, can't); avoid stiff forms. Every line must pass the Standalone test.
+    - RULE 4 (Length & Rhythm): 6 to 9 syllables per edited line (±1).
+    - RULE 5 (SETTING CONTINUITY): Stay strictly inside the song's established location/time (e.g. diner at 3 AM). Never introduce random disconnected places just to rhyme.
     - RULE 6 (Structure): Maintain all structural tags like [Verse 1], [Chorus], [Bridge], [Outro].
-    
+
     Return ONLY the complete updated song lyrics text (no markdown, no extra chat).
     """
     
@@ -280,8 +289,8 @@ def run_refinement_graph(draft: str, target_words: List[str], theme: str, genre:
         # Structural or length errors (excluding optional missing words)
         structural_or_length_errors = [e for e in state.get("validation_errors", []) if not e.startswith("Missing target words")]
         
-        # Stop early when no ❌ rejections remain, no structural/length errors exist, and score is high (>= 85%)
-        if not structural_or_length_errors and not has_rejected and score >= 85:
+        # Stop early when no ❌ rejections remain, no structural/length errors exist, and score is high (>= 90%)
+        if not structural_or_length_errors and not has_rejected and score >= 90:
             state["is_completed"] = True
             break
             
