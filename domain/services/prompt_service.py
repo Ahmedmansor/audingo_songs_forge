@@ -99,7 +99,7 @@ Every line must be:
 - Short and easy to memorize.
 - Part of ONE story told in order, with no jumps outside the story or setting.
 - Clean: no explicit profanity. Mild words (hell, damn, God) only inside ordinary everyday expressions.
-- Using target words in their everyday meaning. Never force a word in; drop it instead."""
+- Using target words in their everyday meaning. Never force a word in."""
 
 
 def build_manual_surgical_prompt(
@@ -212,7 +212,10 @@ C. TARGET WORDS & TONE:
    - Do NOT replace any present target word with a synonym.
    - Do NOT add new profanity or crude vulgarities in edited lines. Existing coarse language inside green lines is intentional (street-life realism) and must not be treated as an error.
 
-D. IMPROVEMENT GOALS FOR EDITED LINES (priority order):
+D. RED LINES FOR EDITED LINES (OVERRIDE ALL GOALS BELOW):
+   An edited line must never be awkward, stiff, inverted, poetic, outside the story, an abrupt jump, empty of learning value, or have an unclear speaker. If you cannot fix a line without crossing a red line, keep the original line and say so in the change log. This applies to yellow and red lines only; green lines stay locked.
+
+E. IMPROVEMENT GOALS FOR EDITED LINES (priority order):
    1. THEMATIC CONSISTENCY & SETTING CONTINUITY: Every edited line must stay inside the song's theme ("{domain_to_use}") and established setting / story ("{story_concept}"). Do not introduce new locations, characters, or topics that drift away from the central story. If a line does not serve the core story, rewrite it.
    2. PRACTICAL USABILITY:
       - An ESL learner who memorizes the line should be able to say it naturally in this setting. Prefer natural spoken English over poetic or literary phrasing.
@@ -223,13 +226,13 @@ D. IMPROVEMENT GOALS FOR EDITED LINES (priority order):
    5. FLOW & MELODY: Keep syllable count (±1) and rhyme scheme so the melody still fits.
    6. LENGTH: 6 to 9 syllables per edited line (±1).
 
-E. FINAL SELF-CHECK (execute silently before outputting):
+F. FINAL SELF-CHECK (execute silently before outputting):
    - Count green lines: none missing, none changed, none repositioned.
    - Verify all present target words are still preserved.
-   - Ensure each edited line passes goals 1 to 6 (including Standalone test and 6-9 syllables).
+   - Ensure each edited line passes goals 1 to 6 (including Standalone test and 6-9 syllables) and respects all Red Lines.
    - If a yellow line cannot be improved, keep it as is.
 
-F. OUTPUT FORMAT:
+G. OUTPUT FORMAT:
    Part 1: The complete clean lyrics (without any [🔒], [🚨], or [⚠️] tags), ready to paste.
    Part 2: Change log, one line per edited line:
    "Original line" → "New line" | Reason for change
@@ -237,10 +240,11 @@ F. OUTPUT FORMAT:
    
    === REVIEW ===
    Part 3: GREEN LINE REVIEW (suggestions only, NOT applied to Part 1).
-   Check the green lines against goals D1 to D6, plus:
+   Check the green lines against goals E1 to E6, plus:
    - Flag any green line that breaks thematic consistency or setting continuity.
    - Is the line natural spoken English a learner can reuse in this setting?
    - Is the register (rude, formal, poetic, profane) flagged for the learner?
+   - Any unclear "he" or "they", or a fact the speaker could not realistically know in the scene?
    - Is there weak coherence, forced rhyme, or repetition across the whole song?
    - Does any green line clash with an edit made in Part 1?
    Only mention a green line if you have a REAL, specific improvement. Do not pad the list. For each one give:
@@ -248,7 +252,7 @@ F. OUTPUT FORMAT:
    If nothing is worth changing, write "Green lines are solid, no suggestions."
    Finish with a verdict: overall coherence, educational value, and whether the song is ready to publish.
 
-G. NEVER apply Part 3 suggestions to Part 1 unless the user explicitly approves them in the next message."""
+H. NEVER apply Part 3 suggestions to Part 1 unless the user explicitly approves them in the next message."""
 
 
 def generate_master_prompt(
@@ -313,14 +317,29 @@ The song tells one believable real-life story that fits the theme and uses the t
 3. Clean rhyme and rhythm.
 4. Target words.
 
+## RED LINES (a song that crosses any of these FAILS, no matter how well it does elsewhere)
+1. Awkward or stiff lines. Any line that sounds unnatural, distorted, inverted, overly poetic, or padded to fit a rhyme. If a native speaker would not say it, the song fails.
+2. Breaking the story. Any line that does not belong to the one story, contradicts it, or sits outside the setting.
+3. Abrupt jumps. Any sudden shift in time, place, speaker, or topic that the learner cannot follow.
+4. Losing the educational value. The song must stay useful learning content: every line a real, reusable sentence. No empty emotional filler, vague imagery, or lines that teach nothing a learner could say in real life.
+5. Unclear speakers. Any "he", "they", or fact that the speaker could not realistically know in the scene.
+
+If a target word can only be used by crossing a red line, drop it. Red lines always beat word coverage.
+
 ## TARGET WORDS
-- Try hard to use every target word. Choose story details that give each word a natural place.
+- The words are drawn randomly from a larger database. The goal is NOT to use all of them. The goal is a perfect song: natural lines and a connected story always come before word coverage.
+- Coverage is tracked across the whole song collection, and a separate verification step counts which target words were used and which extra database words appeared naturally. Do not chase a count.
+- Before dropping any word, first try to use it in a different context or story detail. Try at least two other natural contexts (a different speaker, a different line, a different angle on the scene).
+- Drop a word only if every attempt sounds forced, awkward, or breaks the story.
+- Never force a word in just for coverage.
+- If a character's role matches a target word (for example, a "director" character and the word "director"), use it.
 - Inflected forms are fine (plural, tense, "every day").
 - Sensitive words (kill, terrorist, etc.) only in ordinary or figurative everyday use, otherwise skip.
 - Use one consistent variety of English in the whole song. Never mix American and British forms.
 
 ## STORY RULES
 - Plan the story silently first: setting, characters, 5-6 events in time order, ending, and where each target word fits naturally.
+- Every character who speaks or is mentioned must be named or clearly identified. No unexplained "he" or "they."
 - One place, one continuous situation. Memories are allowed only if they directly support the conflict.
 - Every line advances or deepens the story. No random imagery, no jumps outside it.
 
@@ -336,7 +355,7 @@ The song tells one believable real-life story that fits the theme and uses the t
 - Avoid hard-to-pronounce words at the end of lines.
 
 ## SELF-CHECK (do silently, then fix before output)
-For every line: natural? in story order? right length? dialect consistent? no filler? Is each target word used in its natural everyday meaning, not forced?
+For every line: natural? in story order? right length? dialect consistent? no filler? Is each target word used in its natural everyday meaning, not forced? For every word left out: did I try at least two other natural contexts before dropping it?
 Standalone test: if this line is read alone, is it a natural, useful sentence a learner could say in real life?
 Rewrite any line that fails.
 
