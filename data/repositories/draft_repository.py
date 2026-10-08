@@ -19,6 +19,7 @@ def save_active_batch_state(
     poster_prompt: str = "",
     vocalist: str = "Male",
     selected_domain: str = "All Domains",
+    word_fit_audit: Optional[Dict[str, Any]] = None,
     db_path: Path = DB_PATH
 ) -> None:
     """Save active studio batch state to app_state table in SQLite."""
@@ -32,7 +33,8 @@ def save_active_batch_state(
         "suno_prompt": suno_prompt,
         "poster_prompt": poster_prompt,
         "selected_vocalist": vocalist,
-        "selected_domain": selected_domain
+        "selected_domain": selected_domain,
+        "word_fit_audit": word_fit_audit
     }
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -167,8 +169,25 @@ def delete_studio_draft(draft_id: int, db_path: Path = DB_PATH) -> bool:
         conn.commit()
         return cursor.rowcount > 0
 
-def save_refinement_state(draft_input: str, graph_report: Optional[Dict[str, Any]], concept: str = "", domain: Optional[str] = None, db_path: Path = DB_PATH) -> None:
-    payload = {'draft_input': draft_input, 'graph_report': graph_report, 'concept': concept, 'domain': domain}
+def save_refinement_state(
+    draft_input: str,
+    graph_report: Optional[Dict[str, Any]] = None,
+    concept: str = "",
+    domain: Optional[str] = None,
+    critic_only_report: Optional[Dict[str, Any]] = None,
+    critic_only_time: Optional[float] = None,
+    critic_only_mode: bool = True,
+    db_path: Path = DB_PATH
+) -> None:
+    payload = {
+        'draft_input': draft_input,
+        'graph_report': graph_report,
+        'concept': concept,
+        'domain': domain,
+        'critic_only_report': critic_only_report,
+        'critic_only_time': critic_only_time,
+        'critic_only_mode': critic_only_mode,
+    }
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("INSERT INTO app_state (key, value) VALUES ('refinement_state', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (json.dumps(payload),))

@@ -63,7 +63,7 @@ def init_session_state():
         st.session_state.graph_report = None
 
     if "word_fit_audit" not in st.session_state:
-        st.session_state.word_fit_audit = None
+        st.session_state.word_fit_audit = persisted_session.get("word_fit_audit", None)
 
 
 def sync_active_session():
@@ -79,7 +79,9 @@ def sync_active_session():
             suno_prompt=st.session_state.get("studio_suno_prompt", ""),
             poster_prompt=st.session_state.get("studio_poster_prompt", ""),
             vocalist=st.session_state.get("selected_vocalist", "Male"),
-            selected_domain=st.session_state.get("selected_domain", "All Domains")
+            selected_domain=st.session_state.get("selected_domain", "All Domains"),
+            word_fit_audit=st.session_state.get("word_fit_audit", None)
         )
     else:
         db.clear_active_batch_state()
+

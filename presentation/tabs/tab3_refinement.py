@@ -34,6 +34,15 @@ def render_tab_refinement():
         if current_report:
             st.session_state["graph_report"] = current_report
 
+    if "critic_only_report" not in st.session_state and persisted_state.get("critic_only_report"):
+        st.session_state["critic_only_report"] = persisted_state.get("critic_only_report")
+
+    if "critic_only_time" not in st.session_state and persisted_state.get("critic_only_time") is not None:
+        st.session_state["critic_only_time"] = persisted_state.get("critic_only_time")
+
+    if "critic_only_mode" not in st.session_state and persisted_state.get("critic_only_mode") is not None:
+        st.session_state["critic_only_mode"] = persisted_state.get("critic_only_mode")
+
     # Handle pending draft update BEFORE widget instantiation to prevent StreamlitWidgetAlreadyInstantiatedError
     if "pending_draft_update" in st.session_state:
         st.session_state["refine_draft"] = st.session_state.pop("pending_draft_update")
@@ -131,7 +140,15 @@ def render_tab_refinement():
                         st.session_state["graph_time"] = round(end_time - start_time, 1)
                         
                         # Persist state
-                        db.save_refinement_state(draft, final_state["final_report"], concept_val, domain=active_domain)
+                        db.save_refinement_state(
+                            draft_input=draft,
+                            graph_report=final_state["final_report"],
+                            concept=concept_val,
+                            domain=active_domain,
+                            critic_only_report=st.session_state.get("critic_only_report"),
+                            critic_only_time=st.session_state.get("critic_only_time"),
+                            critic_only_mode=False
+                        )
                         st.rerun()
                 else:
                     st.error("Please provide a draft and ensure target words are selected in the Studio.")
@@ -151,8 +168,18 @@ def render_tab_refinement():
                             master_prompt=master_prompt_val,
                             dialect=st.session_state.get("selected_dialect", "American English")
                         )
+                        critic_time = round(time.time() - start_time, 1)
                         st.session_state["critic_only_report"] = critic_report
-                        st.session_state["critic_only_time"] = critic_report.get("time_taken", round(time.time() - start_time, 1))
+                        st.session_state["critic_only_time"] = critic_time
+                        db.save_refinement_state(
+                            draft_input=draft,
+                            graph_report=st.session_state.get("graph_report"),
+                            concept=concept_val,
+                            domain=active_domain,
+                            critic_only_report=critic_report,
+                            critic_only_time=critic_time,
+                            critic_only_mode=True
+                        )
                         st.rerun()
                 else:
                     st.error("Please provide lyrics draft to critique.")
@@ -191,6 +218,16 @@ def render_tab_refinement():
                 with col_c2:
                     if st.button(":material/refresh: إعادة التدقيق", width="stretch", help="مسح التقرير الحالي"):
                         st.session_state.pop("critic_only_report", None)
+                        st.session_state.pop("critic_only_time", None)
+                        db.save_refinement_state(
+                            draft_input=draft,
+                            graph_report=st.session_state.get("graph_report"),
+                            concept=concept_val,
+                            domain=active_domain,
+                            critic_only_report=None,
+                            critic_only_time=None,
+                            critic_only_mode=critic_only_mode
+                        )
                         st.rerun()
 
                 dropped = critic_report.get("dropped_words", [])
@@ -228,7 +265,15 @@ def render_tab_refinement():
                         if st.button(":material/input: نقل الكلمات تلقائياً للمسودة", width="stretch", help="ضغطة واحدة تنقل هذه الكلمات فوراً لخانة الإدخال على اليسار لبدء تحسين جديد"):
                             polished = lyrics_text
                             st.session_state["pending_draft_update"] = polished
-                            db.save_refinement_state(polished, current_report, concept_val, domain=active_domain)
+                            db.save_refinement_state(
+                                draft_input=polished,
+                                graph_report=current_report,
+                                concept=concept_val,
+                                domain=active_domain,
+                                critic_only_report=st.session_state.get("critic_only_report"),
+                                critic_only_time=st.session_state.get("critic_only_time"),
+                                critic_only_mode=False
+                            )
                             st.rerun()
                     with col_btn2:
                         if st.button(":material/arrow_forward: إرسال لمعمل الاعتماد (Commit Lab)", width="stretch", help="إرسال الكلمات المصقولة مباشرة إلى Tab 4 لحفظها واعتمادها"):

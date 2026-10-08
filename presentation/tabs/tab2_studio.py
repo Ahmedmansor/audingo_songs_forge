@@ -508,6 +508,7 @@ def render_tab_studio():
                     with st.spinner("🔍 Auditing 20 words against story scenario with Gemini Flash..."):
                         audit_res = gemini_client.audit_words_against_story(current_words, concept_val)
                         st.session_state.word_fit_audit = audit_res
+                        sync_active_session()
                         st.rerun()
 
         with aud_col_status:
@@ -531,6 +532,7 @@ def render_tab_studio():
                         st.markdown(f"- **`{item.get('word', '')}`**: {item.get('reason', '')}")
                     if st.button(":material/close: Dismiss Audit Warnings", key="dismiss_audit_btn"):
                         st.session_state.word_fit_audit = None
+                        sync_active_session()
                         st.rerun()
 
         # Generate Prompts
