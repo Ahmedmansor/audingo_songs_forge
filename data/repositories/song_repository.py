@@ -22,7 +22,8 @@ def approve_and_save_song(
     genre: str = "",
     song_structure: str = "",
     creative_concept: str = "",
-    db_path: Path = DB_PATH
+    db_path: Path = DB_PATH,
+    refinement_report: Optional[Dict[str, Any]] = None,
 ) -> Tuple[int, int, int]:
     """Approve and save song atomically, incrementing usage for words."""
     with get_connection(db_path) as conn:
@@ -34,19 +35,20 @@ def approve_and_save_song(
         reused_words_str = ", ".join(reused_words or [])
         extra_words_str = ", ".join(checked_extra_words)
         mood_json = json.dumps(mood_breakdown) if isinstance(mood_breakdown, dict) else (mood_breakdown or "")
+        refinement_json = json.dumps(refinement_report, ensure_ascii=False) if refinement_report else None
 
         cairo_now = get_cairo_now_str()
         cursor.execute(
             """
             INSERT INTO songs (
                 title, lyrics, target_words, bonus_words, reused_words, extra_words,
-                mood_breakdown, genre, song_structure, creative_concept, created_at
+                mood_breakdown, genre, song_structure, creative_concept, created_at, refinement_report
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 title, lyrics, target_words_str, bonus_words_str, reused_words_str, extra_words_str,
-                mood_json, genre, song_structure, creative_concept, cairo_now
+                mood_json, genre, song_structure, creative_concept, cairo_now, refinement_json
             )
         )
         song_id = cursor.lastrowid
@@ -79,7 +81,7 @@ def get_all_songs(db_path: Path = DB_PATH) -> pd.DataFrame:
     """Retrieve all saved songs from the database, sorted newest first."""
     with get_connection(db_path) as conn:
         df = pd.read_sql_query(
-            "SELECT id, title, lyrics, target_words, bonus_words, reused_words, extra_words, mood_breakdown, genre, song_structure, creative_concept, created_at FROM songs ORDER BY id DESC",
+            "SELECT id, title, lyrics, target_words, bonus_words, reused_words, extra_words, mood_breakdown, genre, song_structure, creative_concept, created_at, refinement_report FROM songs ORDER BY id DESC",
             conn
         )
         return df

@@ -70,6 +70,12 @@ def clear_active_batch_state(db_path: Path = DB_PATH) -> None:
         conn.commit()
 
 
+def get_workspace_reset_token(db_path: Path = DB_PATH) -> str:
+    with get_connection(db_path) as conn:
+        row = conn.execute("SELECT value FROM app_state WHERE key = 'workspace_reset_token'").fetchone()
+        return row["value"] if row else ""
+
+
 def save_studio_draft(
     song_title: str,
     batch: List[Dict[str, Any]],

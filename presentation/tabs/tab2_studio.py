@@ -12,7 +12,7 @@ from presentation.components.widgets import (
     render_copy_words_toolbar,
     render_domain_breakdown_section,
 )
-from presentation.components.session import sync_active_session
+from presentation.components.session import sync_active_session, set_target_batch
 
 
 def render_tab_studio():
@@ -55,7 +55,7 @@ def render_tab_studio():
             with _dc1:
                 if st.button(":material/restore: Load Draft (words only)", width="stretch", key="btn_load_draft_words"):
                     if _draft_batch:
-                        st.session_state.target_batch = _draft_batch
+                        set_target_batch(_draft_batch)
                         st.session_state.mood_analysis = None
                         st.session_state.master_prompt = ""
                         st.session_state.studio_suno_prompt = ""
@@ -70,7 +70,7 @@ def render_tab_studio():
             with _dc2:
                 if st.button(":material/inventory_2: Load Draft (full session)", width="stretch", key="btn_load_draft_full"):
                     if _draft_payload:
-                        st.session_state.target_batch = _draft_batch
+                        set_target_batch(_draft_batch)
                         st.session_state.mood_analysis = _draft_payload.get("mood_analysis", None)
                         st.session_state.master_prompt = _draft_payload.get("master_prompt", "")
                         st.session_state.studio_suno_prompt = _draft_payload.get("suno_prompt", "")
@@ -80,7 +80,7 @@ def render_tab_studio():
                         st.session_state.selected_genre = _draft_payload.get("selected_genre", st.session_state.selected_genre)
                         st.session_state.selected_structure = _draft_payload.get("selected_structure", st.session_state.selected_structure)
                         st.session_state.selected_vocalist = _draft_payload.get("selected_vocalist", st.session_state.selected_vocalist)
-                        sync_active_session()
+                        sync_active_session(invalidate_direction=False)
                         st.success("✅ Full session restored from draft!")
                         st.rerun()
                     else:
@@ -192,7 +192,7 @@ def render_tab_studio():
                 active_blend = st.session_state.get("blend_joker", True)
                 new_batch = db.pull_20_words(domain=active_domain, blend_joker=active_blend)
                 if len(new_batch) == 20:
-                    st.session_state.target_batch = new_batch
+                    set_target_batch(new_batch)
                     st.session_state.mood_analysis = None
                     st.session_state.master_prompt = ""
                     st.session_state.studio_suno_prompt = ""
@@ -209,7 +209,7 @@ def render_tab_studio():
                     st.success(f"Pulled 20 random unused words (10 Nouns, 6 Verbs, 4 Adjectives){dom_tag}!")
                     st.rerun()
                 elif len(new_batch) > 0:
-                    st.session_state.target_batch = new_batch
+                    set_target_batch(new_batch)
                     st.session_state.custom_concept = ""
                     st.session_state.studio_suno_prompt = ""
                     st.session_state.graph_report = None
@@ -251,7 +251,7 @@ def render_tab_studio():
                     )
                     
                     if len(curated_batch) == 20:
-                        st.session_state.target_batch = curated_batch
+                        set_target_batch(curated_batch)
                         st.session_state.mood_analysis = None
                         st.session_state.master_prompt = ""
                         st.session_state.studio_suno_prompt = ""
@@ -263,7 +263,7 @@ def render_tab_studio():
                         st.success(f"✨ Curated 20 thematic words for '{theme_title}' (10 Nouns, 6 Verbs, 4 Adjectives)!")
                         st.rerun()
                     elif len(curated_batch) > 0:
-                        st.session_state.target_batch = curated_batch
+                        set_target_batch(curated_batch)
                         st.session_state.custom_concept = curation_res.get("theme_description", "")
                         st.session_state.graph_report = None
                         st.session_state.word_fit_audit = None
@@ -278,7 +278,7 @@ def render_tab_studio():
                 active_domain = st.session_state.get("selected_domain", "All Domains")
                 active_blend = st.session_state.get("blend_joker", True)
                 new_batch = db.pull_20_words(domain=active_domain, blend_joker=active_blend)
-                st.session_state.target_batch = new_batch
+                set_target_batch(new_batch)
                 st.session_state.mood_analysis = None
                 st.session_state.master_prompt = ""
                 st.session_state.studio_suno_prompt = ""
@@ -291,7 +291,7 @@ def render_tab_studio():
 
         with b_col4:
             if st.button(":material/mop: Clear", width="stretch", help="Clear active target batch"):
-                st.session_state.target_batch = []
+                set_target_batch([])
                 st.session_state.mood_analysis = None
                 st.session_state.master_prompt = ""
                 st.session_state.studio_suno_prompt = ""
@@ -401,7 +401,9 @@ def render_tab_studio():
                     if st.button(f":material/refresh: Swap", key=f"swap_{word_item['id']}_{idx}", help=f"Swap '{word_item['word']}' with another unused {pos}"):
                         swapped = db.swap_single_word(pos, current_ids)
                         if swapped:
-                            st.session_state.target_batch[idx] = swapped
+                            updated_batch = list(st.session_state.target_batch)
+                            updated_batch[idx] = swapped
+                            set_target_batch(updated_batch, keep_direction=True, clear_lyrics=False)
                             st.session_state.master_prompt = ""
                             st.session_state.studio_suno_prompt = ""
                             st.session_state.graph_report = None

@@ -2,6 +2,7 @@ import json
 import logging
 import re
 import time
+from datetime import datetime, timezone
 from typing import Dict, Any, List, TypedDict, Optional
 from google.genai import types
 from data.services.gemini_service import get_gemini_client
@@ -343,6 +344,9 @@ def run_refinement_graph(draft: str, target_words: List[str], theme: str, genre:
     final_words_found = [w for w in target_words if w not in state.get("permanently_dropped_words", [])]
     
     state["final_report"] = {
+        "input_lyrics": draft,
+        "evaluated_at": datetime.now(timezone.utc).isoformat(),
+        "context": {"concept": concept, "genre": genre, "dialect": dialect, "target_words": list(target_words), "domain": theme},
         "final_lyrics": state["draft_lyrics"],
         "overall_score": last_critic_report.get("overall_score", 0) if last_critic_report else 0,
         "critic_name": get_category_profile(theme)["critic_name"],
@@ -467,6 +471,8 @@ OUTPUT JSON SCHEMA:
     
     return {
         "overall_score": overall_score,
+        "evaluated_at": datetime.now(timezone.utc).isoformat(),
+        "context": {"concept": concept, "genre": genre, "dialect": dialect, "target_words": list(target_words), "domain": theme},
         "critic_name": p["critic_name"],
         "domain": theme,
         "line_breakdown": parsed_lines,

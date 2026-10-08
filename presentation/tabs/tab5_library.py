@@ -5,6 +5,7 @@ tab4_library.py — Tab 4: Songs Library & Archives.
 import json
 import pandas as pd
 import streamlit as st
+from presentation.components.refinement_report import render_saved_refinement_report
 from constants import GENRES, SONG_STRUCTURES, DOMAIN_CONFIG
 import db
 import gemini_client
@@ -222,6 +223,8 @@ def render_tab_library():
 
                 st.markdown("<hr style='margin: 15px 0; border-color: var(--studio-line);'>", unsafe_allow_html=True)
                 st.markdown(f'<div class="lyrics-box">{lyrics_text}</div>', unsafe_allow_html=True)
+
+                render_saved_refinement_report(row.get("refinement_report"), lyrics_text, song_id)
 
                 act_c1, act_c2, _ = st.columns([1.5, 2, 2.5])
                 with act_c1:

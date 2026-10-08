@@ -108,6 +108,8 @@ def init_db(db_path: Path = DB_PATH) -> None:
             cursor.execute("ALTER TABLE songs ADD COLUMN creative_concept TEXT")
         if "reused_words" not in existing_cols:
             cursor.execute("ALTER TABLE songs ADD COLUMN reused_words TEXT")
+        if "refinement_report" not in existing_cols:
+            cursor.execute("ALTER TABLE songs ADD COLUMN refinement_report TEXT")
 
         # 4. app_state table
         cursor.execute("""

@@ -33,6 +33,7 @@ class Song:
     creative_concept: Optional[str] = None
     reused_words: Optional[str] = None
     created_at: Optional[datetime] = None
+    refinement_report: Optional[str] = None
 
     @property
     def target_words_list(self) -> List[str]:

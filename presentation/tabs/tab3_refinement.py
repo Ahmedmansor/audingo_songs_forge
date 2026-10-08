@@ -6,30 +6,29 @@ import db
 from scripts.lyrics_graph import run_refinement_graph, run_critic_only, compute_line_status
 from domain.services.prompt_service import build_manual_surgical_prompt
 from constants import get_category_profile
+from domain.services.refinement_archive import report_applies_to_draft, lyrics_signature
+from presentation.components.session import apply_pending_workflow_reset, sync_active_session
 
 def render_tab_refinement():
     st.subheader("Find the right words.")
     st.markdown("<p class='sub-text'>Give your lyrics a thoughtful second pass. Refine the story, rhythm, and vocabulary.</p>", unsafe_allow_html=True)
+    apply_pending_workflow_reset()
+    if not st.session_state.get("target_batch"):
+        st.info("اختار الكلمات من Studio الأول. الكلمات والاتجاه الموسيقي هيظهروا هنا تلقائياً.")
+        return
     
     # Load persistence state if available
     persisted_state = db.load_refinement_state()
     initial_draft = persisted_state.get("draft_input", "")
-    if not st.session_state.get("custom_concept") and persisted_state.get("concept"):
-        st.session_state["custom_concept"] = persisted_state.get("concept")
     
-    # Domain persistence: restore to refine_domain (separate from Studio's selected_domain)
-    # Old drafts have no "domain", so persisted_state.get("domain") is None and we do NOT overwrite
-    persisted_domain = persisted_state.get("domain")
-    if persisted_domain and "refine_domain" not in st.session_state:
-        st.session_state["refine_domain"] = persisted_domain
-
-    active_domain = st.session_state.get("refine_domain") or st.session_state.get("selected_domain") or "Basic / Neutral"
+    # Studio owns the current category, music direction and word selection.
+    active_domain = st.session_state.get("selected_domain") or "Basic / Neutral"
     critic_profile = get_category_profile(active_domain)
     critic_name = critic_profile["critic_name"]
     
     # Bulletproof hydration: Get from session, fallback to DB
     current_report = st.session_state.get("graph_report")
-    if not current_report:
+    if not current_report and not st.session_state.get("_refinement_reports_loaded", False):
         current_report = persisted_state.get("graph_report")
         if current_report:
             st.session_state["graph_report"] = current_report
@@ -42,6 +41,12 @@ def render_tab_refinement():
 
     if "critic_only_mode" not in st.session_state and persisted_state.get("critic_only_mode") is not None:
         st.session_state["critic_only_mode"] = persisted_state.get("critic_only_mode")
+    st.session_state["_refinement_reports_loaded"] = True
+
+    # Bind legacy pipeline reports to the input saved alongside that report.
+    current_report = st.session_state.get("graph_report")
+    if current_report and "input_lyrics" not in current_report and current_report == persisted_state.get("graph_report"):
+        st.session_state["graph_report"] = {**current_report, "input_lyrics": initial_draft}
 
     # Handle pending draft update BEFORE widget instantiation to prevent StreamlitWidgetAlreadyInstantiatedError
     if "pending_draft_update" in st.session_state:
@@ -59,17 +64,25 @@ def render_tab_refinement():
             st.warning(f"⚠️ Critic category ({active_domain}) differs from Studio category ({studio_domain}).")
         
         col_meta1, col_meta2 = st.columns(2)
+        st.session_state["refine_theme"] = active_domain
+        st.session_state["refine_genre"] = st.session_state.get("selected_genre", "Cinematic / Ballad")
+        st.session_state["refine_concept"] = st.session_state.get("custom_concept", "")
+
+        def sync_refinement_concept():
+            st.session_state["custom_concept"] = st.session_state.get("refine_concept", "")
+            sync_active_session()
+
         with col_meta1:
-            theme_val = st.text_input("Theme / Category (Synced)", value=active_domain, disabled=True, key="refine_theme")
+            theme_val = st.text_input("Theme / Category (Synced)", disabled=True, key="refine_theme")
             st.caption(f"🎭 **Active Critic:** {critic_name}")
         with col_meta2:
-            genre_val = st.text_input("Genre & Style (Synced)", value=st.session_state.get("selected_genre", "Cinematic / Ballad"), disabled=True, key="refine_genre")
+            genre_val = st.text_input("Genre & Style (Synced)", disabled=True, key="refine_genre")
             
         concept_val = st.text_area(
             ":material/lightbulb: Story / Creative Concept (Synced from Studio):",
-            value=st.session_state.get("custom_concept", ""),
             help="The critic will judge authenticity against this specific story.",
-            key="refine_concept"
+            key="refine_concept",
+            on_change=sync_refinement_concept,
         )
         if concept_val:
             st.session_state["custom_concept"] = concept_val
@@ -93,12 +106,25 @@ def render_tab_refinement():
             key="refine_draft"
         )
 
+        st.session_state.setdefault("critic_only_mode", True)
         critic_only_mode = st.toggle(
             "🔍 Critic only",
-            value=st.session_state.get("critic_only_mode", True),
             key="critic_only_mode",
             help="وضع الناقد فقط: تدقيق ونقد الأسطر وحساب النسب والألوان فوراً بدون تعديل أو لوب. لا يغير حالة Refinement المحفوظة."
         )
+
+        # Persist edits (including clearing the box), not only successful API runs.
+        # Keep reports as historical snapshots; visibility is checked separately.
+        if draft != initial_draft or concept_val != persisted_state.get("concept", "") or critic_only_mode != persisted_state.get("critic_only_mode", True):
+            db.save_refinement_state(
+                draft_input=draft,
+                graph_report=st.session_state.get("graph_report"),
+                concept=concept_val,
+                domain=active_domain,
+                critic_only_report=st.session_state.get("critic_only_report"),
+                critic_only_time=st.session_state.get("critic_only_time"),
+                critic_only_mode=critic_only_mode,
+            )
 
         def _clean_draft_text(raw_text: str) -> str:
             lines = []
@@ -184,9 +210,20 @@ def render_tab_refinement():
                 else:
                     st.error("Please provide lyrics draft to critique.")
                 
+    critic_report = st.session_state.get("critic_only_report")
+    current_report = st.session_state.get("graph_report")
+    active_report = critic_report if critic_only_mode else current_report
+    if not report_applies_to_draft(critic_report, draft):
+        critic_report = None
+    if not report_applies_to_draft(current_report, draft):
+        current_report = None
+
     with col2:
+        if not lyrics_signature(draft):
+            st.info("أدخل كلمات الأغنية أولاً علشان يظهر تقرير الناقد.")
+        elif active_report and not report_applies_to_draft(active_report, draft):
+            st.warning("الكلمات اتغيرت عن النسخة اللي اتعمل لها النقد. شغّل النقد مرة تانية لعرض نتيجة تخص الكلمات الحالية.")
         if critic_only_mode:
-            critic_report = st.session_state.get("critic_only_report")
             display_critic = (critic_report.get("critic_name") if critic_report else None) or critic_name
             st.markdown(f"##### :material/fact_check: {display_critic} Report")
             if critic_report:
@@ -230,13 +267,18 @@ def render_tab_refinement():
                         )
                         st.rerun()
 
+                if st.button(":material/arrow_forward: Send reviewed lyrics to Commit Lab", width="stretch"):
+                    st.session_state["raw_lyrics_input"] = critic_report.get("raw_lyrics", "")
+                    st.session_state["commit_lyrics"] = st.session_state["raw_lyrics_input"]
+                    st.session_state["analysis_results"] = None
+                    st.toast("تم إرسال الكلمات إلى Commit Lab لمراجعة المفردات والاعتماد.")
+
                 dropped = critic_report.get("dropped_words", [])
                 if dropped:
                     st.warning(f"⚠️ **الناقد يوصي بإسقاط الكلمات التالية لعدم واقعيتها في السياق:** {', '.join(dropped)}")
             else:
                 st.info("👈 ألصق كلمات الأغنية في الخانة على اليسار واضغط **Run critic** لتشغيل الناقد وفحص السطور بنسب مئوية وألوان فورية.")
         else:
-            current_report = st.session_state.get("graph_report")
             pipeline_critic = (current_report.get("critic_name") if current_report else None) or critic_name
             st.markdown(f"##### :material/bar_chart: Final Report ({pipeline_critic})")
 
@@ -278,6 +320,8 @@ def render_tab_refinement():
                     with col_btn2:
                         if st.button(":material/arrow_forward: إرسال لمعمل الاعتماد (Commit Lab)", width="stretch", help="إرسال الكلمات المصقولة مباشرة إلى Tab 4 لحفظها واعتمادها"):
                             st.session_state["raw_lyrics_input"] = lyrics_text
+                            st.session_state["commit_lyrics"] = lyrics_text
+                            st.session_state["analysis_results"] = None
                             st.toast("🚀 تم الإرسال إلى Commit Lab! افتح Tab 4 لحفظ الأغنية.")
 
                 # External AI Surgical Prompt Exporter (Collapsed by default)
@@ -376,7 +420,6 @@ def render_tab_refinement():
 
     # Full-width Line-by-Line Section
     if critic_only_mode:
-        critic_report = st.session_state.get("critic_only_report")
         if critic_report:
             lines = critic_report.get("line_breakdown", [])
             if lines:
