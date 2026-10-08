@@ -63,6 +63,14 @@ def render_tab_refinement():
         
         if st.button("Start Refinement Pipeline", type="primary", use_container_width=True):
             if draft.strip() and target_words_list:
+                # Clean up metadata sections if the user accidentally pasted them
+                clean_draft = []
+                for line in draft.splitlines():
+                    if line.strip().lower().startswith("[words used]") or line.strip().lower().startswith("[words left out]"):
+                        break
+                    clean_draft.append(line)
+                draft_to_process = "\n".join(clean_draft).strip()
+
                 with st.spinner("Initializing Multi-Agent Graph..."):
                     progress_container = st.empty()
                     
@@ -71,7 +79,7 @@ def render_tab_refinement():
                         
                     start_time = time.time()
                     final_state = run_refinement_graph(
-                        draft, 
+                        draft_to_process, 
                         target_words_list, 
                         theme_val, 
                         genre_val, 

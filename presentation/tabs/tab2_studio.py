@@ -445,8 +445,9 @@ def render_tab_studio():
                     song_structure=st.session_state.selected_structure,
                     mood_analysis=mood_dict,
                     creative_concept=concept,
-                    previously_used_words=used_content_words,
-                    selected_domain=st.session_state.get("selected_domain", "All Domains")
+                    selected_domain=st.session_state.get("selected_domain", "All Domains"),
+                    vocalist=st.session_state.selected_vocalist,
+                    dialect="American English"
                 )
                 suno_text = prompt_builder.build_suno_style_prompt(
                     genre=st.session_state.selected_genre,
