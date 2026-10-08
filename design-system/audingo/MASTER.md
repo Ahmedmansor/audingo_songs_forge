@@ -50,3 +50,17 @@ against a database copy, browser review at desktop and 375px. Appearance was che
 with a filtered dictionary value retained, and dark preference retained after reload.
 Both token palettes pass 4.5:1 contrast for primary, secondary, and status text. Live Gemini calls
 and destructive actions are outside visual validation.
+
+Library uses progressive disclosure: choose one song, read its compact summary,
+then switch between Overview, Vocabulary, Critic, Production, and Edit. Lyrics,
+mood analysis, vocabulary lists, and package editors start collapsed. Long lyrics
+scroll within a bounded container. Production shows one saved package and one
+prompt at a time. Keep native controls, rounded surface cards, restrained blue
+accents, and consistent Material icons. Sidebar bars represent covered unique
+words divided by the total for that domain; always pair the bar with counts and
+a percentage. These counts describe archive coverage, not learner mastery.
+
+Library summary numbers use semantic theme colors: total new words blue,
+authenticity green, targets purple, new bonus teal, reused muted, and extra amber.
+Keep their labels neutral and visible; color supplements the labels. The domain
+breakdown appears directly in Overview only, without duplication in Vocabulary.

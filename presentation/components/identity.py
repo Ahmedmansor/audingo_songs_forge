@@ -36,3 +36,15 @@ def domain_card(name, data):
 <div class="domain-track" role="progressbar" aria-label="{escape(name)} mastery" aria-valuenow="{percent:.1f}" aria-valuemin="0" aria-valuemax="100"><span style="width:{percent:.1f}%"></span></div>
 <div class="domain-caption"><span>{percent:.1f}% mastered</span><span>{data.get("used", 0):,} / {data.get("total", 0):,}</span></div>
 </article>'''
+
+
+def sidebar_domain_progress(name, data):
+    total = max(0, int(data.get("total", 0)))
+    used = max(0, min(int(data.get("used", 0)), total))
+    percent = used / total * 100 if total else 0.0
+    label = escape(name, quote=True)
+    return f'''<section class="sidebar-domain-progress">
+<div class="sidebar-domain-heading">{icon_svg(name)}<span>{label}</span><strong>{percent:.1f}%</strong></div>
+<div class="domain-track" role="progressbar" aria-label="{label} coverage" aria-valuenow="{percent:.1f}" aria-valuemin="0" aria-valuemax="100"><span style="width:{percent:.1f}%"></span></div>
+<div class="domain-caption"><span>{used:,} / {total:,} covered</span><span>{total - used:,} left</span></div>
+</section>'''

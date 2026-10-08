@@ -146,6 +146,7 @@ from presentation.tabs.tab5_library import render_tab_library
 render_tab_library()
 ''', default_timeout=20).run()
             self.assertFalse(library.exception)
+            library.button_group[0].set_value("Critic").run()
             self.assertTrue(any("Natural request" in frame.value.to_string() for frame in library.dataframe))
             update_song(int(saved.id), "Archived critic", "Changed afterwards", "", db_path=self.path)
             library.run()
