@@ -14,6 +14,7 @@ from data.services.gemini_service import (
     build_variant_instruction,
     generate_track_variant,
     curate_thematic_vocabulary_batch,
+    audit_words_against_story,
 )
 
 __all__ = [
@@ -27,4 +28,5 @@ __all__ = [
     "build_variant_instruction",
     "generate_track_variant",
     "curate_thematic_vocabulary_batch",
+    "audit_words_against_story",
 ]

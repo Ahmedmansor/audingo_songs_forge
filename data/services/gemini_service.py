@@ -494,3 +494,107 @@ Return a valid JSON object with the following exact schema:
         "theme_name": "Everyday Life & Human Stories",
         "theme_description": "A diverse snapshot of everyday real-life experiences."
     }
+
+
+def build_vocab_story_audit_prompt(words: List[str], story_concept: str) -> str:
+    """Build the JSON prompt to audit 20 words against a story concept for natural conversational fit."""
+    words_str = ", ".join(f'"{w}"' for w in words)
+    return f"""You are an elite ESL songwriting director, master linguist, and curriculum auditor for Audingo.
+
+AUDINGO EDUCATIONAL MISSION & PEDAGOGICAL PHILOSOPHY:
+In Audingo, songs are written to help English language learners acquire natural spoken English.
+The ultimate standard is:
+"An English learner can memorize ANY single line in the song and find that it is a real, authentic sentence that native speakers actually say in their everyday lives."
+
+Therefore, each line in the song must:
+1. Sound completely natural, conversational, and unforced (NO strained grammar, inverted syntax, archaic language, or excessive poetic abstraction).
+2. Keep a single, orderly, cohesive storyline without disjointed topic leaps.
+3. Employ target vocabulary words in their natural, everyday conversational meaning — WITHOUT forcing any word awkwardly into the sentence ("من غير ما نحشر كلمة بالعافية").
+
+INPUT DATA:
+- Story / Creative Scenario:
+  "{story_concept}"
+
+- 20 Target Vocabulary Words to Audit:
+  [{words_str}]
+
+CRITICAL AUDITING RULES:
+1. BASIC & NEUTRAL WORDS EXEMPTION:
+   - Common, basic, or neutral words (e.g., words commonly used across diverse everyday topics like "time", "day", "door", "friend", "water", "walk", "call", "talk", "happy", "look", "car", "wait", "listen", "home", etc.) naturally fit into almost ANY daily life scenario or dialogue.
+   - You MUST NEVER flag basic or neutral words as "out of context" or "forced"!
+2. WHAT YOU MUST AUDIT & FLAG:
+   - Severe Thematic Clash: Words that belong to a jarringly distant or technical domain (e.g. specialized medical, nautical, political, or industrial jargon) that make zero sense in this specific slice-of-life scene, forcing awkward dialogue.
+   - Overly Formal, Academic, or Obscure Words: Words that native speakers would never use in casual spoken dialogue in this scenario, forcing an artificial, warped sentence structure just to squeeze them in.
+3. REASONING:
+   - For any flagged word, provide a concise, constructive 1-sentence explanation of why it feels forced or out of context for this specific scenario and everyday dialogue.
+
+Return a valid JSON object matching this exact schema:
+{{
+    "all_fit": true,
+    "flagged_words": [
+        {{
+            "word": "exact_word_from_input",
+            "reason": "1 short punchy sentence explaining why this word clashes with the scenario or feels forced for natural everyday speech"
+        }}
+    ],
+    "summary": "1 concise sentence evaluating the overall thematic and conversational harmony of the batch."
+}}
+"""
+
+
+def audit_words_against_story(words: List[str], story_concept: str) -> Dict[str, Any]:
+    """
+    Audit 20 target vocabulary words against a story/creative concept.
+    Flags words that feel forced, overly technical, or out of context for natural everyday dialogue,
+    while exempting basic/neutral words.
+    """
+    from google.genai import types
+
+    client = get_gemini_client()
+    prompt = build_vocab_story_audit_prompt(words, story_concept)
+    last_error = None
+
+    for model_name in PREFERRED_MODELS:
+        try:
+            logger.info("Calling Gemini for vocab-story audit with model: %s", model_name)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.3,
+                ),
+            )
+            raw = response.text.strip()
+            if raw.startswith("```"):
+                lines = raw.splitlines()
+                raw = "\n".join(
+                    line for line in lines if not line.strip().startswith("```")
+                ).strip()
+
+            data = json.loads(raw)
+            flagged = data.get("flagged_words", [])
+            all_fit = data.get("all_fit", len(flagged) == 0)
+
+            return {
+                "success": True,
+                "model_used": model_name,
+                "all_fit": all_fit and len(flagged) == 0,
+                "flagged_words": flagged,
+                "summary": data.get(
+                    "summary",
+                    "All words fit the scenario naturally." if not flagged else f"{len(flagged)} word(s) flagged."
+                )
+            }
+        except Exception as exc:
+            logger.warning("Vocab-story audit failed with model %s: %s", model_name, exc)
+            last_error = exc
+            continue
+
+    return {
+        "success": False,
+        "error": str(last_error),
+        "all_fit": True,
+        "flagged_words": [],
+        "summary": "Could not complete audit due to service error."
+    }

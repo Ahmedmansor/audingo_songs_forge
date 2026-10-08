@@ -62,6 +62,9 @@ def init_session_state():
     if "graph_report" not in st.session_state:
         st.session_state.graph_report = None
 
+    if "word_fit_audit" not in st.session_state:
+        st.session_state.word_fit_audit = None
+
 
 def sync_active_session():
     """Sync current studio batch and musical direction to SQLite for F5 persistence."""

@@ -257,6 +257,7 @@ def render_tab_studio():
                         st.session_state.studio_suno_prompt = ""
                         st.session_state.custom_concept = curation_res.get("theme_description", "")
                         st.session_state.graph_report = None
+                        st.session_state.word_fit_audit = None
                         sync_active_session()
                         theme_title = curation_res.get("theme_name", "Curated Storyline")
                         st.success(f"✨ Curated 20 thematic words for '{theme_title}' (10 Nouns, 6 Verbs, 4 Adjectives)!")
@@ -265,6 +266,7 @@ def render_tab_studio():
                         st.session_state.target_batch = curated_batch
                         st.session_state.custom_concept = curation_res.get("theme_description", "")
                         st.session_state.graph_report = None
+                        st.session_state.word_fit_audit = None
                         sync_active_session()
                         st.warning(f"Curated {len(curated_batch)} words.")
                         st.rerun()
@@ -282,6 +284,7 @@ def render_tab_studio():
                 st.session_state.studio_suno_prompt = ""
                 st.session_state.custom_concept = ""
                 st.session_state.graph_report = None
+                st.session_state.word_fit_audit = None
                 sync_active_session()
                 st.info("Batch redrawn.")
                 st.rerun()
@@ -294,6 +297,7 @@ def render_tab_studio():
                 st.session_state.studio_suno_prompt = ""
                 st.session_state.custom_concept = ""
                 st.session_state.graph_report = None
+                st.session_state.word_fit_audit = None
                 db.clear_active_batch_state()
                 st.rerun()
 
@@ -329,19 +333,67 @@ def render_tab_studio():
         batch_domain_data = db.compute_domain_breakdown(current_words)
         render_domain_breakdown_section(batch_domain_data, title="📊 Active 20-Word Batch Domain Balance", compact=True)
 
+        audit_data = st.session_state.get("word_fit_audit") or {}
+        flagged_list = audit_data.get("flagged_words", [])
+        flagged_dict = {
+            fw.get("word", "").lower().strip(): fw.get("reason", "")
+            for fw in flagged_list if fw.get("word")
+        }
+
+        if flagged_dict:
+            st.warning(
+                f"⚠️ **Pre-Lyrics Audit Active:** {len(flagged_dict)} word(s) flagged below as potentially awkward or out of context. "
+                f"Review the highlighted cards and use the **Swap** button to replace any clashing word, then re-run the audit."
+            )
+
         cols = st.columns(4)
         for idx, word_item in enumerate(st.session_state.target_batch):
             col_target = cols[idx % 4]
             with col_target:
                 pos = word_item["pos_type"]
                 badge_class = "badge-noun" if pos == "Noun" else ("badge-verb" if pos == "Verb" else "badge-adj")
+                word_text = word_item["word"]
+
+                # Dynamic font sizing to prevent long words from displacing card layout
+                w_len = len(word_text)
+                if w_len >= 14:
+                    font_size = "0.76rem"
+                elif w_len >= 11:
+                    font_size = "0.84rem"
+                elif w_len >= 9:
+                    font_size = "0.92rem"
+                else:
+                    font_size = "1.04rem"
+
+                is_flagged = word_text.lower().strip() in flagged_dict
+                flag_reason = flagged_dict.get(word_text.lower().strip(), "")
+
+                if is_flagged:
+                    card_style = (
+                        "border: 2px solid #F59E0B; background: #FFFDF5; "
+                        "box-shadow: 0 1px 4px rgba(245, 158, 11, 0.2);"
+                    )
+                    reason_html = (
+                        f'<div style="margin-top: 6px; padding: 4px 6px; border-radius: 6px; '
+                        f'background: #FEF3C7; border: 1px solid #FDE68A; color: #92400E; '
+                        f'font-size: 0.72rem; line-height: 1.25; font-weight: 550;">'
+                        f'⚠️ <b>Mismatch:</b> {flag_reason}</div>'
+                    )
+                else:
+                    card_style = "border: 1px solid var(--studio-line); background: white;"
+                    reason_html = ""
                 
                 with st.container():
                     st.markdown(
                         f"""
-                        <div class="word-card">
-                            <span style="color: #1D1D1F !important;"><strong style="color: #1D1D1F !important; font-size: 1.05rem;">{idx+1}. {word_item['word']}</strong></span>
-                            <span class="{badge_class}">{pos}</span>
+                        <div class="word-card" style="{card_style} min-height: 54px; display: flex; flex-direction: column; justify-content: center; gap: 4px; box-sizing: border-box; padding: 10px 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 6px;">
+                                <span style="color: #1D1D1F !important; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
+                                    <strong style="color: #1D1D1F !important; font-size: {font_size}; letter-spacing: -0.01em;">{idx+1}. {word_text}</strong>
+                                </span>
+                                <span class="{badge_class}" style="margin: 0; flex-shrink: 0; font-size: 0.75rem; padding: 2px 7px;">{pos}</span>
+                            </div>
+                            {reason_html}
                         </div>
                         """,
                         unsafe_allow_html=True
@@ -353,8 +405,14 @@ def render_tab_studio():
                             st.session_state.master_prompt = ""
                             st.session_state.studio_suno_prompt = ""
                             st.session_state.graph_report = None
+                            if st.session_state.get("word_fit_audit"):
+                                old_w = word_item["word"].lower().strip()
+                                cur_flagged = st.session_state.word_fit_audit.get("flagged_words", [])
+                                st.session_state.word_fit_audit["flagged_words"] = [
+                                    fw for fw in cur_flagged if fw.get("word", "").lower().strip() != old_w
+                                ]
                             sync_active_session()
-                            st.success(f"Swapped '{word_item['word']}' → '{swapped['word']}'")
+                            st.success(f"Swapped '{word_item['word']}' → '{swapped['word']}'. Re-run audit to verify!")
                             st.rerun()
                         else:
                             st.warning(f"No more unused {pos} words available to swap.")
@@ -371,6 +429,7 @@ def render_tab_studio():
                 with st.spinner("Analyzing vocabulary mood with Gemini Flash..."):
                     res = gemini_client.analyze_vocabulary_mood(current_words)
                     st.session_state.mood_analysis = res
+                    st.session_state.word_fit_audit = None
                     if res.get("genre"):
                         st.session_state.selected_genre = res["genre"]
                     if res.get("song_structure"):
@@ -427,6 +486,52 @@ def render_tab_studio():
         if new_concept != st.session_state.custom_concept:
             st.session_state.custom_concept = new_concept
             sync_active_session()
+
+        # Pre-Lyrics Audit Bar (Vocabulary vs Story Context)
+        st.markdown("##### :material/fact_check: Pre-Lyrics Audit (Vocabulary vs Story Context):")
+        aud_col_btn, aud_col_status = st.columns([1.5, 2], vertical_alignment="center")
+        with aud_col_btn:
+            if st.button(
+                ":material/fact_check: Audit Words vs Story Context",
+                type="secondary",
+                width="stretch",
+                help="Audit the 20 target words against the story scenario to check for words that feel forced, overly technical, or out of context for everyday conversational dialogue."
+            ):
+                concept_val = st.session_state.custom_concept.strip() or (
+                    st.session_state.mood_analysis.get("creative_concept", "").strip() if st.session_state.mood_analysis else ""
+                )
+                if not concept_val:
+                    st.warning("💡 Please generate or write a Story / Creative Concept above before auditing.")
+                elif not current_words:
+                    st.warning("⚠️ No active target batch found.")
+                else:
+                    with st.spinner("🔍 Auditing 20 words against story scenario with Gemini Flash..."):
+                        audit_res = gemini_client.audit_words_against_story(current_words, concept_val)
+                        st.session_state.word_fit_audit = audit_res
+                        st.rerun()
+
+        with aud_col_status:
+            if st.session_state.get("word_fit_audit"):
+                audit_info = st.session_state.word_fit_audit
+                flagged_arr = audit_info.get("flagged_words", [])
+                if not flagged_arr or audit_info.get("all_fit"):
+                    st.success("✅ **Harmony Passed:** All 20 words fit naturally into this story scenario without forcing awkward dialogue!")
+                else:
+                    st.warning(f"⚠️ **{len(flagged_arr)} Word(s) Flagged:** Check the highlighted cards in Step 1 above to easily swap them.")
+
+        if st.session_state.get("word_fit_audit"):
+            audit_info = st.session_state.word_fit_audit
+            flagged_arr = audit_info.get("flagged_words", [])
+            summary_txt = audit_info.get("summary", "")
+            if flagged_arr:
+                with st.expander(f":material/info: View Audit Feedback ({len(flagged_arr)} Words Flagged)", expanded=False):
+                    if summary_txt:
+                        st.markdown(f"**Overall Assessment:** {summary_txt}")
+                    for item in flagged_arr:
+                        st.markdown(f"- **`{item.get('word', '')}`**: {item.get('reason', '')}")
+                    if st.button(":material/close: Dismiss Audit Warnings", key="dismiss_audit_btn"):
+                        st.session_state.word_fit_audit = None
+                        st.rerun()
 
         # Generate Prompts
         st.markdown("---")

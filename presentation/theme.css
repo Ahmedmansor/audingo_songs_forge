@@ -57,8 +57,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .sidebar-domain span { flex: 1; }
 .sidebar-domain b { font-variant-numeric: tabular-nums; font-weight: 550; }
 .sub-text, .sub-header { color: var(--studio-muted); }
-.word-card { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: white; border: 1px solid var(--studio-line); border-radius: 12px; padding: 12px 16px; margin-bottom: 8px; color: var(--studio-ink); }
-.badge-noun, .badge-verb, .badge-adj, .target-pill, .bonus-pill, .extra-pill, .reused-pill, .stat-badge { display: inline-block; border-radius: 8px; padding: 4px 10px; font-size: .8rem; font-weight: 550; margin: 2px; overflow-wrap: anywhere; }
+.word-card { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: white; border: 1px solid var(--studio-line); border-radius: 12px; padding: 10px 14px; margin-bottom: 8px; color: var(--studio-ink); min-height: 54px; box-sizing: border-box; }
+.badge-noun, .badge-verb, .badge-adj, .target-pill, .bonus-pill, .extra-pill, .reused-pill, .stat-badge { display: inline-block; border-radius: 8px; padding: 3px 8px; font-size: .78rem; font-weight: 550; margin: 0; overflow-wrap: anywhere; }
 .badge-noun, .bonus-pill, .stat-badge-bonus { background: var(--studio-tint); color: #0055aa; }
 .badge-verb, .target-pill, .stat-badge-target, .stat-badge-total-new { background: #eaf5ee; color: var(--studio-green); }
 .badge-adj, .extra-pill, .stat-badge-extra { background: #fff4dc; color: var(--studio-amber); }
