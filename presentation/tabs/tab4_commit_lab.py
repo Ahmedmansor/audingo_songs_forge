@@ -18,7 +18,8 @@ from presentation.components.session import sync_active_session
 
 def render_tab_commit_lab():
     """Renders the Lyrics Analysis, Color-Coded Categorization, and Approval Pipeline."""
-    st.subheader("🧪 Song Review, Text Pipeline & Word Approval")
+    st.subheader("Ready for the final listen.")
+    st.caption("Review your lyrics, check the vocabulary, and add the finished song to your library.")
     
     nlp = load_nlp()
 
@@ -129,7 +130,7 @@ def render_tab_commit_lab():
 
     col_btn_analyze, _ = st.columns([1.5, 3])
     with col_btn_analyze:
-        if st.button("🔍 Analyze Song", type="primary", use_container_width=True):
+        if st.button(":material/search: Analyze Song", type="primary", width="stretch"):
             if not st.session_state.raw_lyrics_input.strip():
                 st.error("Please paste song lyrics before analyzing.")
             else:
@@ -156,7 +157,7 @@ def render_tab_commit_lab():
         yellow_list = res.get("yellow", [])
 
         st.markdown("---")
-        st.subheader("📊 Color-Coded Classification Report")
+        st.subheader(":material/bar_chart: Color-Coded Classification Report")
         
         m_col1, m_col2, m_col3, m_col4, m_col5 = st.columns(5)
         m_col1.metric("🟢 Target Hits", f"{len(green_list)} / {len(current_target_words)}")
@@ -259,8 +260,8 @@ def render_tab_commit_lab():
                     st.markdown(
                         f"""
                         <div style="background: rgba(148, 163, 184, 0.08); border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
-                            <h4 style="margin: 0 0 4px 0; color: #94A3B8;">⚪ Previously Covered Words ({len(reused_list)})</h4>
-                            <p style="margin: 0 0 8px 0;"><small style="color: #64748B;">NGSL words already introduced in past songs. Their global usage counter will update upon saving, but they are not counted as new bonus discoveries.</small></p>
+                            <h4 style="margin: 0 0 4px 0; color: #6E6E73;">⚪ Previously Covered Words ({len(reused_list)})</h4>
+                            <p style="margin: 0 0 8px 0;"><small style="color: #6E6E73;">NGSL words already introduced in past songs. Their global usage counter will update upon saving, but they are not counted as new bonus discoveries.</small></p>
                             <div>{reused_pills}</div>
                         </div>
                         """,
@@ -287,7 +288,7 @@ def render_tab_commit_lab():
             pack_vocalist = st.session_state.get("selected_vocalist", "Male")
             st.markdown(
                 f"""
-                <div style="background: rgba(99, 102, 241, 0.08); border-left: 4px solid #6366F1; padding: 10px 14px; border-radius: 8px; margin: 12px 0 16px 0; font-size: 0.92rem; color: #E2E8F0;">
+                <div style="background: rgba(99, 102, 241, 0.08); border-left: 4px solid #6366F1; padding: 10px 14px; border-radius: 8px; margin: 12px 0 16px 0; font-size: 0.92rem; color: #1D1D1F;">
                     💿 <b>Packaging Integration:</b> When you approve, this song will automatically register its 
                     <b>Suno AI Music Style Prompt</b> and <b>Album Poster Prompt</b> under genre <b>{st.session_state.selected_genre}</b> ({pack_vocalist}) in your Songs Library!
                 </div>
@@ -296,7 +297,7 @@ def render_tab_commit_lab():
             )
 
             st.markdown("---")
-            submitted = st.form_submit_button("✅ Approve & Save Song", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("✅ Approve & Save Song", type="primary", width="stretch")
             
             if submitted:
                 title = (st.session_state.song_title_input or "").strip()

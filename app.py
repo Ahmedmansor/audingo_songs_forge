@@ -16,13 +16,14 @@ db.init_db()
 # Page configuration
 st.set_page_config(
     page_title="Audingo Songs Forge | NGSL Studio",
-    page_icon="🎵",
+    page_icon=":material/graphic_eq:",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="auto"
 )
 
 # Presentation Layer Imports
 from presentation.styles import apply_custom_styles
+from presentation.components.identity import icon_svg
 from presentation.components.session import init_session_state
 from presentation.components.sidebar import render_sidebar
 from presentation.tabs.tab1_dictionary import render_tab_dictionary
@@ -40,17 +41,21 @@ init_session_state()
 # 3. Render Modern Mastery Sidebar
 render_sidebar()
 
-# 4. Main Page Header
-st.markdown('<div class="main-header">Audingo Songs Forge</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">NGSL Vocabulary Targeting, AI Prompt Crafting, and Lyric Review Pipeline</div>', unsafe_allow_html=True)
+# 4. Workspace identity
+st.html(f"""<header class="studio-hero">
+<div><div class="studio-eyebrow">Audingo / Songs Forge</div>
+<h1>Words become music.</h1>
+<p>A thoughtful space to discover vocabulary, craft lyrics,<br>and create songs that stay with you.</p></div>
+<div class="hero-art" aria-hidden="true">{icon_svg()}</div>
+</header>""")
 
-# 5. Primary Feature Tabs
+# 5. Primary feature tabs: keep widget state across the complete workflow.
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📊 Dictionary & Analytics",
-    "🎧 Studio (Word Selection & Prompt)",
-    "✨ AI Graph Refinement",
-    "🧪 Commit Lab (Review & Approval)",
-    "🎵 Songs Library"
+    ":material/menu_book: Dictionary",
+    ":material/tune: Studio",
+    ":material/auto_awesome: Refinement",
+    ":material/fact_check: Commit Lab",
+    ":material/library_music: Library",
 ])
 
 with tab1:

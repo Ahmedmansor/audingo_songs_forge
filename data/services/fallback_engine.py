@@ -26,19 +26,29 @@ MASTER_FALLBACK_CHAIN = [
     "gemini-1.5-flash",
 ]
 
+_LAST_WORKING_INDEX: int = 0
+
 def generate_with_fallback(
     prompt: str, 
-    start_index: int = 0, 
+    start_index: Optional[int] = None, 
     require_json: bool = False,
     temperature: float = 0.7
 ) -> Tuple[str, int]:
     """
-    Central API router. Attempts to call Gemini models sequentially starting from start_index.
+    Central API router. Attempts to call Gemini models sequentially starting from start_index
+    or the last known working model to eliminate repeated 503 timeout delays.
     Returns a tuple of (response_text, successful_model_index).
     """
+    global _LAST_WORKING_INDEX
     client = get_gemini_client()
     
-    for idx in range(start_index, len(MASTER_FALLBACK_CHAIN)):
+    effective_start = start_index if start_index is not None else _LAST_WORKING_INDEX
+    # Build attempt chain: try from effective_start to end, then wrap to beginning
+    indices_to_try = list(range(effective_start, len(MASTER_FALLBACK_CHAIN))) + list(range(0, effective_start))
+    seen = set()
+    chain = [i for i in indices_to_try if not (i in seen or seen.add(i))]
+
+    for idx in chain:
         model_name = MASTER_FALLBACK_CHAIN[idx]
         try:
             logger.info(f"[FallbackEngine] Attempting with model: {model_name}")
@@ -58,10 +68,12 @@ def generate_with_fallback(
                 lines = raw.splitlines()
                 raw = "\n".join(line for line in lines if not line.strip().startswith("```")).strip()
                 
+            _LAST_WORKING_INDEX = idx
             return raw, idx
             
         except Exception as e:
-            logger.warning(f"[FallbackEngine] Model {model_name} failed: {e}. Switching to next weaker model...")
+            logger.warning(f"[FallbackEngine] Model {model_name} failed: {e}. Switching to next model...")
             continue
             
     raise Exception("Critical Error: All models in the fallback chain have been exhausted or failed.")
+

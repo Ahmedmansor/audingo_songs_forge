@@ -4,10 +4,12 @@ widgets.py — Reusable UI widgets and presentation components.
 
 import json
 import datetime
+from html import escape
 from typing import Dict, Any, List, Optional
 import streamlit as st
 import streamlit.components.v1 as components
 from constants import DOMAINS, DOMAIN_CONFIG
+from presentation.components.identity import icon_svg
 
 
 def format_cairo_display_time(raw_ts: str) -> str:
@@ -64,31 +66,31 @@ def render_copy_words_toolbar(words: List[str]):
         align-items: center;
         justify-content: center;
         gap: 7px;
-        background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+        background: #0066CC;
         color: #FFFFFF;
-        border: 1px solid rgba(255, 255, 255, 0.25);
+        border: 1px solid #D2D2D7;
         padding: 7px 15px;
-        border-radius: 9px;
+        border-radius: 20px;
         font-size: 0.86rem;
         font-weight: 600;
         cursor: pointer;
         transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 2px 8px rgba(79, 70, 229, 0.28);
-        outline: none;
+        box-shadow: none;
+        min-height: 40px;
         user-select: none;
         white-space: nowrap;
         text-decoration: none;
       }}
       .copy-btn:hover {{
-        background: linear-gradient(135deg, #4338CA 0%, #6D28D9 100%);
-        box-shadow: 0 4px 14px rgba(79, 70, 229, 0.42);
+        background: #0055AA;
+        box-shadow: none;
         transform: translateY(-1px);
       }}
       .copy-btn:active {{
         transform: translateY(0) scale(0.97);
       }}
       .copy-btn.copied {{
-        background: linear-gradient(135deg, #059669 0%, #10B981 100%) !important;
+        background: #216E39 !important;
         box-shadow: 0 4px 14px rgba(16, 185, 129, 0.45) !important;
         border-color: rgba(52, 211, 153, 0.5) !important;
       }}
@@ -101,19 +103,19 @@ def render_copy_words_toolbar(words: List[str]):
         color: #334155;
         border: 1px solid #CBD5E1;
         padding: 7px 12px;
-        border-radius: 9px;
+        border-radius: 20px;
         font-size: 0.82rem;
         font-weight: 600;
         cursor: pointer;
         transition: all 0.2s ease;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-        outline: none;
+        min-height: 40px;
         user-select: none;
         white-space: nowrap;
       }}
       .copy-btn-secondary:hover {{
         background: #F8FAFC;
-        color: #0F172A;
+        color: #1D1D1F;
         border-color: #94A3B8;
         box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
         transform: translateY(-1px);
@@ -128,7 +130,7 @@ def render_copy_words_toolbar(words: List[str]):
         box-shadow: 0 2px 10px rgba(16, 185, 129, 0.25) !important;
       }}
       .badge-pill {{
-        background: rgba(255, 255, 255, 0.22);
+        background: rgba(255,255,255,0.2);
         font-size: 0.72rem;
         font-weight: 700;
         padding: 1px 6px;
@@ -140,6 +142,10 @@ def render_copy_words_toolbar(words: List[str]):
       }}
       .copy-btn:hover .icon, .copy-btn-secondary:hover .icon {{
         transform: scale(1.1);
+      }}
+      button:focus-visible {{ outline: 2px solid #0066CC; outline-offset: 2px; }}
+      @media (prefers-reduced-motion: reduce) {{
+        *, *::before, *::after {{ transition: none !important; transform: none !important; }}
       }}
     </style>
     </head>
@@ -275,10 +281,10 @@ def render_domain_breakdown_section(
             color = cfg.get("color", "#94A3B8")
             bg = cfg.get("bg", "rgba(148, 163, 184, 0.15)")
             border = cfg.get("border", "rgba(148, 163, 184, 0.3)")
-            emoji = cfg.get("emoji", "")
+            emoji = icon_svg(d)
             
             words_preview = ", ".join(words[:25]) + (f" ... (+{len(words)-25} more)" if len(words) > 25 else "")
-            tooltip_str = f"{emoji} {d} ({cnt} words): {words_preview}"
+            tooltip_str = escape(f"{d} ({cnt} words): {words_preview}", quote=True)
             
             badges_html.append(
                 f'<span title="{tooltip_str}" style="background: {bg}; color: {color}; border: 1px solid {border}; padding: 3px 9px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; cursor: help;">'
@@ -291,7 +297,7 @@ def render_domain_breakdown_section(
     edu_note_html = ""
     if is_high_formal:
         edu_note_html = (
-            f'<div style="background: rgba(59, 130, 246, 0.09); border-left: 4px solid #3B82F6; border-radius: 8px; padding: 10px 14px; margin-top: 10px; font-size: 0.88rem; color: #BFDBFE; line-height: 1.55;">'
+            f'<div style="background: rgba(59, 130, 246, 0.09); border-left: 4px solid #3B82F6; border-radius: 8px; padding: 10px 14px; margin-top: 10px; font-size: 0.88rem; color: #0055AA; line-height: 1.55;">'
             f'💡 <b>ESL Learning Context Note:</b><br>'
             f'This song embeds a notable concentration of <b>Professional & Academic ({formal_pct}%)</b> vocabulary. '
             f'These formal terms are woven into a musical story to make them easier to remember and use in professional workplaces, academia, and interviews.'
@@ -300,14 +306,14 @@ def render_domain_breakdown_section(
 
     if compact:
         box_html = (
-            f'<div style="background: rgba(15, 23, 42, 0.55); border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 10px; padding: 10px 14px; margin: 10px 0;">'
+            f'<div style="background: #F5F5F7; border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 10px; padding: 10px 14px; margin: 10px 0;">'
             f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">'
-            f'<span style="font-size: 0.85rem; font-weight: 700; color: #F1F5F9;">{title}</span>'
+            f'<span style="font-size: 0.85rem; font-weight: 700; color: #1D1D1F;">{title}</span>'
             f'<span style="font-size: 0.78rem; font-weight: 700; color: {DOMAIN_CONFIG.get(primary_domain, {}).get("color", "#38BDF8")};">'
             f'Primary: {DOMAIN_CONFIG.get(primary_domain, {}).get("emoji", "")} {primary_domain} ({primary_pct}%)'
             f'</span>'
             f'</div>'
-            f'<div style="width: 100%; height: 8px; border-radius: 6px; overflow: hidden; display: flex; background: rgba(51, 65, 85, 0.5); margin-bottom: 8px;">'
+            f'<div style="width: 100%; height: 8px; border-radius: 6px; overflow: hidden; display: flex; background: #E8E8ED; margin-bottom: 8px;">'
             f'{bar_html}'
             f'</div>'
             f'<div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">'
@@ -319,14 +325,14 @@ def render_domain_breakdown_section(
         st.markdown(box_html, unsafe_allow_html=True)
     else:
         box_html = (
-            f'<div style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(148, 163, 184, 0.22); border-radius: 12px; padding: 14px 18px; margin: 12px 0 16px 0;">'
+            f'<div style="background: #F5F5F7; border: 1px solid rgba(148, 163, 184, 0.22); border-radius: 12px; padding: 14px 18px; margin: 12px 0 16px 0;">'
             f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">'
-            f'<span style="font-size: 0.95rem; font-weight: 700; color: #F8FAFC;">{title}</span>'
-            f'<span style="background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(129, 140, 248, 0.4); padding: 3px 10px; border-radius: 12px; font-size: 0.82rem; font-weight: 700; color: #C7D2FE;">'
+            f'<span style="font-size: 0.95rem; font-weight: 700; color: #1D1D1F;">{title}</span>'
+            f'<span style="background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(129, 140, 248, 0.4); padding: 3px 10px; border-radius: 12px; font-size: 0.82rem; font-weight: 700; color: #0055AA;">'
             f'🎯 Dominant Register: {DOMAIN_CONFIG.get(primary_domain, {}).get("emoji", "")} <b>{primary_domain}</b> ({primary_pct}%)'
             f'</span>'
             f'</div>'
-            f'<div style="width: 100%; height: 10px; border-radius: 8px; overflow: hidden; display: flex; background: rgba(51, 65, 85, 0.6); margin-bottom: 10px;">'
+            f'<div style="width: 100%; height: 10px; border-radius: 8px; overflow: hidden; display: flex; background: #E8E8ED; margin-bottom: 10px;">'
             f'{bar_html}'
             f'</div>'
             f'<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">'
@@ -359,11 +365,11 @@ def render_domain_breakdown_section(
                 color = cfg.get("color", "#94A3B8")
                 bg = cfg.get("bg", "rgba(148, 163, 184, 0.08)")
                 border = cfg.get("border", "rgba(148, 163, 184, 0.25)")
-                emoji = cfg.get("emoji", "")
+                emoji = icon_svg(d)
                 label_ar = cfg.get("label_ar", d)
 
                 chips_html = " ".join([
-                    f'<span style="background: rgba(15, 23, 42, 0.75); color: #F1F5F9; border: 1px solid {border}; '
+                    f'<span style="background: #F5F5F7; color: #1D1D1F; border: 1px solid {border}; '
                     f'border-radius: 6px; padding: 2px 8px; font-size: 0.8rem; font-family: monospace; display: inline-block;">'
                     f'{w}'
                     f'</span>'
@@ -376,7 +382,7 @@ def render_domain_breakdown_section(
                         <span style="font-size: 0.86rem; font-weight: 700; color: {color};">
                             {emoji} {d} <small style="opacity: 0.75; font-weight: normal;">({label_ar})</small>
                         </span>
-                        <span style="background: rgba(0, 0, 0, 0.3); color: {color}; font-size: 0.76rem; font-weight: 700; padding: 1px 7px; border-radius: 10px; border: 1px solid {border};">
+                        <span style="background: #F5F5F7; color: {color}; font-size: 0.76rem; font-weight: 700; padding: 1px 7px; border-radius: 10px; border: 1px solid {border};">
                             {cnt} words · {pct}%
                         </span>
                     </div>

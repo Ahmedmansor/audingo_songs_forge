@@ -10,7 +10,7 @@ import gemini_client
 @st.dialog("⚠️ Confirm Song Deletion")
 def confirm_delete_song_dialog(song_id: int, song_title: str, row_num: int):
     """Safety confirmation modal before executing atomic delete and rollback."""
-    st.markdown(f"#### 🗑️ Are you sure you want to delete Song #{row_num}?")
+    st.markdown(f"#### :material/delete: Are you sure you want to delete Song #{row_num}?")
     st.warning(
         f"**Song Title:** {song_title}\n\n"
         f"⚠️ **Atomic Safe Rollback will occur:**\n"
@@ -20,31 +20,31 @@ def confirm_delete_song_dialog(song_id: int, song_title: str, row_num: int):
     )
     dlg_c1, dlg_c2 = st.columns(2)
     with dlg_c1:
-        if st.button("🔥 Yes, Confirm Delete", type="primary", use_container_width=True, key=f"dlg_confirm_del_{song_id}"):
+        if st.button("🔥 Yes, Confirm Delete", type="primary", width="stretch", key=f"dlg_confirm_del_{song_id}"):
             if db.delete_song(song_id, rollback_words=True):
                 st.session_state["lib_toast_msg"] = f"Song #{row_num} ('{song_title}') deleted and dictionary counters rolled back."
                 st.rerun()
     with dlg_c2:
-        if st.button("❌ Cancel", use_container_width=True, key=f"dlg_cancel_del_{song_id}"):
+        if st.button(":material/cancel: Cancel", width="stretch", key=f"dlg_cancel_del_{song_id}"):
             st.rerun()
 
 
 @st.dialog("⚠️ Confirm Track Variant Deletion")
 def confirm_delete_variant_dialog(variant_id: int, genre: str, vocalist: str):
     """Safety confirmation modal before deleting a track variant package."""
-    st.markdown("#### 🗑️ Delete Track Variant Package?")
+    st.markdown("#### :material/delete: Delete Track Variant Package?")
     st.warning(
         f"Are you sure you want to delete the production package for **{genre}** ({vocalist})?\n\n"
         f"This will permanently delete both the Suno music prompt and the poster art prompt. This action cannot be undone."
     )
     dlg_c1, dlg_c2 = st.columns(2)
     with dlg_c1:
-        if st.button("🔥 Yes, Delete Variant", type="primary", use_container_width=True, key=f"dlg_confirm_del_variant_{variant_id}"):
+        if st.button("🔥 Yes, Delete Variant", type="primary", width="stretch", key=f"dlg_confirm_del_variant_{variant_id}"):
             if db.delete_track_variant(variant_id):
                 st.session_state["lib_toast_msg"] = f"Track variant for '{genre}' ({vocalist}) was deleted."
                 st.rerun()
     with dlg_c2:
-        if st.button("❌ Cancel", use_container_width=True, key=f"dlg_cancel_del_variant_{variant_id}"):
+        if st.button(":material/cancel: Cancel", width="stretch", key=f"dlg_cancel_del_variant_{variant_id}"):
             st.rerun()
 
 
@@ -60,7 +60,7 @@ def confirm_overwrite_variant_dialog(song_id: int, song_title: str, lyrics_text:
     dlg_c1, dlg_c2 = st.columns(2)
     clean_g = "".join(c for c in genre if c.isalnum())
     with dlg_c1:
-        if st.button("⚡ Yes, Overwrite & Regenerate", type="primary", use_container_width=True, key=f"dlg_confirm_ovr_{song_id}_{clean_g}_{vocalist}"):
+        if st.button("⚡ Yes, Overwrite & Regenerate", type="primary", width="stretch", key=f"dlg_confirm_ovr_{song_id}_{clean_g}_{vocalist}"):
             with st.spinner(f"Generating new package for '{genre}' ({vocalist})..."):
                 res = gemini_client.generate_track_variant(
                     title=song_title,
@@ -83,5 +83,5 @@ def confirm_overwrite_variant_dialog(song_id: int, song_title: str, lyrics_text:
                 else:
                     st.error(f"Failed to generate package: {res.get('error')}")
     with dlg_c2:
-        if st.button("❌ Cancel", use_container_width=True, key=f"dlg_cancel_ovr_{song_id}_{clean_g}_{vocalist}"):
+        if st.button(":material/cancel: Cancel", width="stretch", key=f"dlg_cancel_ovr_{song_id}_{clean_g}_{vocalist}"):
             st.rerun()

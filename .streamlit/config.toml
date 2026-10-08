@@ -5,3 +5,28 @@ headless = false
 
 [client]
 toolbarMode = "developer"
+
+[theme]
+base = "light"
+primaryColor = "#0066CC"
+backgroundColor = "#F5F5F7"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#1D1D1F"
+font = "-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+headingFont = "-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+baseFontSize = 16
+headingFontWeights = [650, 600, 600, 600, 600, 600]
+borderColor = "#D2D2D7"
+baseRadius = "0.75rem"
+buttonRadius = "full"
+showWidgetBorder = true
+showSidebarBorder = true
+linkColor = "#0066CC"
+codeBackgroundColor = "#ECECEE"
+codeTextColor = "#1D1D1F"
+dataframeHeaderBackgroundColor = "#ECECEE"
+chartCategoricalColors = ["#0066CC", "#216E39", "#855600", "#7352A2", "#B42318", "#6E6E73"]
+
+[theme.sidebar]
+backgroundColor = "#FBFBFD"
+secondaryBackgroundColor = "#F5F5F7"

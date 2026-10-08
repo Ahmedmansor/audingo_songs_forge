@@ -1,16 +1,33 @@
-"""
-lyrics_graph.py — Graph Engine for Song Lyrics Refinement and Validation
-"""
-
 import json
 import logging
 import re
+import time
 from typing import Dict, Any, List, TypedDict, Optional
 from google.genai import types
 from data.services.gemini_service import get_gemini_client
 from data.services.fallback_engine import generate_with_fallback, MASTER_FALLBACK_CHAIN
+from domain.services.prompt_service import ESL_GOAL_BLOCK
+from constants import get_category_profile
 
 logger = logging.getLogger(__name__)
+
+def compute_line_status(score: int) -> tuple[str, str]:
+    """
+    Strict code-based thresholding:
+    🟢 >= 90 (✅)
+    🟡 75-89 (⚠️)
+    🔴 < 75 (❌)
+    """
+    try:
+        val = int(round(score))
+    except Exception:
+        val = 0
+    if val >= 90:
+        return "✅", "🟢"
+    elif val >= 75:
+        return "⚠️", "🟡"
+    else:
+        return "❌", "🔴"
 
 class LineReport(TypedDict):
     line: str
@@ -73,57 +90,69 @@ def python_inspector_node(state: GraphState) -> GraphState:
 
 
 def authenticity_critic_node(state: GraphState) -> tuple[GraphState, Dict[str, Any]]:
-    """Agent 2: The Critic (Evaluates authenticity and line scores)."""
+    """Agent 2: The Strict Critic (Evaluates authenticity and line scores starting at 100 with deductions)."""
     theme = state["theme_category"]
     genre = state["genre"]
     concept = state["core_concept"]
-    master_prompt = state["master_prompt"]
+    dialect = state.get("dialect", "American English")
     draft = state["draft_lyrics"]
     errors = state.get("validation_errors", [])
+    target_words = state.get("target_words", [])
+    words_str = ", ".join(target_words) if target_words else "None specified"
+    p = get_category_profile(theme)
     
-    prompt = f"""You are an expert English linguist and ESL quality critic.
-    Review the following song lyrics line by line.
+    prompt = f"""You are a strict ESL lyric critic. You do NOT rewrite anything. Score each line from 0 to 100 against THE GOAL below.
+Judge each line in the context of the whole song (so you can catch contradictions), but score only that line.
 
-    THE GOAL: The learner should be able to memorize ANY single line and use it as-is in real life. Every line must be a natural sentence a native speaker would actually say, and it must make sense when read alone.
+{ESL_GOAL_BLOCK}
 
-    CONTEXTUAL ANCHORS:
-    - Broad Theme: "{theme}"
-    - Musical Genre: "{genre}"
-    - Core Story/Concept: "{concept}"
-    - Dialect: American English (replace or flag British-only slang like 'mate', 'cheers' as ⚠️ or ❌ with score < 90)
+CONTEXTUAL ANCHORS:
+- Theme: "{theme}"
+- Category guidance: Setting: {p['setting']}. Register: {p['register']}.
+- Musical Genre: "{genre}"
+- Core Story / Setting: "{concept}"
+- Dialect: {dialect}
+- Target words (the only words that count as target words): {words_str}
 
-    TASK & COHERENCE CHECK (flag as ⚠️ or ❌ if violated):
-    1. THEMATIC CONSISTENCY: Every line must stay inside the song's theme ('{theme}') and central story ('{concept}'). Do not introduce topics or characters that drift away from the central conflict.
-    2. SETTING CONTINUITY: Every line must stay inside the song's established location/time (e.g., a diner at 3 AM). Any sudden new location or scene without a clear transition must be flagged as ⚠️ or ❌.
-    3. PRACTICAL USABILITY & STANDALONE TEST: Read alone, the line must be natural and useful. Prefer everyday conversational English with natural contractions (I'm, don't, can't) over stiff, poetic, or literary phrasing.
-    4. DIALECT CONSISTENCY: The target dialect is American English. Flag any British slang (such as 'mate', 'bloke', 'cheers') as ⚠️ or ❌ with score < 90 unless it is a required target word.
-    5. NO FORCED RHYME: Does the line exist only to rhyme with its pair, without adding meaning to the story? If removing it would not hurt the narrative (filler line), flag it as ⚠️ or ❌.
-    6. RHYME & RHYTHM: If a line destroys the natural rhyme scheme or feels awkwardly long to sing (target: 6-9 syllables), mark it as ⚠️ or ❌.
-    7. ACTIONABLE CRITIQUE: In the 'comment', state which rule failed and suggest a fix that stays inside the song's world.
-    8. TARGET WORD REALISM: If a target word completely destroys the realism of the scene, recommend dropping that word in 'dropped_words'.
-    9. LENGTH INSPECTOR: Review the SYSTEM PRE-ANALYSIS REPORT below. If a line is flagged as too long, mark it as ❌ and instruct the Editor to shorten it to 6-9 syllables.
+Start every line at 100 and subtract:
+- Not something a native speaker would say in this setting (poetic, literary, inverted word order): -25
+- Filler added for rhyme or rhythm, or vague when read alone ("I hope that you can see"): -20
+- Fails the standalone test (not useful or not understandable on its own): -20
+- Target word used in a forced, odd or non-everyday way (apply only to the target words above): -25
+- Contradicts the story or the narrator's stance, or jumps outside the story/setting: -25
+- Stiff form where a contraction is natural in this setting ("I am sorry", "do not"): -10
+- Mixes dialects in the line, or uses forms outside {dialect}: -15
+- Longer than 9 syllables or hard to sing/memorize: -10
+- Crude language beyond ordinary expressions: -20
 
-    SYSTEM PRE-ANALYSIS REPORT (Python word-count & missing words):
-    {json.dumps(errors, indent=2)}
+Rules:
+- If any deduction applies, the score cannot exceed 89. A line with no deductions scores 90-100.
+- Do not give 90+ to a line you cannot defend. A real song rarely has every line above 90. If almost all your scores are 90+, re-check yourself.
+- Apply the target-word deduction only to the official target words listed above.
+- For each line return: number, the line, score, and a short issue (or "none").
+- If a target word completely destroys the realism of the scene or sounds forced, list it in dropped_words.
 
-    SONG LYRICS:
-    {draft}
+SYSTEM INSPECTOR FLAGS (Reference only):
+{json.dumps(errors, indent=2)}
 
-    OUTPUT JSON SCHEMA:
-    {{
-        "overall_score": 0-100,
-        "dropped_words": ["word1", "word2"], 
-        "dropped_reasons": {{"word1": "reason"}},
-        "lines_review": [
-            {{
-                "line": "the exact line text",
-                "status": "✅" (Perfect, STRICTLY score >= 90%), "⚠️" (Acceptable but needs polish / score 70-89%), "❌" (Rejected/Awkward / score < 70%), "🗑️" (Drop the target word here),
-                "score": 0-100,
-                "comment": "Brief reason"
-            }}
-        ]
-    }}
-    """
+SONG LYRICS TO EVALUATE:
+{draft}
+
+OUTPUT JSON SCHEMA:
+{{
+    "overall_score": 0-100,
+    "dropped_words": ["word1"],
+    "dropped_reasons": {{"word1": "reason"}},
+    "lines_review": [
+        {{
+            "number": 1,
+            "line": "exact line text",
+            "score": 0-100,
+            "issue": "short reason or 'none'"
+        }}
+    ]
+}}
+"""
     
     try:
         raw_response, new_model_idx = generate_with_fallback(
@@ -138,9 +167,20 @@ def authenticity_critic_node(state: GraphState) -> tuple[GraphState, Dict[str, A
         
         critic_report = json.loads(raw_response)
         
-        # Calculate true mathematical average from line reviews to ensure accuracy
+        # Enforce code-based thresholding and status calculation
         lines_review = critic_report.get("lines_review", [])
         if lines_review:
+            for idx, item in enumerate(lines_review, 1):
+                raw_score = item.get("score", 70)
+                status_icon, color_circle = compute_line_status(raw_score)
+                item["status"] = status_icon
+                item["color"] = color_circle
+                issue_val = item.get("issue") or item.get("comment") or "none"
+                item["comment"] = issue_val
+                item["issue"] = issue_val
+                if "number" not in item:
+                    item["number"] = idx
+            
             valid_scores = [l.get("score") for l in lines_review if isinstance(l.get("score"), (int, float))]
             if valid_scores:
                 critic_report["overall_score"] = round(sum(valid_scores) / len(valid_scores))
@@ -151,9 +191,9 @@ def authenticity_critic_node(state: GraphState) -> tuple[GraphState, Dict[str, A
         state["execution_log"].append({
             "request_num": state["total_requests"],
             "loop": state.get("iterations", 1),
-            "agent": "Critic Agent (الناقد)",
+            "agent": "Critic Agent (الناقد الصارم)",
             "model": MASTER_FALLBACK_CHAIN[new_model_idx],
-            "action": f"Scored lyrics: {critic_report.get('overall_score', 0)}% (Checked {len(critic_report.get('lines_review', []))} lines)"
+            "action": f"Scored lyrics: {critic_report.get('overall_score', 0)}% ({len(critic_report.get('lines_review', []))} lines evaluated)"
         })
         
         new_drops = critic_report.get("dropped_words", [])
@@ -166,58 +206,56 @@ def authenticity_critic_node(state: GraphState) -> tuple[GraphState, Dict[str, A
         return state, critic_report
     except Exception as e:
         logger.error(f"Critic node failed: {e}")
-        # Fallback empty report
         return state, {"overall_score": 0, "dropped_words": [], "lines_review": []}
 
 
 def editor_refiner_node(state: GraphState, critic_report: Dict[str, Any]) -> GraphState:
-    """Agent 3: The Editor (Fixes the draft)."""
+    """Agent 3: The Editor (Fixes the draft based on strict critique)."""
     theme = state["theme_category"]
     genre = state["genre"]
     concept = state["core_concept"]
-    master_prompt = state["master_prompt"]
     draft = state["draft_lyrics"]
     errors = state["validation_errors"]
     
-    critical_rejections = [r for r in critic_report.get("lines_review", []) if r.get("status") in ["❌", "🗑️"]]
-    minor_warnings = [r for r in critic_report.get("lines_review", []) if r.get("status") == "⚠️"]
+    critical_rejections = [r for r in critic_report.get("lines_review", []) if r.get("score", 0) < 75 or r.get("status") in ["❌", "🗑️"]]
+    minor_warnings = [r for r in critic_report.get("lines_review", []) if 75 <= r.get("score", 0) < 90 or r.get("status") == "⚠️"]
     dropped_words = state.get("permanently_dropped_words", [])
     
     prompt = f"""You are an expert English linguist and a professional ESL teacher who edits song lyrics for learners.
-    Your mission is to perform SURGICAL REPAIRS on the song lyrics below.
+Your mission is to perform SURGICAL REPAIRS on the song lyrics below.
 
-    THE GOAL: the learner should be able to memorize ANY single line and use it as-is in real life. Every line must be a natural sentence a native speaker would actually say, and it must make sense when read alone.
+{ESL_GOAL_BLOCK}
 
-    Theme: {theme}
-    Genre: {genre}
-    Core Story: {concept}
-    Dialect: American English (never mix dialects; replace British-only words like "mate" unless they are target words in locked lines)
+Theme: {theme}
+Genre: {genre}
+Core Story: {concept}
+Dialect: American English (never mix dialects; replace British-only words like "mate" unless they are target words in locked lines)
 
-    Current Draft:
-    {draft}
+Current Draft:
+{draft}
 
-    Python Inspector Errors (Length / Missing Words):
-    {json.dumps(errors)}
+Python Inspector Errors (Length / Missing Words):
+{json.dumps(errors)}
 
-    CRITICAL FLAWED LINES (Must be rewritten - Status ❌ / 🗑️):
-    {json.dumps(critical_rejections)}
+CRITICAL FLAWED LINES (Must be rewritten - Score < 75%):
+{json.dumps(critical_rejections)}
 
-    MINOR LINES (Only tweak if it can be done effortlessly - Status ⚠️):
-    {json.dumps(minor_warnings)}
+MINOR LINES (Only tweak if it can be done effortlessly - Score 75-89%):
+{json.dumps(minor_warnings)}
 
-    Words to permanently drop (do not try to include these):
-    {json.dumps(dropped_words)}
+Words to permanently drop (do not try to include these):
+{json.dumps(dropped_words)}
 
-    SURGICAL REPAIR RULES:
-    - RULE 1 (PRESERVE VERIFIED LINES): DO NOT alter or rewrite lines that scored ✅. Keep them intact!
-    - RULE 2 (KILL FORCED RHYMES): Lines marked ❌ contain awkward forced rhymes. Replace them with 100% natural, everyday spoken English.
-    - RULE 3 (PRACTICAL USABILITY & CONTRACTIONS): Use natural contractions (I'm, don't, can't); avoid stiff forms. Every line must pass the Standalone test.
-    - RULE 4 (Length & Rhythm): 6 to 9 syllables per edited line (±1).
-    - RULE 5 (SETTING CONTINUITY): Stay strictly inside the song's established location/time (e.g. diner at 3 AM). Never introduce random disconnected places just to rhyme.
-    - RULE 6 (Structure): Maintain all structural tags like [Verse 1], [Chorus], [Bridge], [Outro].
+SURGICAL REPAIR RULES:
+- RULE 1 (PRESERVE VERIFIED LINES): DO NOT alter or rewrite lines that scored 90%+ (🟢 / ✅). Keep them intact!
+- RULE 2 (KILL FORCED RHYMES): Lines marked ❌ (< 75%) contain awkward forced rhymes. Replace them with 100% natural, everyday spoken English.
+- RULE 3 (PRACTICAL USABILITY & CONTRACTIONS): Use natural contractions (I'm, don't, can't); avoid stiff forms. Every line must pass the Standalone test.
+- RULE 4 (Length & Rhythm): 6 to 9 syllables per edited line (±1).
+- RULE 5 (SETTING CONTINUITY): Stay strictly inside the song's established location/time. Never introduce random disconnected places just to rhyme.
+- RULE 6 (Structure): Maintain all structural tags like [Verse 1], [Chorus], [Bridge], [Outro].
 
-    Return ONLY the complete updated song lyrics text (no markdown, no extra chat).
-    """
+Return ONLY the complete updated song lyrics text (no markdown, no extra chat).
+"""
     
     try:
         raw_response, new_model_idx = generate_with_fallback(
@@ -247,7 +285,7 @@ def editor_refiner_node(state: GraphState, critic_report: Dict[str, Any]) -> Gra
     return state
 
 
-def run_refinement_graph(draft: str, target_words: List[str], theme: str, genre: str, concept: str, master_prompt: str, progress_callback=None) -> GraphState:
+def run_refinement_graph(draft: str, target_words: List[str], theme: str, genre: str, concept: str, master_prompt: str, dialect: str = "American English", progress_callback=None) -> GraphState:
     """Main Graph Execution Loop"""
     state: GraphState = {
         "draft_lyrics": draft,
@@ -256,6 +294,7 @@ def run_refinement_graph(draft: str, target_words: List[str], theme: str, genre:
         "genre": genre,
         "core_concept": concept,
         "master_prompt": master_prompt,
+        "dialect": dialect,
         "validation_errors": [],
         "iterations": 0,
         "is_completed": False,
@@ -306,6 +345,8 @@ def run_refinement_graph(draft: str, target_words: List[str], theme: str, genre:
     state["final_report"] = {
         "final_lyrics": state["draft_lyrics"],
         "overall_score": last_critic_report.get("overall_score", 0) if last_critic_report else 0,
+        "critic_name": get_category_profile(theme)["critic_name"],
+        "domain": theme,
         "words_kept": final_words_found,
         "words_dropped": state.get("permanently_dropped_words", []),
         "line_breakdown": last_critic_report.get("lines_review", []) if last_critic_report else [],
@@ -317,3 +358,124 @@ def run_refinement_graph(draft: str, target_words: List[str], theme: str, genre:
     }
     
     return state
+
+
+def run_critic_only(
+    draft: str,
+    target_words: List[str],
+    theme: str,
+    genre: str,
+    concept: str,
+    master_prompt: str = "",
+    dialect: str = "American English"
+) -> Dict[str, Any]:
+    """
+    Mode: Critic Only (وضع الناقد فقط)
+    Runs ONLY the strict critic node:
+    - No inspector errors blocking or altering
+    - No editor node, no loops, no automated rewriting
+    - Every line scored starting from 100 with deduction rules
+    - Code strictly computes color & status: 🟢 >= 90, 🟡 75-89, 🔴 < 75
+    - Returns full breakdown with line, score, color, status, comment/issue, and overall score
+    """
+    start_time = time.time()
+    words_str = ", ".join(target_words) if target_words else "None specified"
+    p = get_category_profile(theme)
+    
+    prompt = f"""You are a strict ESL lyric critic. You do NOT rewrite anything. Score each line from 0 to 100 against THE GOAL below.
+Judge each line in the context of the whole song (so you can catch contradictions), but score only that line.
+
+{ESL_GOAL_BLOCK}
+
+CONTEXTUAL ANCHORS:
+- Theme: "{theme}"
+- Category guidance: Setting: {p['setting']}. Register: {p['register']}.
+- Musical Genre: "{genre}"
+- Core Story / Setting: "{concept}"
+- Dialect: {dialect}
+- Target words (the only words that count as target words): {words_str}
+
+Start every line at 100 and subtract:
+- Not something a native speaker would say in this setting (poetic, literary, inverted word order): -25
+- Filler added for rhyme or rhythm, or vague when read alone ("I hope that you can see"): -20
+- Fails the standalone test (not useful or not understandable on its own): -20
+- Target word used in a forced, odd or non-everyday way (apply only to the target words above): -25
+- Contradicts the story or the narrator's stance, or jumps outside the story/setting: -25
+- Stiff form where a contraction is natural in this setting ("I am sorry", "do not"): -10
+- Mixes dialects in the line, or uses forms outside {dialect}: -15
+- Longer than 9 syllables or hard to sing/memorize: -10
+- Crude language beyond ordinary expressions: -20
+
+Rules:
+- If any deduction applies, the score cannot exceed 89. A line with no deductions scores 90-100.
+- Do not give 90+ to a line you cannot defend. A real song rarely has every line above 90. If almost all your scores are 90+, re-check yourself.
+- Apply the target-word deduction only to the official target words listed above.
+- For each line return: number, the line, score, and a short issue (or "none").
+- If a target word completely destroys the realism of the scene or sounds forced, list it in dropped_words.
+
+SONG LYRICS TO EVALUATE:
+{draft}
+
+OUTPUT JSON SCHEMA:
+{{
+    "overall_score": 0-100,
+    "dropped_words": ["word1"],
+    "dropped_reasons": {{"word1": "reason"}},
+    "lines_review": [
+        {{
+            "number": 1,
+            "line": "exact line text",
+            "score": 0-100,
+            "issue": "short reason or 'none'"
+        }}
+    ]
+}}
+"""
+
+    raw_response, model_idx = generate_with_fallback(prompt, require_json=True)
+    end_time = time.time()
+    
+    critic_report = json.loads(raw_response)
+    lines_review = critic_report.get("lines_review", [])
+    
+    # Strictly compute color and status in Python code: 🟢 >= 90, 🟡 75-89, 🔴 < 75
+    parsed_lines = []
+    scores = []
+    for idx, item in enumerate(lines_review, 1):
+        raw_score = item.get("score", 70)
+        status_icon, color_circle = compute_line_status(raw_score)
+        issue_text = item.get("issue") or item.get("comment") or "none"
+        line_text = item.get("line", "")
+        
+        parsed_entry = {
+            "number": item.get("number", idx),
+            "line": line_text,
+            "score": raw_score,
+            "status": status_icon,
+            "color": color_circle,
+            "comment": issue_text,
+            "issue": issue_text
+        }
+        parsed_lines.append(parsed_entry)
+        if isinstance(raw_score, (int, float)):
+            scores.append(raw_score)
+            
+    overall_score = round(sum(scores) / len(scores)) if scores else 0
+    passed_count = sum(1 for l in parsed_lines if l["score"] >= 90)
+    warn_count = sum(1 for l in parsed_lines if 75 <= l["score"] < 90)
+    flagged_count = sum(1 for l in parsed_lines if l["score"] < 75)
+    
+    return {
+        "overall_score": overall_score,
+        "critic_name": p["critic_name"],
+        "domain": theme,
+        "line_breakdown": parsed_lines,
+        "passed_count": passed_count,
+        "warn_count": warn_count,
+        "flagged_count": flagged_count,
+        "dropped_words": critic_report.get("dropped_words", []),
+        "raw_lyrics": draft,
+        "model_used": MASTER_FALLBACK_CHAIN[model_idx],
+        "time_taken": round(end_time - start_time, 1)
+    }
+

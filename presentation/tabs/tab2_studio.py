@@ -17,12 +17,13 @@ from presentation.components.session import sync_active_session
 
 def render_tab_studio():
     """Renders the Target Word Selection, Batch Management, and AI Prompt Generator."""
-    st.subheader("🎯 Target Word Selection & AI Prompt Generator")
+    st.subheader("Make room for your next idea.")
+    st.caption("Choose your words, shape the mood, and craft your song.")
 
     # ─── Approved Session Drafts — Recovery Dropdown ───────────────────────────────────
     _all_drafts = db.list_studio_drafts()
     if _all_drafts:
-        with st.expander("📂 Load from Approved Session Drafts (last 10)", expanded=False):
+        with st.expander(":material/folder_open: Load from Approved Session Drafts (last 10)", expanded=False):
             st.caption(
                 "These snapshots were saved automatically each time you approved a song. "
                 "Load one to restore its word batch and re-use it as a starting point."
@@ -52,7 +53,7 @@ def render_tab_studio():
 
             _dc1, _dc2, _dc3 = st.columns([2, 2, 1])
             with _dc1:
-                if st.button("♻️ Load Draft (words only)", use_container_width=True, key="btn_load_draft_words"):
+                if st.button(":material/restore: Load Draft (words only)", width="stretch", key="btn_load_draft_words"):
                     if _draft_batch:
                         st.session_state.target_batch = _draft_batch
                         st.session_state.mood_analysis = None
@@ -67,7 +68,7 @@ def render_tab_studio():
                     else:
                         st.warning("This draft has no words saved.")
             with _dc2:
-                if st.button("📦 Load Draft (full session)", use_container_width=True, key="btn_load_draft_full"):
+                if st.button(":material/inventory_2: Load Draft (full session)", width="stretch", key="btn_load_draft_full"):
                     if _draft_payload:
                         st.session_state.target_batch = _draft_batch
                         st.session_state.mood_analysis = _draft_payload.get("mood_analysis", None)
@@ -85,7 +86,7 @@ def render_tab_studio():
                     else:
                         st.warning("Could not load this draft.")
             with _dc3:
-                if st.button("🗑️ Delete", use_container_width=True, key="btn_delete_draft"):
+                if st.button(":material/delete: Delete", width="stretch", key="btn_delete_draft"):
                     db.delete_studio_draft(_selected_draft_id)
                     st.success("Draft deleted.")
                     st.rerun()
@@ -96,13 +97,13 @@ def render_tab_studio():
     all_dom_label = f"🌐 All Domains ({total_uns_all:,} Remaining - General Draw)"
 
     domain_options = [all_dom_label] + [
-        f"{DOMAIN_CONFIG[d]['emoji']} {d} ({studio_dom_stats.get(d, {}).get('unused', 0):,} remaining / {studio_dom_stats.get(d, {}).get('total', 0):,})"
+        f"{d} ({studio_dom_stats.get(d, {}).get('unused', 0):,} remaining / {studio_dom_stats.get(d, {}).get('total', 0):,})"
         for d in DOMAINS
     ]
     domain_key_map = {all_dom_label: "All Domains"}
     domain_label_from_key = {"All Domains": all_dom_label}
     for d in DOMAINS:
-        lbl = f"{DOMAIN_CONFIG[d]['emoji']} {d} ({studio_dom_stats.get(d, {}).get('unused', 0):,} remaining / {studio_dom_stats.get(d, {}).get('total', 0):,})"
+        lbl = f"{d} ({studio_dom_stats.get(d, {}).get('unused', 0):,} remaining / {studio_dom_stats.get(d, {}).get('total', 0):,})"
         domain_key_map[lbl] = d
         domain_label_from_key[d] = lbl
 
@@ -113,7 +114,7 @@ def render_tab_studio():
     col_filter_ui, col_joker_toggle, col_filter_badge = st.columns([1.6, 1.1, 1.3], vertical_alignment="center")
     with col_filter_ui:
         chosen_domain_label = st.selectbox(
-            "🎯 Filter by Vocabulary Domain:",
+            ":material/adjust: Filter by Vocabulary Domain:",
             options=domain_options,
             index=default_idx,
             key="studio_domain_selector",
@@ -138,7 +139,7 @@ def render_tab_studio():
                 st.rerun()
         else:
             st.markdown(
-                '<div style="margin-top: 10px; font-size: 0.78rem; color: #94A3B8; font-style: italic;">'
+                '<div style="margin-top: 10px; font-size: 0.78rem; color: #6E6E73; font-style: italic;">'
                 '🃏 الجوكر مدمج تلقائياً'
                 '</div>',
                 unsafe_allow_html=True
@@ -149,7 +150,7 @@ def render_tab_studio():
     with col_filter_badge:
         if new_domain_val == "All Domains":
             badge_html = (
-                f'<div style="margin-top: 12px; font-size: 0.82rem; color: #94A3B8; background: rgba(148,163,184,0.1); '
+                f'<div style="margin-top: 12px; font-size: 0.82rem; color: #6E6E73; background: rgba(148,163,184,0.1); '
                 f'border: 1px solid rgba(148,163,184,0.25); border-radius: 8px; padding: 7px 12px;">'
                 f'🎲 <b>{total_uns_all:,}</b> unused words remaining across all domains'
                 f'</div>'
@@ -186,7 +187,7 @@ def render_tab_studio():
     with col_actions:
         b_col1, b_col2, b_col3, b_col4 = st.columns([1.1, 1.3, 1, 0.9])
         with b_col1:
-            if st.button("🎲 Random 20", type="secondary", use_container_width=True, help="Randomly pull 20 unused words (10 N, 6 V, 4 A) directly from SQLite."):
+            if st.button(":material/shuffle: Random 20", type="secondary", width="stretch", help="Randomly pull 20 unused words (10 N, 6 V, 4 A) directly from SQLite."):
                 active_domain = st.session_state.get("selected_domain", "All Domains")
                 active_blend = st.session_state.get("blend_joker", True)
                 new_batch = db.pull_20_words(domain=active_domain, blend_joker=active_blend)
@@ -219,7 +220,7 @@ def render_tab_studio():
                     st.error("No unused words remaining in the database!")
 
         with b_col2:
-            if st.button("🧠 Smart Thematic Pull", type="primary", use_container_width=True, help="Gemini analyzes 140 candidate unused words and selects 20 words (10 N, 6 V, 4 A) that share natural chemistry and relate to an authentic everyday life scenario."):
+            if st.button(":material/neurology: Smart Thematic Pull", type="primary", width="stretch", help="Gemini analyzes 140 candidate unused words and selects 20 words (10 N, 6 V, 4 A) that share natural chemistry and relate to an authentic everyday life scenario."):
                 active_domain = st.session_state.get("selected_domain", "All Domains")
                 active_blend = st.session_state.get("blend_joker", True)
                 dom_spin = f" within {active_domain}" if active_domain != "All Domains" else ""
@@ -271,7 +272,7 @@ def render_tab_studio():
                         st.error("Could not curate a batch from unused words.")
 
         with b_col3:
-            if st.button("🔄 Cancel & Redraw", use_container_width=True):
+            if st.button(":material/refresh: Cancel & Redraw", width="stretch"):
                 active_domain = st.session_state.get("selected_domain", "All Domains")
                 active_blend = st.session_state.get("blend_joker", True)
                 new_batch = db.pull_20_words(domain=active_domain, blend_joker=active_blend)
@@ -286,7 +287,7 @@ def render_tab_studio():
                 st.rerun()
 
         with b_col4:
-            if st.button("🧹 Clear", use_container_width=True, help="Clear active target batch"):
+            if st.button(":material/mop: Clear", width="stretch", help="Clear active target batch"):
                 st.session_state.target_batch = []
                 st.session_state.mood_analysis = None
                 st.session_state.master_prompt = ""
@@ -312,7 +313,7 @@ def render_tab_studio():
             st.markdown(
                 f"""
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 2px;">
-                    <span style="font-weight: 700; color: #0F172A; font-size: 1.05rem;">🎯 Active Target Batch:</span>
+                    <span style="font-weight: 700; color: #1D1D1F; font-size: 1.05rem;">🎯 Active Target Batch:</span>
                     <span style="background: #EDE9FE; color: #5B21B6; font-size: 0.82rem; font-weight: 700; padding: 2px 9px; border-radius: 12px; border: 1px solid #DDD6FE;">{len(st.session_state.target_batch)} Words</span>
                     <span style="background: #E0E7FF; color: #3730A3; font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid #C7D2FE;">🔵 {nouns_count} Nouns</span>
                     <span style="background: #DCFCE7; color: #166534; font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid #BBF7D0;">🟢 {verbs_count} Verbs</span>
@@ -339,13 +340,13 @@ def render_tab_studio():
                     st.markdown(
                         f"""
                         <div class="word-card">
-                            <span style="color: #0F172A !important;"><strong style="color: #0F172A !important; font-size: 1.05rem;">{idx+1}. {word_item['word']}</strong></span>
+                            <span style="color: #1D1D1F !important;"><strong style="color: #1D1D1F !important; font-size: 1.05rem;">{idx+1}. {word_item['word']}</strong></span>
                             <span class="{badge_class}">{pos}</span>
                         </div>
                         """,
                         unsafe_allow_html=True
                     )
-                    if st.button(f"🔄 Swap", key=f"swap_{word_item['id']}_{idx}", help=f"Swap '{word_item['word']}' with another unused {pos}"):
+                    if st.button(f":material/refresh: Swap", key=f"swap_{word_item['id']}_{idx}", help=f"Swap '{word_item['word']}' with another unused {pos}"):
                         swapped = db.swap_single_word(pos, current_ids)
                         if swapped:
                             st.session_state.target_batch[idx] = swapped
@@ -361,12 +362,12 @@ def render_tab_studio():
         st.markdown("---")
 
         # Step 2: Gemini Mood & Style Analysis
-        st.subheader("🤖 Step 2: Gemini Flash Mood & Musical Analysis")
+        st.subheader(":material/auto_awesome: Step 2: Gemini Flash Mood & Musical Analysis")
         col_gem1, col_gem2 = st.columns([1.5, 2])
         
         with col_gem1:
             st.markdown("Analyze the 20 target words to get an emotional breakdown, genre, and structure.")
-            if st.button("✨ Run Gemini Analysis", type="secondary", use_container_width=True):
+            if st.button(":material/auto_awesome: Run Gemini Analysis", type="secondary", width="stretch"):
                 with st.spinner("Analyzing vocabulary mood with Gemini Flash..."):
                     res = gemini_client.analyze_vocabulary_mood(current_words)
                     st.session_state.mood_analysis = res
@@ -418,7 +419,7 @@ def render_tab_studio():
                 sync_active_session()
 
         new_concept = st.text_area(
-            "💡 Story / Creative Concept (Generated by Gemini, fully editable by you):",
+            ":material/lightbulb: Story / Creative Concept (Generated by Gemini, fully editable by you):",
             value=st.session_state.custom_concept,
             height=75,
             help="Tweak Gemini's concept or write your own practical everyday life scenario before generating the prompt."
@@ -429,9 +430,9 @@ def render_tab_studio():
 
         # Generate Prompts
         st.markdown("---")
-        st.subheader("📋 Step 3: Generation & Production Prompts")
+        st.subheader(":material/content_copy: Step 3: Generation & Production Prompts")
         
-        if st.button("🚀 Generate Final Prompt", type="primary", use_container_width=True):
+        if st.button(":material/arrow_forward: Generate Final Prompt", type="primary", width="stretch"):
             mood_dict = st.session_state.mood_analysis.get("mood_breakdown", {}) if st.session_state.mood_analysis else {}
             concept = st.session_state.custom_concept.strip() or (
                 st.session_state.mood_analysis.get("creative_concept", "") if st.session_state.mood_analysis else ""
@@ -465,7 +466,7 @@ def render_tab_studio():
                 sync_active_session()
 
         if st.session_state.master_prompt:
-            st.markdown("#### 🎵 1. Suno AI Music Style Prompt (Ready to Paste into Suno):")
+            st.markdown("#### :material/music_note: 1. Suno AI Music Style Prompt (Ready to Paste into Suno):")
             st.caption("Dense, keyword-rich Suno style prompt (< 120 chars) tailored to your selected genre, tempo, and vocal clarity:")
             
             suno_prompt_val = st.session_state.studio_suno_prompt or prompt_builder.build_suno_style_prompt(
@@ -476,16 +477,16 @@ def render_tab_studio():
             suno_color = "#10B981" if suno_char_len <= 120 else "#EF4444"
             st.markdown(
                 f"<div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;'>"
-                f"<small style='color: #94A3B8;'>📋 Click the copy icon in the box below to paste into Suno's 'Style of Music' box</small>"
+                f"<small style='color: #6E6E73;'>📋 Click the copy icon in the box below to paste into Suno's 'Style of Music' box</small>"
                 f"<small style='color: {suno_color}; font-weight: 700;'>Length: {suno_char_len} / 120 chars</small>"
                 f"</div>",
                 unsafe_allow_html=True
             )
             st.code(suno_prompt_val, language="markdown")
 
-            st.markdown("<hr style='margin: 18px 0; border-color: rgba(255,255,255,0.08);'>", unsafe_allow_html=True)
+            st.markdown("<hr style='margin: 18px 0; border-color: #D2D2D7;'>", unsafe_allow_html=True)
 
-            st.markdown("#### 🎨 2. Midjourney / DALL-E Album Cover Prompt (Poster Art):")
+            st.markdown("#### :material/palette: 2. Midjourney / DALL-E Album Cover Prompt (Poster Art):")
             st.caption("Artistic visual prompt capturing the genre aesthetic, lighting, and story atmosphere:")
             
             concept_for_poster = st.session_state.custom_concept.strip() or (
@@ -499,9 +500,9 @@ def render_tab_studio():
             )
             st.code(poster_prompt_val, language="markdown")
 
-            st.markdown("<hr style='margin: 18px 0; border-color: rgba(255,255,255,0.08);'>", unsafe_allow_html=True)
+            st.markdown("<hr style='margin: 18px 0; border-color: #D2D2D7;'>", unsafe_allow_html=True)
 
-            st.markdown("#### 📝 3. Master Lyrics Prompt (Copy & Paste into Claude / GPT-4o):")
+            st.markdown("#### :material/edit_note: 3. Master Lyrics Prompt (Copy & Paste into Claude / GPT-4o):")
             st.caption("Full prompt containing all 20 target vocabulary words, real-world narrative concept, and strict Logic Gate:")
             st.code(st.session_state.master_prompt, language="markdown")
     else:
