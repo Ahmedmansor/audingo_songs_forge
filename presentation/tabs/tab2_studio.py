@@ -139,7 +139,7 @@ def render_tab_studio():
                 st.rerun()
         else:
             st.markdown(
-                '<div style="margin-top: 10px; font-size: 0.78rem; color: #6E6E73; font-style: italic;">'
+                '<div style="margin-top: 10px; font-size: 0.78rem; color: var(--studio-muted); font-style: italic;">'
                 '🃏 الجوكر مدمج تلقائياً'
                 '</div>',
                 unsafe_allow_html=True
@@ -150,7 +150,7 @@ def render_tab_studio():
     with col_filter_badge:
         if new_domain_val == "All Domains":
             badge_html = (
-                f'<div style="margin-top: 12px; font-size: 0.82rem; color: #6E6E73; background: rgba(148,163,184,0.1); '
+                f'<div style="margin-top: 12px; font-size: 0.82rem; color: var(--studio-muted); background: rgba(148,163,184,0.1); '
                 f'border: 1px solid rgba(148,163,184,0.25); border-radius: 8px; padding: 7px 12px;">'
                 f'🎲 <b>{total_uns_all:,}</b> unused words remaining across all domains'
                 f'</div>'
@@ -313,15 +313,15 @@ def render_tab_studio():
 
         col_batch_info, col_batch_actions = st.columns([1.25, 1.15], vertical_alignment="center")
         with col_batch_info:
-            other_pill = f'<span style="background: #F1F5F9; color: #475569; font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid #CBD5E1;">⚪ {others_count} Other</span>' if others_count else ''
+            other_pill = f'<span style="background: var(--studio-neutral-bg); color: var(--studio-neutral-ink); font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid var(--studio-line);">⚪ {others_count} Other</span>' if others_count else ''
             st.markdown(
                 f"""
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 2px;">
-                    <span style="font-weight: 700; color: #1D1D1F; font-size: 1.05rem;">🎯 Active Target Batch:</span>
-                    <span style="background: #EDE9FE; color: #5B21B6; font-size: 0.82rem; font-weight: 700; padding: 2px 9px; border-radius: 12px; border: 1px solid #DDD6FE;">{len(st.session_state.target_batch)} Words</span>
-                    <span style="background: #E0E7FF; color: #3730A3; font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid #C7D2FE;">🔵 {nouns_count} Nouns</span>
-                    <span style="background: #DCFCE7; color: #166534; font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid #BBF7D0;">🟢 {verbs_count} Verbs</span>
-                    <span style="background: #FEF3C7; color: #92400E; font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid #FDE68A;">🟡 {adjs_count} Adjectives</span>
+                    <span style="font-weight: 700; color: var(--studio-ink); font-size: 1.05rem;">🎯 Active Target Batch:</span>
+                    <span style="background: var(--studio-tint); color: var(--studio-purple); font-size: 0.82rem; font-weight: 700; padding: 2px 9px; border-radius: 12px; border: 1px solid var(--studio-line);">{len(st.session_state.target_batch)} Words</span>
+                    <span style="background: var(--studio-tint); color: var(--studio-blue); font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid var(--studio-line);">🔵 {nouns_count} Nouns</span>
+                    <span style="background: var(--studio-green-bg); color: var(--studio-green); font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid var(--studio-line);">🟢 {verbs_count} Verbs</span>
+                    <span style="background: var(--studio-amber-bg); color: var(--studio-amber); font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid var(--studio-line);">🟡 {adjs_count} Adjectives</span>
                     {other_pill}
                 </div>
                 """,
@@ -370,17 +370,17 @@ def render_tab_studio():
 
                 if is_flagged:
                     card_style = (
-                        "border: 2px solid #F59E0B; background: #FFFDF5; "
+                        "border: 2px solid #F59E0B; background: var(--studio-amber-bg); "
                         "box-shadow: 0 1px 4px rgba(245, 158, 11, 0.2);"
                     )
                     reason_html = (
                         f'<div style="margin-top: 6px; padding: 4px 6px; border-radius: 6px; '
-                        f'background: #FEF3C7; border: 1px solid #FDE68A; color: #92400E; '
+                        f'background: var(--studio-amber-bg); border: 1px solid var(--studio-line); color: var(--studio-amber); '
                         f'font-size: 0.72rem; line-height: 1.25; font-weight: 550;">'
                         f'⚠️ <b>Mismatch:</b> {flag_reason}</div>'
                     )
                 else:
-                    card_style = "border: 1px solid var(--studio-line); background: white;"
+                    card_style = "border: 1px solid var(--studio-line); background: var(--studio-surface);"
                     reason_html = ""
                 
                 with st.container():
@@ -388,8 +388,8 @@ def render_tab_studio():
                         f"""
                         <div class="word-card" style="{card_style} min-height: 54px; display: flex; flex-direction: column; justify-content: center; gap: 4px; box-sizing: border-box; padding: 10px 14px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 6px;">
-                                <span style="color: #1D1D1F !important; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
-                                    <strong style="color: #1D1D1F !important; font-size: {font_size}; letter-spacing: -0.01em;">{idx+1}. {word_text}</strong>
+                                <span style="color: var(--studio-ink) !important; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
+                                    <strong style="color: var(--studio-ink) !important; font-size: {font_size}; letter-spacing: -0.01em;">{idx+1}. {word_text}</strong>
                                 </span>
                                 <span class="{badge_class}" style="margin: 0; flex-shrink: 0; font-size: 0.75rem; padding: 2px 7px;">{pos}</span>
                             </div>
@@ -582,14 +582,14 @@ def render_tab_studio():
             suno_color = "#10B981" if suno_char_len <= 120 else "#EF4444"
             st.markdown(
                 f"<div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;'>"
-                f"<small style='color: #6E6E73;'>📋 Click the copy icon in the box below to paste into Suno's 'Style of Music' box</small>"
+                f"<small style='color: var(--studio-muted);'>📋 Click the copy icon in the box below to paste into Suno's 'Style of Music' box</small>"
                 f"<small style='color: {suno_color}; font-weight: 700;'>Length: {suno_char_len} / 120 chars</small>"
                 f"</div>",
                 unsafe_allow_html=True
             )
             st.code(suno_prompt_val, language="markdown")
 
-            st.markdown("<hr style='margin: 18px 0; border-color: #D2D2D7;'>", unsafe_allow_html=True)
+            st.markdown("<hr style='margin: 18px 0; border-color: var(--studio-line);'>", unsafe_allow_html=True)
 
             st.markdown("#### :material/palette: 2. Midjourney / DALL-E Album Cover Prompt (Poster Art):")
             st.caption("Artistic visual prompt capturing the genre aesthetic, lighting, and story atmosphere:")
@@ -605,7 +605,7 @@ def render_tab_studio():
             )
             st.code(poster_prompt_val, language="markdown")
 
-            st.markdown("<hr style='margin: 18px 0; border-color: #D2D2D7;'>", unsafe_allow_html=True)
+            st.markdown("<hr style='margin: 18px 0; border-color: var(--studio-line);'>", unsafe_allow_html=True)
 
             st.markdown("#### :material/edit_note: 3. Master Lyrics Prompt (Copy & Paste into Claude / GPT-4o):")
             st.caption("Full prompt containing all 20 target vocabulary words, real-world narrative concept, and strict Logic Gate:")

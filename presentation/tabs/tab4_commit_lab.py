@@ -260,8 +260,8 @@ def render_tab_commit_lab():
                     st.markdown(
                         f"""
                         <div style="background: rgba(148, 163, 184, 0.08); border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
-                            <h4 style="margin: 0 0 4px 0; color: #6E6E73;">⚪ Previously Covered Words ({len(reused_list)})</h4>
-                            <p style="margin: 0 0 8px 0;"><small style="color: #6E6E73;">NGSL words already introduced in past songs. Their global usage counter will update upon saving, but they are not counted as new bonus discoveries.</small></p>
+                            <h4 style="margin: 0 0 4px 0; color: var(--studio-muted);">⚪ Previously Covered Words ({len(reused_list)})</h4>
+                            <p style="margin: 0 0 8px 0;"><small style="color: var(--studio-muted);">NGSL words already introduced in past songs. Their global usage counter will update upon saving, but they are not counted as new bonus discoveries.</small></p>
                             <div>{reused_pills}</div>
                         </div>
                         """,
@@ -288,7 +288,7 @@ def render_tab_commit_lab():
             pack_vocalist = st.session_state.get("selected_vocalist", "Male")
             st.markdown(
                 f"""
-                <div style="background: rgba(99, 102, 241, 0.08); border-left: 4px solid #6366F1; padding: 10px 14px; border-radius: 8px; margin: 12px 0 16px 0; font-size: 0.92rem; color: #1D1D1F;">
+                <div style="background: rgba(99, 102, 241, 0.08); border-left: 4px solid #6366F1; padding: 10px 14px; border-radius: 8px; margin: 12px 0 16px 0; font-size: 0.92rem; color: var(--studio-ink);">
                     💿 <b>Packaging Integration:</b> When you approve, this song will automatically register its 
                     <b>Suno AI Music Style Prompt</b> and <b>Album Poster Prompt</b> under genre <b>{st.session_state.selected_genre}</b> ({pack_vocalist}) in your Songs Library!
                 </div>

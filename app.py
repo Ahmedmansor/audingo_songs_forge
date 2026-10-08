@@ -23,6 +23,7 @@ st.set_page_config(
 
 # Presentation Layer Imports
 from presentation.styles import apply_custom_styles
+from presentation.components.appearance import render_appearance_switch
 from presentation.components.identity import icon_svg
 from presentation.components.session import init_session_state
 from presentation.components.sidebar import render_sidebar
@@ -33,6 +34,7 @@ from presentation.tabs.tab4_commit_lab import render_tab_commit_lab
 from presentation.tabs.tab5_library import render_tab_library
 
 # 1. Apply UI theme & styles
+render_appearance_switch()
 apply_custom_styles()
 
 # 2. Initialize Session State & Persisted DB Sync

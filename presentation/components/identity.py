@@ -13,8 +13,12 @@ _PATHS = {
 }
 
 
-def icon_svg(name="wave", color="#0066CC"):
+def icon_svg(name="wave", color=None):
     """Decorative outline icon with an adjacent visible label."""
+    if color is None:
+        import streamlit as st
+        from presentation.theme import palette
+        color = palette(st.session_state.get("ui_theme_mode", "dark"))["blue"]
     svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" '
             f'fill="none" stroke="{escape(color, quote=True)}" stroke-width="1.6" '
             'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'

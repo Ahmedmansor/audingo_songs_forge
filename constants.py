@@ -73,42 +73,42 @@ DOMAINS = [
 DOMAIN_CONFIG = {
     "Basic / Neutral": {
         "emoji": "🃏",
-        "color": "#855600",
+        "color": "var(--studio-amber)",
         "bg": "rgba(245, 158, 11, 0.15)",
         "border": "rgba(245, 158, 11, 0.4)",
         "label_ar": "الجوكر (كلمات عامة وأساسية)"
     },
     "Science, Tech & Academia": {
         "emoji": "🔬",
-        "color": "#006B80",
+        "color": "var(--studio-teal)",
         "bg": "rgba(6, 182, 212, 0.15)",
         "border": "rgba(6, 182, 212, 0.4)",
         "label_ar": "العلوم والتقنية والأكاديميا"
     },
     "Emotions & Relationships": {
         "emoji": "❤️",
-        "color": "#AF3150",
+        "color": "var(--studio-pink)",
         "bg": "rgba(244, 63, 94, 0.15)",
         "border": "rgba(251, 113, 133, 0.4)",
         "label_ar": "المشاعر والروايات"
     },
     "Street & Daily Life": {
         "emoji": "🏙️",
-        "color": "#216E39",
+        "color": "var(--studio-green)",
         "bg": "rgba(16, 185, 129, 0.15)",
         "border": "rgba(52, 211, 153, 0.4)",
         "label_ar": "الشارع واليوميات"
     },
     "Law, Politics & Society": {
         "emoji": "🏛️",
-        "color": "#7352A2",
+        "color": "var(--studio-purple)",
         "bg": "rgba(139, 92, 246, 0.15)",
         "border": "rgba(167, 139, 250, 0.4)",
         "label_ar": "القانون والسياسة والمجتمع"
     },
     "Business & Career": {
         "emoji": "💼",
-        "color": "#0066CC",
+        "color": "var(--studio-blue)",
         "bg": "rgba(59, 130, 246, 0.15)",
         "border": "rgba(96, 165, 250, 0.4)",
         "label_ar": "العمل والبيزنس"

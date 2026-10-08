@@ -218,7 +218,7 @@ def render_tab_refinement():
                 
                 with st.expander(":material/edit_note: Final Polished Lyrics", expanded=True):
                     lyrics_text = current_report.get("final_lyrics", "")
-                    lyrics_html = f"""<div style="white-space: pre-wrap; font-family: 'Consolas', 'Courier New', monospace; background: #0F172A; color: #1D1D1F; padding: 18px; border-radius: 8px; font-size: 1.02rem; border: 1px solid #334155; line-height: 1.65; box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);">
+                    lyrics_html = f"""<div style="white-space: pre-wrap; font-family: 'Consolas', 'Courier New', monospace; background: var(--studio-bg); color: var(--studio-ink); padding: 18px; border-radius: 8px; font-size: 1.02rem; border: 1px solid var(--studio-line); line-height: 1.65; box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);">
 {lyrics_text}
 </div>"""
                     st.markdown(lyrics_html, unsafe_allow_html=True)
@@ -237,7 +237,7 @@ def render_tab_refinement():
 
                 # External AI Surgical Prompt Exporter (Collapsed by default)
                 with st.expander(":material/build: برومبت التعديل الخارجي (External AI Surgical Prompt)", expanded=False, key="ext_prompt_expander_closed"):
-                    st.markdown("""<div style="font-size: 0.88rem; color: #515154; margin-bottom: 12px; line-height: 1.5;">
+                    st.markdown("""<div style="font-size: 0.88rem; color: var(--studio-neutral-ink); margin-bottom: 12px; line-height: 1.5;">
 خذ هذا البرومبت الجاهز وانسخه بضغطة زر إلى أي ذكاء اصطناعي خارجي (مثل <strong>Claude 3.5 Sonnet</strong> أو <strong>ChatGPT 4o</strong>). البرومبت مصمم جراحياً ليحتوي على الأسطر التي تحتاج تعديلاً فقط مع القواعد الصارمة لحماية الأسطر الخضراء.
 </div>""", unsafe_allow_html=True)
                     
@@ -262,14 +262,14 @@ def render_tab_refinement():
                     kept = current_report.get("words_kept", [])
                     dropped = current_report.get("words_dropped", [])
                     
-                    kept_html = "".join([f"<span style='background: rgba(16, 185, 129, 0.2); color: #216E39; padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: 700; margin: 0 6px 8px 0; display: inline-block; border: 1px solid #10B981; box-shadow: 0 1px 2px rgba(0,0,0,0.1);'>{w}</span>" for w in kept])
-                    dropped_html = "".join([f"<span style='background: rgba(239, 68, 68, 0.2); color: #B42318; padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: 700; margin: 0 6px 8px 0; display: inline-block; border: 1px solid #EF4444; text-decoration: line-through; opacity: 0.85;'>{w}</span>" for w in dropped])
+                    kept_html = "".join([f"<span style='background: rgba(16, 185, 129, 0.2); color: var(--studio-green); padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: 700; margin: 0 6px 8px 0; display: inline-block; border: 1px solid #10B981; box-shadow: 0 1px 2px rgba(0,0,0,0.1);'>{w}</span>" for w in kept])
+                    dropped_html = "".join([f"<span style='background: rgba(239, 68, 68, 0.2); color: var(--studio-red); padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: 700; margin: 0 6px 8px 0; display: inline-block; border: 1px solid #EF4444; text-decoration: line-through; opacity: 0.85;'>{w}</span>" for w in dropped])
                     
-                    display_kept = kept_html if kept_html else "<span style='color: #6E6E73; font-style: italic;'>None</span>"
-                    st.markdown(f"<div style='margin-bottom: 15px;'><strong style='color: #1D1D1F; font-size: 1.05rem;'>✅ Successfully Integrated ({len(kept)})</strong><div style='margin-top: 10px;'>{display_kept}</div></div>", unsafe_allow_html=True)
+                    display_kept = kept_html if kept_html else "<span style='color: var(--studio-muted); font-style: italic;'>None</span>"
+                    st.markdown(f"<div style='margin-bottom: 15px;'><strong style='color: var(--studio-ink); font-size: 1.05rem;'>✅ Successfully Integrated ({len(kept)})</strong><div style='margin-top: 10px;'>{display_kept}</div></div>", unsafe_allow_html=True)
                     
                     if dropped:
-                        st.markdown(f"<div><strong style='color: #1D1D1F; font-size: 1.05rem;'>❌ Dropped by Critic ({len(dropped)})</strong><div style='margin-top: 10px;'>{dropped_html}</div></div>", unsafe_allow_html=True)
+                        st.markdown(f"<div><strong style='color: var(--studio-ink); font-size: 1.05rem;'>❌ Dropped by Critic ({len(dropped)})</strong><div style='margin-top: 10px;'>{dropped_html}</div></div>", unsafe_allow_html=True)
 
                 with st.expander(f"📜 API Requests & Execution Log ({current_report.get('total_requests', 9)} Requests)", expanded=False):
                     exec_log = current_report.get("execution_log")
@@ -311,17 +311,17 @@ def render_tab_refinement():
                         r_action = item.get("action", "")
                         border_color = "#10B981" if "Critic" in r_agent else "#6366F1"
                         
-                        log_html += f"""<div style="background: #F5F5F7; border: 1px solid #D2D2D7; border-left: 3px solid {border_color}; border-radius: 6px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                        log_html += f"""<div style="background: var(--studio-bg); border: 1px solid var(--studio-line); border-left: 3px solid {border_color}; border-radius: 6px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
         <div>
             <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="background: #D2D2D7; color: #1D1D1F; padding: 2px 7px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">Req #{r_num}</span>
-                <span style="color: #6E6E73; font-size: 0.8rem;">Loop {r_loop}</span>
-                <strong style="color: #1D1D1F; font-size: 0.9rem;">{r_agent}</strong>
+                <span style="background: var(--studio-line); color: var(--studio-ink); padding: 2px 7px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">Req #{r_num}</span>
+                <span style="color: var(--studio-muted); font-size: 0.8rem;">Loop {r_loop}</span>
+                <strong style="color: var(--studio-ink); font-size: 0.9rem;">{r_agent}</strong>
             </div>
-            <div style="color: #515154; font-size: 0.85rem; margin-top: 4px;">{r_action}</div>
+            <div style="color: var(--studio-neutral-ink); font-size: 0.85rem; margin-top: 4px;">{r_action}</div>
         </div>
         <div style="flex-shrink: 0;">
-            <span style="background: rgba(59, 130, 246, 0.15); color: #0055AA; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-family: monospace; border: 1px solid rgba(59, 130, 246, 0.3);">{r_model}</span>
+            <span style="background: rgba(59, 130, 246, 0.15); color: var(--studio-blue); padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-family: monospace; border: 1px solid rgba(59, 130, 246, 0.3);">{r_model}</span>
         </div>
     </div>"""
                     log_html += "</div>"
@@ -359,23 +359,23 @@ def render_tab_refinement():
                 col_title, col_copy = st.columns([3.2, 1.3])
                 with col_title:
                     header_html = f"""<div style="margin-top: 10px; margin-bottom: 8px;">
-<h3 style="margin: 0; color: #1D1D1F; font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em;">
+<h3 style="margin: 0; color: var(--studio-ink); font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em;">
 🔍 جدول نقد وتدقيق السطور (Critic Only Breakdown)
 </h3>
-<p style="margin: 4px 0 10px 0; color: #6E6E73; font-size: 0.92rem;">
+<p style="margin: 4px 0 10px 0; color: var(--studio-muted); font-size: 0.92rem;">
 تقييم كل سطر بنسبة مئوية ولون بناءً على المعايير الصارمة: 🟢 ≥ 90 | 🟡 75-89 | 🔴 &lt; 75
 </p>
 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-<span style="background: #D2D2D7; color: #515154; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid #D2D2D7;">
+<span style="background: var(--studio-line); color: var(--studio-neutral-ink); padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid var(--studio-line);">
 Total: {total_lines} Lines
 </span>
-<span style="background: rgba(16, 185, 129, 0.15); color: #216E39; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.3);">
+<span style="background: rgba(16, 185, 129, 0.15); color: var(--studio-green); padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.3);">
 🟢 {passed_lines} Passed (≥ 90%)
 </span>
-<span style="background: rgba(245, 158, 11, 0.15); color: #855600; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(245, 158, 11, 0.3);">
+<span style="background: rgba(245, 158, 11, 0.15); color: var(--studio-amber); padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(245, 158, 11, 0.3);">
 🟡 {warn_lines} Polished (75-89%)
 </span>
-<span style="background: rgba(239, 68, 68, 0.15); color: #B42318; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(239, 68, 68, 0.3);">
+<span style="background: rgba(239, 68, 68, 0.15); color: var(--studio-red); padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(239, 68, 68, 0.3);">
 🔴 {flagged_lines} Flagged (&lt; 75%)
 </span>
 </div>
@@ -400,23 +400,23 @@ Total: {total_lines} Lines
                     if score_val >= 90:
                         row_border = "#10B981"
                         badge_bg = "rgba(16, 185, 129, 0.12)"
-                        badge_text = "#216E39"
+                        badge_text = "var(--studio-green)"
                         badge_border = "#34D399"
                     elif score_val >= 75:
                         row_border = "#F59E0B"
                         badge_bg = "rgba(245, 158, 11, 0.12)"
-                        badge_text = "#855600"
+                        badge_text = "var(--studio-amber)"
                         badge_border = "#FBBF24"
                     else:
                         row_border = "#EF4444"
                         badge_bg = "rgba(239, 68, 68, 0.12)"
-                        badge_text = "#B42318"
+                        badge_text = "var(--studio-red)"
                         badge_border = "#F87171"
 
                     table_rows.append(f"""
 <tr style="border-bottom: 1px solid #E5E5EA;">
-    <td style="padding: 12px 14px; font-weight: 700; color: #6E6E73; border-left: 4px solid {row_border}; width: 45px; text-align: center;">{idx}</td>
-    <td style="padding: 12px 14px; font-weight: 600; color: #1D1D1F; font-size: 0.98rem; line-height: 1.45;">{line_txt}</td>
+    <td style="padding: 12px 14px; font-weight: 700; color: var(--studio-muted); border-left: 4px solid {row_border}; width: 45px; text-align: center;">{idx}</td>
+    <td style="padding: 12px 14px; font-weight: 600; color: var(--studio-ink); font-size: 0.98rem; line-height: 1.45;">{line_txt}</td>
     <td style="padding: 12px 14px; font-weight: 800; font-size: 0.95rem; text-align: center; width: 85px;">
         <span style="background: {badge_bg}; color: {badge_text}; padding: 3px 10px; border-radius: 12px; border: 1px solid {badge_border};">{score_val}%</span>
     </td>
@@ -425,15 +425,15 @@ Total: {total_lines} Lines
 </tr>
 """)
 
-                table_html = f"""<div style="border: 1px solid #D2D2D7; border-radius: 10px; overflow: hidden; background: #FFFFFF; box-shadow: 0 1px 3px rgba(0,0,0,0.04); margin-top: 14px; margin-bottom: 24px;">
+                table_html = f"""<div style="border: 1px solid var(--studio-line); border-radius: 10px; overflow: hidden; background: var(--studio-surface); box-shadow: 0 1px 3px rgba(0,0,0,0.04); margin-top: 14px; margin-bottom: 24px;">
 <table style="width: 100%; border-collapse: collapse; text-align: left; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
     <thead>
-        <tr style="background: #F5F5F7; border-bottom: 1px solid #D2D2D7;">
-            <th style="padding: 11px 14px; font-size: 0.82rem; font-weight: 700; color: #6E6E73; text-align: center; width: 45px;">#</th>
-            <th style="padding: 11px 14px; font-size: 0.82rem; font-weight: 700; color: #6E6E73;">السطر (Lyric Line)</th>
-            <th style="padding: 11px 14px; font-size: 0.82rem; font-weight: 700; color: #6E6E73; text-align: center; width: 85px;">النسبة</th>
-            <th style="padding: 11px 14px; font-size: 0.82rem; font-weight: 700; color: #6E6E73; text-align: center; width: 60px;">اللون</th>
-            <th style="padding: 11px 14px; font-size: 0.82rem; font-weight: 700; color: #6E6E73;">السبب / الملاحظة (Reason & Deductions)</th>
+        <tr style="background: var(--studio-bg); border-bottom: 1px solid var(--studio-line);">
+            <th style="padding: 11px 14px; font-size: 0.82rem; font-weight: 700; color: var(--studio-muted); text-align: center; width: 45px;">#</th>
+            <th style="padding: 11px 14px; font-size: 0.82rem; font-weight: 700; color: var(--studio-muted);">السطر (Lyric Line)</th>
+            <th style="padding: 11px 14px; font-size: 0.82rem; font-weight: 700; color: var(--studio-muted); text-align: center; width: 85px;">النسبة</th>
+            <th style="padding: 11px 14px; font-size: 0.82rem; font-weight: 700; color: var(--studio-muted); text-align: center; width: 60px;">اللون</th>
+            <th style="padding: 11px 14px; font-size: 0.82rem; font-weight: 700; color: var(--studio-muted);">السبب / الملاحظة (Reason & Deductions)</th>
         </tr>
     </thead>
     <tbody>
@@ -470,26 +470,26 @@ Total: {total_lines} Lines
             full_breakdown_text = "\n".join(breakdown_lines_export)
 
             if flagged_lines > 0:
-                flagged_badge = f'<span style="background: rgba(239, 68, 68, 0.15); color: #B42318; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(239, 68, 68, 0.3);">❌ {flagged_lines} Flagged</span>'
+                flagged_badge = f'<span style="background: rgba(239, 68, 68, 0.15); color: var(--studio-red); padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(239, 68, 68, 0.3);">❌ {flagged_lines} Flagged</span>'
             else:
-                flagged_badge = '<span style="background: rgba(16, 185, 129, 0.12); color: #216E39; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.25);">✨ 0 Flagged (Clean!)</span>'
+                flagged_badge = '<span style="background: rgba(16, 185, 129, 0.12); color: var(--studio-green); padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.25);">✨ 0 Flagged (Clean!)</span>'
 
-            warn_badge = f'<span style="background: rgba(245, 158, 11, 0.15); color: #855600; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(245, 158, 11, 0.3);">⚠️ {warn_lines} Polished</span>' if warn_lines else ''
+            warn_badge = f'<span style="background: rgba(245, 158, 11, 0.15); color: var(--studio-amber); padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(245, 158, 11, 0.3);">⚠️ {warn_lines} Polished</span>' if warn_lines else ''
 
             col_title, col_copy = st.columns([3.2, 1.3])
             with col_title:
                 header_html = f"""<div style="margin-top: 10px; margin-bottom: 8px;">
-<h3 style="margin: 0; color: #1D1D1F; font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em;">
+<h3 style="margin: 0; color: var(--studio-ink); font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em;">
 🔍 Critic's Line-by-Line Breakdown
 </h3>
-<p style="margin: 4px 0 10px 0; color: #6E6E73; font-size: 0.92rem;">
+<p style="margin: 4px 0 10px 0; color: var(--studio-muted); font-size: 0.92rem;">
 Full evaluation of every lyric line scored for authenticity, natural delivery, and story coherence.
 </p>
 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-<span style="background: #D2D2D7; color: #515154; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid #D2D2D7;">
+<span style="background: var(--studio-line); color: var(--studio-neutral-ink); padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid var(--studio-line);">
 Total: {total_lines} Lines
 </span>
-<span style="background: rgba(16, 185, 129, 0.15); color: #216E39; padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.3);">
+<span style="background: rgba(16, 185, 129, 0.15); color: var(--studio-green); padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.3);">
 ✅ {passed_lines} Passed
 </span>
 {warn_badge}
@@ -512,33 +512,33 @@ Total: {total_lines} Lines
                 comment = line_data.get("comment", "")
                 
                 if l_score >= 90 or status == "✅":
-                    card_bg = "linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, #F5F5F7 100%)"
+                    card_bg = "linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, var(--studio-bg) 100%)"
                     border_color = "#10B981"
-                    badge_bg = "#FFFFFF"
+                    badge_bg = "var(--studio-surface)"
                     badge_text_color = "#047857"
                     badge_border = "#34D399"
-                    feedback_color = "#216E39"
+                    feedback_color = "var(--studio-green)"
                     icon = "✅"
                 elif l_score < 75 or status in ["❌", "🗑️"]:
-                    card_bg = "linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, #F5F5F7 100%)"
+                    card_bg = "linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, var(--studio-bg) 100%)"
                     border_color = "#EF4444"
-                    badge_bg = "#FFFFFF"
+                    badge_bg = "var(--studio-surface)"
                     badge_text_color = "#B91C1C"
                     badge_border = "#F87171"
-                    feedback_color = "#B42318"
+                    feedback_color = "var(--studio-red)"
                     icon = "❌"
                 else:
-                    card_bg = "linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, #F5F5F7 100%)"
+                    card_bg = "linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, var(--studio-bg) 100%)"
                     border_color = "#F59E0B"
-                    badge_bg = "#FFFFFF"
+                    badge_bg = "var(--studio-surface)"
                     badge_text_color = "#B45309"
                     badge_border = "#FBBF24"
-                    feedback_color = "#855600"
+                    feedback_color = "var(--studio-amber)"
                     icon = "⚠️"
 
-                card_html = f"""<div style="background: {card_bg}; border-left: 4px solid {border_color}; border-top: 1px solid #D2D2D7; border-right: 1px solid #D2D2D7; border-bottom: 1px solid #D2D2D7; border-radius: 8px; padding: 14px 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); display: flex; flex-direction: column; justify-content: space-between; gap: 8px;">
+                card_html = f"""<div style="background: {card_bg}; border-left: 4px solid {border_color}; border-top: 1px solid var(--studio-line); border-right: 1px solid var(--studio-line); border-bottom: 1px solid var(--studio-line); border-radius: 8px; padding: 14px 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); display: flex; flex-direction: column; justify-content: space-between; gap: 8px;">
     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 14px;">
-        <span style="font-size: 1.05rem; font-weight: 600; color: #1D1D1F; line-height: 1.45; word-break: break-word;">{text}</span>
+        <span style="font-size: 1.05rem; font-weight: 600; color: var(--studio-ink); line-height: 1.45; word-break: break-word;">{text}</span>
         <div style="background: {badge_bg}; color: {badge_text_color}; padding: 3px 10px; border-radius: 20px; border: 1.5px solid {badge_border}; font-size: 0.85rem; font-weight: 800; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.15); flex-shrink: 0;">
             <span>{icon}</span> <span>{l_score}%</span>
         </div>

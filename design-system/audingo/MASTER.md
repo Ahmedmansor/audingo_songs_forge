@@ -1,7 +1,8 @@
 # Audingo — quiet creative workspace
 
-Direction: Apple-inspired light surfaces, spacious typography, monochrome outline
-icons, and purposeful blue accents. Keep Audingo's own name and waveform identity.
+Direction: Apple-inspired surfaces, spacious typography, monochrome outline icons,
+and purposeful blue accents. Dark is the initial preference; a visible sidebar
+button switches between light and dark. Keep Audingo's own name and waveform identity.
 
 Applied UI/UX Pro Max's productivity-workspace guidance: clear hierarchy, consistent
 icons, readable contrast, visible keyboard focus, responsive cards, and reduced
@@ -24,7 +25,8 @@ Use the local system font stack (Apple system fonts when available, Segoe UI on
 Windows). No external font download. Use 16px body text, restrained heading
 weights, 12–20px corners, and pill-shaped buttons. Maintain 44px action targets.
 
-Native widget theme: `.streamlit/config.toml`. Existing custom presentation:
+Native widget themes: `.streamlit/config.toml`. Semantic light/dark tokens:
+`presentation/theme.py`. Existing custom presentation:
 `presentation/theme.css`. Domain icons: `presentation/components/identity.py`.
 Decorative SVGs use data-URI images because Streamlit's HTML sanitizer removes
 inline SVG. Navigation and action labels use Material Symbols Rounded.
@@ -34,6 +36,17 @@ navigation wraps. Respect reduced motion and retain Streamlit sidebar controls.
 Do not change machine-readable status emoji in refinement data; these are part
 of the existing pipeline contract.
 
+The appearance button uses a CCv2 adapter to Streamlit 1.63's native theme menu
+(stable `stMainMenuButton` and `stMainMenuItem-theme-*` test IDs), since there is no
+public Python theme setter. This changes native controls and canvas tables without
+reloading the page or dropping unsaved inputs. Browser theme persistence remains
+Streamlit's responsibility. The adapter is isolated in `components/appearance.py`
+and falls back to the built-in menu if the frontend structure changes. Recheck it
+when upgrading Streamlit. Temporary frontend token overrides keep custom cards
+in sync while the server receives the native theme context.
+
 Validation: compile checks, Streamlit AppTest rendering and dictionary filters
-against a database copy, browser review at desktop and 375px. Live Gemini calls
+against a database copy, browser review at desktop and 375px. Appearance was checked in both directions,
+with a filtered dictionary value retained, and dark preference retained after reload.
+Both token palettes pass 4.5:1 contrast for primary, secondary, and status text. Live Gemini calls
 and destructive actions are outside visual validation.

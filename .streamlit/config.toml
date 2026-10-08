@@ -7,26 +7,55 @@ headless = false
 toolbarMode = "developer"
 
 [theme]
-base = "light"
-primaryColor = "#0066CC"
-backgroundColor = "#F5F5F7"
-secondaryBackgroundColor = "#FFFFFF"
-textColor = "#1D1D1F"
+base = "dark"
 font = "-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
 headingFont = "-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
 baseFontSize = 16
 headingFontWeights = [650, 600, 600, 600, 600, 600]
-borderColor = "#D2D2D7"
 baseRadius = "0.75rem"
 buttonRadius = "full"
 showWidgetBorder = true
 showSidebarBorder = true
+
+[theme.light]
+primaryColor = "#0066CC"
+backgroundColor = "#F5F5F7"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#1D1D1F"
+borderColor = "#D2D2D7"
 linkColor = "#0066CC"
 codeBackgroundColor = "#ECECEE"
 codeTextColor = "#1D1D1F"
 dataframeHeaderBackgroundColor = "#ECECEE"
 chartCategoricalColors = ["#0066CC", "#216E39", "#855600", "#7352A2", "#B42318", "#6E6E73"]
 
-[theme.sidebar]
+[theme.dark]
+primaryColor = "#0071E3"
+backgroundColor = "#161617"
+secondaryBackgroundColor = "#232325"
+textColor = "#F5F5F7"
+borderColor = "#454549"
+linkColor = "#78B7FF"
+codeBackgroundColor = "#303033"
+codeTextColor = "#F5F5F7"
+dataframeHeaderBackgroundColor = "#303033"
+chartCategoricalColors = ["#78B7FF", "#8BD5A2", "#F0C779", "#C4B0ED", "#FFABA5", "#B1B1B7"]
+blueColor = "#78B7FF"
+blueTextColor = "#78B7FF"
+blueBackgroundColor = "#20354D"
+greenColor = "#8BD5A2"
+greenTextColor = "#8BD5A2"
+greenBackgroundColor = "#233C2C"
+redColor = "#FFABA5"
+redTextColor = "#FFABA5"
+redBackgroundColor = "#442A29"
+yellowTextColor = "#F0C779"
+yellowBackgroundColor = "#423621"
+
+[theme.light.sidebar]
 backgroundColor = "#FBFBFD"
 secondaryBackgroundColor = "#F5F5F7"
+
+[theme.dark.sidebar]
+backgroundColor = "#1C1C1E"
+secondaryBackgroundColor = "#232325"
