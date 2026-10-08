@@ -509,23 +509,35 @@ def build_curated_batch_from_words(
     return final_batch
 
 
-def swap_single_word(
+def _fetch_swap_candidate(
+    cursor,
     pos_type: str,
-    current_word_ids: List[int],
-    db_path: Path = DB_PATH
+    allocated_ids: set,
+    domain: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
-    """Replace one word with another unused word of the SAME pos_type, excluding all words in current batch."""
-    with get_connection(db_path) as conn:
-        cursor = conn.cursor()
-        placeholders = ",".join("?" * len(current_word_ids)) if current_word_ids else "0"
+    """Helper to fetch an unused word matching pos_type, prioritizing domain if provided with graceful fallback."""
+    use_domain = domain if (domain and domain != "All Domains" and "الكل" not in domain and "All" not in domain) else None
+    is_pure_neutral = (use_domain == "Basic / Neutral")
+
+    placeholders = ",".join("?" * len(allocated_ids)) if allocated_ids else "0"
+    base_exclude = f"id NOT IN ({placeholders})" if allocated_ids else "1=1"
+
+    # 1. Try target domain first if specified
+    if use_domain is not None:
+        if is_pure_neutral:
+            dom_sql = "AND (domain_coca = 'Basic / Neutral' OR domain_coca IS NULL)"
+            params = [pos_type] + list(allocated_ids) if allocated_ids else [pos_type]
+        else:
+            dom_sql = "AND domain_coca = ?"
+            params = [pos_type] + list(allocated_ids) + [use_domain] if allocated_ids else [pos_type, use_domain]
+
         query = f"""
             SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
             FROM ngsl_words
-            WHERE usage_count = 0 AND pos_type = ? AND id NOT IN ({placeholders})
+            WHERE usage_count = 0 AND pos_type = ? AND {base_exclude} {dom_sql}
             ORDER BY RANDOM()
             LIMIT 1
         """
-        params = [pos_type] + current_word_ids
         cursor.execute(query, params)
         row = cursor.fetchone()
         if row:
@@ -537,7 +549,72 @@ def swap_single_word(
                 "usage_count": row["usage_count"],
                 "domain": row["domain"]
             }
+
+    # 2. Fallback to any domain (if no domain specified or target domain pool exhausted for this POS)
+    fallback_query = f"""
+        SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
+        FROM ngsl_words
+        WHERE usage_count = 0 AND pos_type = ? AND {base_exclude}
+        ORDER BY RANDOM()
+        LIMIT 1
+    """
+    params = [pos_type] + list(allocated_ids) if allocated_ids else [pos_type]
+    cursor.execute(fallback_query, params)
+    row = cursor.fetchone()
+    if row:
+        return {
+            "id": row["id"],
+            "word": row["word"],
+            "lemma_family": row["lemma_family"],
+            "pos_type": row["pos_type"],
+            "usage_count": row["usage_count"],
+            "domain": row["domain"]
+        }
+
     return None
+
+
+def swap_single_word(
+    pos_type: str,
+    current_word_ids: List[int],
+    domain: Optional[str] = None,
+    db_path: Path = DB_PATH
+) -> Optional[Dict[str, Any]]:
+    """Replace one word with another unused word of the SAME pos_type from target domain, excluding all words in current batch."""
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        return _fetch_swap_candidate(cursor, pos_type, set(current_word_ids), domain=domain)
+
+
+def swap_multiple_words(
+    words_to_swap: List[Dict[str, Any]],
+    current_word_ids: List[int],
+    domain: Optional[str] = None,
+    db_path: Path = DB_PATH
+) -> Dict[int, Optional[Dict[str, Any]]]:
+    """
+    Replace multiple words with unused words of their respective pos_types from target domain,
+    ensuring no duplicate IDs are introduced across the batch or newly allocated words.
+    Returns mapping of old_id -> new_word_dict (or None if unavailable).
+    """
+    results: Dict[int, Optional[Dict[str, Any]]] = {}
+    allocated_ids = set(current_word_ids)
+
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        for word_item in words_to_swap:
+            pos = word_item["pos_type"]
+            old_id = word_item["id"]
+
+            new_word = _fetch_swap_candidate(cursor, pos, allocated_ids, domain=domain)
+            if new_word:
+                results[old_id] = new_word
+                allocated_ids.discard(old_id)
+                allocated_ids.add(new_word["id"])
+            else:
+                results[old_id] = None
+
+    return results
 
 
 def get_all_lemma_mappings(db_path: Path = DB_PATH) -> Dict[str, str]:

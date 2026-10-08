@@ -24,6 +24,7 @@ def approve_and_save_song(
     creative_concept: str = "",
     db_path: Path = DB_PATH,
     refinement_report: Optional[Dict[str, Any]] = None,
+    source_domain: Optional[str] = None,
 ) -> Tuple[int, int, int]:
     """Approve and save song atomically, incrementing usage for words."""
     with get_connection(db_path) as conn:
@@ -42,13 +43,13 @@ def approve_and_save_song(
             """
             INSERT INTO songs (
                 title, lyrics, target_words, bonus_words, reused_words, extra_words,
-                mood_breakdown, genre, song_structure, creative_concept, created_at, refinement_report
+                mood_breakdown, genre, song_structure, creative_concept, created_at, refinement_report, source_domain
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 title, lyrics, target_words_str, bonus_words_str, reused_words_str, extra_words_str,
-                mood_json, genre, song_structure, creative_concept, cairo_now, refinement_json
+                mood_json, genre, song_structure, creative_concept, cairo_now, refinement_json, source_domain
             )
         )
         song_id = cursor.lastrowid
@@ -81,7 +82,7 @@ def get_all_songs(db_path: Path = DB_PATH) -> pd.DataFrame:
     """Retrieve all saved songs from the database, sorted newest first."""
     with get_connection(db_path) as conn:
         df = pd.read_sql_query(
-            "SELECT id, title, lyrics, target_words, bonus_words, reused_words, extra_words, mood_breakdown, genre, song_structure, creative_concept, created_at, refinement_report FROM songs ORDER BY id DESC",
+            "SELECT id, title, lyrics, target_words, bonus_words, reused_words, extra_words, mood_breakdown, genre, song_structure, creative_concept, created_at, refinement_report, source_domain FROM songs ORDER BY id DESC",
             conn
         )
         return df
@@ -100,7 +101,8 @@ def update_song(
     song_structure: Optional[str] = None,
     creative_concept: Optional[str] = None,
     sync_ngsl_usage: bool = True,
-    db_path: Path = DB_PATH
+    db_path: Path = DB_PATH,
+    source_domain: Optional[str] = None,
 ) -> bool:
     """Update an existing song's details and metadata in SQLite."""
     with get_connection(db_path) as conn:
@@ -138,6 +140,8 @@ def update_song(
             updates.append(("song_structure", song_structure))
         if creative_concept is not None:
             updates.append(("creative_concept", creative_concept))
+        if source_domain is not None:
+            updates.append(("source_domain", source_domain or None))
             
         set_clause = ", ".join(f"{col} = ?" for col, _ in updates)
         params = [val for _, val in updates] + [song_id]

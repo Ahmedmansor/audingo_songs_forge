@@ -333,6 +333,7 @@ def render_tab_studio():
         batch_domain_data = db.compute_domain_breakdown(current_words)
         render_domain_breakdown_section(batch_domain_data, title="📊 Active 20-Word Batch Domain Balance", compact=True)
 
+        # Pre-Lyrics Audit Bar (Vocabulary vs Story Context)
         audit_data = st.session_state.get("word_fit_audit") or {}
         flagged_list = audit_data.get("flagged_words", [])
         flagged_dict = {
@@ -340,11 +341,131 @@ def render_tab_studio():
             for fw in flagged_list if fw.get("word")
         }
 
-        if flagged_dict:
-            st.warning(
-                f"⚠️ **Pre-Lyrics Audit Active:** {len(flagged_dict)} word(s) flagged below as potentially awkward or out of context. "
-                f"Review the highlighted cards and use the **Swap** button to replace any clashing word, then re-run the audit."
-            )
+        st.markdown("##### :material/fact_check: Pre-Lyrics Audit (Vocabulary vs Story Context):")
+        aud_col_btn, aud_col_status = st.columns([1.5, 2], vertical_alignment="center")
+        with aud_col_btn:
+            if st.button(
+                ":material/fact_check: Audit Words vs Story Context",
+                type="secondary",
+                width="stretch",
+                key="btn_audit_words_story",
+                help="Audit the 20 target words against the story scenario to check for words that feel forced, overly technical, or out of context for everyday conversational dialogue."
+            ):
+                concept_val = st.session_state.custom_concept.strip() or (
+                    st.session_state.mood_analysis.get("creative_concept", "").strip() if st.session_state.mood_analysis else ""
+                )
+                if not concept_val:
+                    st.warning("💡 Please generate or write a Story / Creative Concept in Step 2 below before auditing.")
+                elif not current_words:
+                    st.warning("⚠️ No active target batch found.")
+                else:
+                    with st.spinner("🔍 Auditing 20 words against story scenario with Gemini Flash..."):
+                        audit_res = gemini_client.audit_words_against_story(current_words, concept_val)
+                        st.session_state.word_fit_audit = audit_res
+                        sync_active_session()
+                        st.rerun()
+
+        with aud_col_status:
+            if st.session_state.get("word_fit_audit"):
+                audit_info = st.session_state.word_fit_audit
+                flagged_arr = audit_info.get("flagged_words", [])
+                if not flagged_arr or audit_info.get("all_fit"):
+                    st.success("✅ **Harmony Passed:** All 20 words fit naturally into this story scenario without forcing awkward dialogue!")
+                else:
+                    st.warning(f"⚠️ **{len(flagged_arr)} Word(s) Flagged:** Check the highlighted cards below to easily swap them.")
+
+        if st.session_state.get("word_fit_audit"):
+            audit_info = st.session_state.word_fit_audit
+            flagged_arr = audit_info.get("flagged_words", [])
+            summary_txt = audit_info.get("summary", "")
+            if flagged_arr:
+                with st.expander(f":material/info: View Audit Feedback ({len(flagged_arr)} Words Flagged)", expanded=False):
+                    if summary_txt:
+                        st.markdown(f"**Overall Assessment:** {summary_txt}")
+                    for item in flagged_arr:
+                        st.markdown(f"- **`{item.get('word', '')}`**: {item.get('reason', '')}")
+                    if st.button(":material/close: Dismiss Audit Warnings", key="dismiss_audit_btn"):
+                        st.session_state.word_fit_audit = None
+                        sync_active_session()
+                        st.rerun()
+
+        # Check active checkbox selections for batch swap
+        selected_indices = [
+            i for i, w in enumerate(st.session_state.target_batch)
+            if st.session_state.get(f"chk_swap_{w['id']}_{i}", False)
+        ]
+        num_selected = len(selected_indices)
+
+        # Batch Swap Action Toolbar
+        col_bswap_info, col_bswap_btn, col_bswap_quick = st.columns([1.6, 1.4, 1.2], vertical_alignment="center")
+        with col_bswap_info:
+            if num_selected > 0:
+                st.markdown(f"**⚡ {num_selected} word(s) selected for batch swap:**")
+            else:
+                st.markdown("<span style='color: var(--studio-muted); font-size: 0.88rem;'>☑️ Check boxes below to swap multiple words at once:</span>", unsafe_allow_html=True)
+        
+        with col_bswap_btn:
+            if num_selected > 0:
+                if st.button(
+                    f":material/swap_calls: Swap Selected ({num_selected})",
+                    type="primary",
+                    width="stretch",
+                    key="btn_swap_selected_words",
+                    help=f"Swap all {num_selected} selected words simultaneously with fresh unused words"
+                ):
+                    words_to_swap = [st.session_state.target_batch[i] for i in selected_indices]
+                    selected_dom = st.session_state.get("selected_domain", "All Domains")
+                    swap_results = db.swap_multiple_words(words_to_swap, current_ids, domain=selected_dom)
+
+                    updated_batch = list(st.session_state.target_batch)
+                    swapped_count = 0
+                    swapped_names = []
+
+                    for i in selected_indices:
+                        old_w = updated_batch[i]
+                        new_w = swap_results.get(old_w["id"])
+                        if new_w:
+                            updated_batch[i] = new_w
+                            swapped_count += 1
+                            dom_tag = f" [{new_w.get('domain', '')}]" if new_w.get("domain") and selected_dom != "All Domains" else ""
+                            swapped_names.append(f"{old_w['word']} → {new_w['word']}{dom_tag}")
+                        st.session_state.pop(f"chk_swap_{old_w['id']}_{i}", None)
+
+                    if swapped_count > 0:
+                        set_target_batch(updated_batch, keep_direction=True, clear_lyrics=False)
+                        st.session_state.master_prompt = ""
+                        st.session_state.studio_suno_prompt = ""
+                        st.session_state.graph_report = None
+
+                        if st.session_state.get("word_fit_audit"):
+                            swapped_lowers = {w["word"].lower().strip() for w in words_to_swap}
+                            cur_flagged = st.session_state.word_fit_audit.get("flagged_words", [])
+                            st.session_state.word_fit_audit["flagged_words"] = [
+                                fw for fw in cur_flagged if fw.get("word", "").lower().strip() not in swapped_lowers
+                            ]
+                        sync_active_session()
+                        dom_info = f" from '{selected_dom}'" if selected_dom and selected_dom != "All Domains" else ""
+                        st.success(f"✨ Swapped {swapped_count} words{dom_info}: {', '.join(swapped_names[:4])}{'...' if len(swapped_names) > 4 else ''}")
+                        st.rerun()
+                    else:
+                        st.warning("No more unused words available to swap for the selected parts of speech.")
+
+        with col_bswap_quick:
+            flagged_unselected = [
+                i for i, w in enumerate(st.session_state.target_batch)
+                if w["word"].lower().strip() in flagged_dict and not st.session_state.get(f"chk_swap_{w['id']}_{i}", False)
+            ]
+            if flagged_unselected:
+                if st.button(f":material/checklist: Select Flagged ({len(flagged_unselected)})", width="stretch", help="Check all words flagged by the audit"):
+                    for i in flagged_unselected:
+                        w = st.session_state.target_batch[i]
+                        st.session_state[f"chk_swap_{w['id']}_{i}"] = True
+                    st.rerun()
+            elif num_selected > 0:
+                if st.button(":material/close: Clear Selection", width="stretch", help="Uncheck all selected words"):
+                    for i, w in enumerate(st.session_state.target_batch):
+                        st.session_state[f"chk_swap_{w['id']}_{i}"] = False
+                    st.rerun()
 
         cols = st.columns(4)
         for idx, word_item in enumerate(st.session_state.target_batch):
@@ -367,12 +488,28 @@ def render_tab_studio():
 
                 is_flagged = word_text.lower().strip() in flagged_dict
                 flag_reason = flagged_dict.get(word_text.lower().strip(), "")
+                is_checked = st.session_state.get(f"chk_swap_{word_item['id']}_{idx}", False)
 
-                if is_flagged:
+                if is_checked:
+                    if is_flagged:
+                        card_style = (
+                            "border: 2px solid #4F46E5; background: var(--studio-amber-bg); "
+                            "box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.25);"
+                        )
+                    else:
+                        card_style = (
+                            "border: 2px solid #4F46E5; background: var(--studio-tint); "
+                            "box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);"
+                        )
+                elif is_flagged:
                     card_style = (
                         "border: 2px solid #F59E0B; background: var(--studio-amber-bg); "
                         "box-shadow: 0 1px 4px rgba(245, 158, 11, 0.2);"
                     )
+                else:
+                    card_style = "border: 1px solid var(--studio-line); background: var(--studio-surface);"
+
+                if is_flagged:
                     reason_html = (
                         f'<div style="margin-top: 6px; padding: 4px 6px; border-radius: 6px; '
                         f'background: var(--studio-amber-bg); border: 1px solid var(--studio-line); color: var(--studio-amber); '
@@ -380,7 +517,6 @@ def render_tab_studio():
                         f'⚠️ <b>Mismatch:</b> {flag_reason}</div>'
                     )
                 else:
-                    card_style = "border: 1px solid var(--studio-line); background: var(--studio-surface);"
                     reason_html = ""
                 
                 with st.container():
@@ -398,26 +534,37 @@ def render_tab_studio():
                         """,
                         unsafe_allow_html=True
                     )
-                    if st.button(f":material/refresh: Swap", key=f"swap_{word_item['id']}_{idx}", help=f"Swap '{word_item['word']}' with another unused {pos}"):
-                        swapped = db.swap_single_word(pos, current_ids)
-                        if swapped:
-                            updated_batch = list(st.session_state.target_batch)
-                            updated_batch[idx] = swapped
-                            set_target_batch(updated_batch, keep_direction=True, clear_lyrics=False)
-                            st.session_state.master_prompt = ""
-                            st.session_state.studio_suno_prompt = ""
-                            st.session_state.graph_report = None
-                            if st.session_state.get("word_fit_audit"):
-                                old_w = word_item["word"].lower().strip()
-                                cur_flagged = st.session_state.word_fit_audit.get("flagged_words", [])
-                                st.session_state.word_fit_audit["flagged_words"] = [
-                                    fw for fw in cur_flagged if fw.get("word", "").lower().strip() != old_w
-                                ]
-                            sync_active_session()
-                            st.success(f"Swapped '{word_item['word']}' → '{swapped['word']}'. Re-run audit to verify!")
-                            st.rerun()
-                        else:
-                            st.warning(f"No more unused {pos} words available to swap.")
+                    col_chk, col_btn = st.columns([1.1, 1], vertical_alignment="center")
+                    with col_chk:
+                        st.checkbox(
+                            "Select",
+                            key=f"chk_swap_{word_item['id']}_{idx}",
+                            help=f"Select '{word_text}' for batch swap"
+                        )
+                    with col_btn:
+                        if st.button(f":material/refresh: Swap", key=f"swap_{word_item['id']}_{idx}", help=f"Swap '{word_item['word']}' instantly"):
+                            selected_dom = st.session_state.get("selected_domain", "All Domains")
+                            swapped = db.swap_single_word(pos, current_ids, domain=selected_dom)
+                            if swapped:
+                                st.session_state.pop(f"chk_swap_{word_item['id']}_{idx}", None)
+                                updated_batch = list(st.session_state.target_batch)
+                                updated_batch[idx] = swapped
+                                set_target_batch(updated_batch, keep_direction=True, clear_lyrics=False)
+                                st.session_state.master_prompt = ""
+                                st.session_state.studio_suno_prompt = ""
+                                st.session_state.graph_report = None
+                                if st.session_state.get("word_fit_audit"):
+                                    old_w = word_item["word"].lower().strip()
+                                    cur_flagged = st.session_state.word_fit_audit.get("flagged_words", [])
+                                    st.session_state.word_fit_audit["flagged_words"] = [
+                                        fw for fw in cur_flagged if fw.get("word", "").lower().strip() != old_w
+                                    ]
+                                sync_active_session()
+                                dom_info = f" [{swapped['domain']}]" if swapped.get("domain") and selected_dom != "All Domains" else ""
+                                st.success(f"Swapped '{word_item['word']}' → '{swapped['word']}'{dom_info}. Re-run audit to verify!")
+                                st.rerun()
+                            else:
+                                st.warning(f"No more unused {pos} words available to swap.")
 
         st.markdown("---")
 
@@ -489,53 +636,7 @@ def render_tab_studio():
             st.session_state.custom_concept = new_concept
             sync_active_session()
 
-        # Pre-Lyrics Audit Bar (Vocabulary vs Story Context)
-        st.markdown("##### :material/fact_check: Pre-Lyrics Audit (Vocabulary vs Story Context):")
-        aud_col_btn, aud_col_status = st.columns([1.5, 2], vertical_alignment="center")
-        with aud_col_btn:
-            if st.button(
-                ":material/fact_check: Audit Words vs Story Context",
-                type="secondary",
-                width="stretch",
-                help="Audit the 20 target words against the story scenario to check for words that feel forced, overly technical, or out of context for everyday conversational dialogue."
-            ):
-                concept_val = st.session_state.custom_concept.strip() or (
-                    st.session_state.mood_analysis.get("creative_concept", "").strip() if st.session_state.mood_analysis else ""
-                )
-                if not concept_val:
-                    st.warning("💡 Please generate or write a Story / Creative Concept above before auditing.")
-                elif not current_words:
-                    st.warning("⚠️ No active target batch found.")
-                else:
-                    with st.spinner("🔍 Auditing 20 words against story scenario with Gemini Flash..."):
-                        audit_res = gemini_client.audit_words_against_story(current_words, concept_val)
-                        st.session_state.word_fit_audit = audit_res
-                        sync_active_session()
-                        st.rerun()
 
-        with aud_col_status:
-            if st.session_state.get("word_fit_audit"):
-                audit_info = st.session_state.word_fit_audit
-                flagged_arr = audit_info.get("flagged_words", [])
-                if not flagged_arr or audit_info.get("all_fit"):
-                    st.success("✅ **Harmony Passed:** All 20 words fit naturally into this story scenario without forcing awkward dialogue!")
-                else:
-                    st.warning(f"⚠️ **{len(flagged_arr)} Word(s) Flagged:** Check the highlighted cards in Step 1 above to easily swap them.")
-
-        if st.session_state.get("word_fit_audit"):
-            audit_info = st.session_state.word_fit_audit
-            flagged_arr = audit_info.get("flagged_words", [])
-            summary_txt = audit_info.get("summary", "")
-            if flagged_arr:
-                with st.expander(f":material/info: View Audit Feedback ({len(flagged_arr)} Words Flagged)", expanded=False):
-                    if summary_txt:
-                        st.markdown(f"**Overall Assessment:** {summary_txt}")
-                    for item in flagged_arr:
-                        st.markdown(f"- **`{item.get('word', '')}`**: {item.get('reason', '')}")
-                    if st.button(":material/close: Dismiss Audit Warnings", key="dismiss_audit_btn"):
-                        st.session_state.word_fit_audit = None
-                        sync_active_session()
-                        st.rerun()
 
         # Generate Prompts
         st.markdown("---")

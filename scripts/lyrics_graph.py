@@ -30,6 +30,30 @@ def compute_line_status(score: int) -> tuple[str, str]:
     else:
         return "❌", "🔴"
 
+def critic_calibration(profile: Dict[str, Any]) -> str:
+    """Shared rubric for critic-only and refinement-loop evaluations."""
+    return """REGISTER AND FAIR SCORING:
+- Natural English includes educated and moderately formal speech when appropriate to the speaker and situation. Everyday meaning does not mean street slang.
+- Basic / Neutral vocabulary is valid in every category. Judge actual meaning and context, not category labels.
+- Ordinary pronouns and references are valid when clear in a real situation; the standalone test does not require every line to retell the story.
+- Normal chorus repetition is not an authenticity flaw. Flag repetition only if it creates a specific meaning or continuity problem.
+- Support every deduction with a concrete defect.
+- Do not give 90+ to a line you cannot defend. A real song rarely has every line above 90. If almost all your scores are 90+, re-check yourself.
+- Do not apply multiple deductions for the same underlying defect.
+- Score every sung lyric line, including repeated occurrences; omit section tags and blank lines.
+- Authenticity measures only the quality of the lyric lines. Missing, unused, or dropped target words and coverage percentages must NEVER lower line scores or overall_score.
+- overall_score is the rounded arithmetic mean of the line scores, with equal weight per lyric line. Coverage and dropped_words are separate information, never a penalty or bonus.
+- Recommend dropping a target only for an actual contextual or usage problem, never merely for its register.
+""" + profile.get("critic_guidance", "")
+
+
+def average_line_score(lines: List[Dict[str, Any]]) -> int:
+    """Authenticity is solely the mean of supplied numeric line scores."""
+    scores = [item.get("score") for item in lines
+              if isinstance(item.get("score"), (int, float))]
+    return round(sum(scores) / len(scores)) if scores else 0
+
+
 class LineReport(TypedDict):
     line: str
     status: str # "✅", "⚠️", "❌", "🗑️"
@@ -115,6 +139,8 @@ CONTEXTUAL ANCHORS:
 - Dialect: {dialect}
 - Target words (the only words that count as target words): {words_str}
 
+{critic_calibration(p)}
+
 Start every line at 100 and subtract:
 - Not something a native speaker would say in this setting (poetic, literary, inverted word order): -25
 - Filler added for rhyme or rhythm, or vague when read alone ("I hope that you can see"): -20
@@ -128,7 +154,6 @@ Start every line at 100 and subtract:
 
 Rules:
 - If any deduction applies, the score cannot exceed 89. A line with no deductions scores 90-100.
-- Do not give 90+ to a line you cannot defend. A real song rarely has every line above 90. If almost all your scores are 90+, re-check yourself.
 - Apply the target-word deduction only to the official target words listed above.
 - For each line return: number, the line, score, and a short issue (or "none").
 - If a target word completely destroys the realism of the scene or sounds forced, list it in dropped_words.
@@ -182,9 +207,7 @@ OUTPUT JSON SCHEMA:
                 if "number" not in item:
                     item["number"] = idx
             
-            valid_scores = [l.get("score") for l in lines_review if isinstance(l.get("score"), (int, float))]
-            if valid_scores:
-                critic_report["overall_score"] = round(sum(valid_scores) / len(valid_scores))
+        critic_report["overall_score"] = average_line_score(lines_review)
         
         # Log this request
         if "execution_log" not in state:
@@ -399,6 +422,8 @@ CONTEXTUAL ANCHORS:
 - Dialect: {dialect}
 - Target words (the only words that count as target words): {words_str}
 
+{critic_calibration(p)}
+
 Start every line at 100 and subtract:
 - Not something a native speaker would say in this setting (poetic, literary, inverted word order): -25
 - Filler added for rhyme or rhythm, or vague when read alone ("I hope that you can see"): -20
@@ -412,7 +437,6 @@ Start every line at 100 and subtract:
 
 Rules:
 - If any deduction applies, the score cannot exceed 89. A line with no deductions scores 90-100.
-- Do not give 90+ to a line you cannot defend. A real song rarely has every line above 90. If almost all your scores are 90+, re-check yourself.
 - Apply the target-word deduction only to the official target words listed above.
 - For each line return: number, the line, score, and a short issue (or "none").
 - If a target word completely destroys the realism of the scene or sounds forced, list it in dropped_words.
@@ -444,7 +468,6 @@ OUTPUT JSON SCHEMA:
     
     # Strictly compute color and status in Python code: 🟢 >= 90, 🟡 75-89, 🔴 < 75
     parsed_lines = []
-    scores = []
     for idx, item in enumerate(lines_review, 1):
         raw_score = item.get("score", 70)
         status_icon, color_circle = compute_line_status(raw_score)
@@ -461,10 +484,8 @@ OUTPUT JSON SCHEMA:
             "issue": issue_text
         }
         parsed_lines.append(parsed_entry)
-        if isinstance(raw_score, (int, float)):
-            scores.append(raw_score)
             
-    overall_score = round(sum(scores) / len(scores)) if scores else 0
+    overall_score = average_line_score(parsed_lines)
     passed_count = sum(1 for l in parsed_lines if l["score"] >= 90)
     warn_count = sum(1 for l in parsed_lines if 75 <= l["score"] < 90)
     flagged_count = sum(1 for l in parsed_lines if l["score"] < 75)

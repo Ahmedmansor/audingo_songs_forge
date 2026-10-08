@@ -62,6 +62,15 @@ class RefinementArchiveTests(unittest.TestCase):
         matching, _ = select_refinement_snapshot(LYRICS, {"critic_only_report": {**REPORT, "raw_lyrics": "Old"}, "graph_report": pipeline}, {})
         self.assertEqual(matching["mode"], "pipeline")
 
+    def test_explicit_final_version_heading_does_not_lose_report(self):
+        report = {**REPORT, "raw_lyrics": "**النسخة النهائية**\n\n" + LYRICS}
+        snapshot, stale = select_refinement_snapshot(LYRICS, {"critic_only_report": report}, {})
+        self.assertIsNotNone(snapshot)
+        self.assertFalse(stale)
+        self.assertTrue(report_matches_lyrics(snapshot, LYRICS))
+        self.assertFalse(report_matches_lyrics(snapshot, LYRICS.replace("hand?", "ride?")))
+        self.assertFalse(report_matches_lyrics(snapshot, "**A real lyric**\n" + LYRICS))
+
     def test_snapshot_roundtrip_independence_edits_and_deletion(self):
         song_id = self.save(self.snapshot())
         self.save(title="No critic")

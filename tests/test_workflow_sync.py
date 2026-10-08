@@ -110,6 +110,25 @@ class WorkflowSyncTests(unittest.TestCase):
         self.assertIsNone(app.session_state["analysis_results"])
         self.assertFalse(any("Approve & Save" in item.label for item in app.button))
 
+    def test_reviewed_title_transfers_and_remains_editable(self):
+        app = self.selected_app()
+        app.text_input(key="commit_song_title_input_field").set_value("Old title").run()
+        app.text_area(key="refine_draft").set_value(
+            "[Title]: Grandpa's Letters\n[Verse 1]\nCan you give me a hand?"
+        ).run()
+        self.button(app, "Run critic").click().run()
+        self.button(app, "Send reviewed lyrics").click().run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.text_input(key="commit_song_title_input_field").value, "Grandpa's Letters")
+        self.assertEqual(app.session_state["song_title_input"], "Grandpa's Letters")
+        self.assertNotIn("[Title]", app.text_area(key="commit_lyrics").value)
+        app.text_input(key="commit_song_title_input_field").set_value("Edited title").run()
+        self.assertEqual(app.session_state["song_title_input"], "Edited title")
+        app.text_area(key="refine_draft").set_value("[Title]:\n[Verse 1]\nCan you give me a hand?").run()
+        self.button(app, "Send reviewed lyrics").click().run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.text_input(key="commit_song_title_input_field").value, "Edited title")
+
     def test_reset_token_discards_old_browser_state(self):
         app = self.selected_app()
         with get_connection(self.path) as conn:
@@ -136,6 +155,7 @@ class WorkflowSyncTests(unittest.TestCase):
         self.assertEqual(app.session_state["target_batch"], [])
         self.assertFalse(any(item.key in ("refine_draft", "commit_lyrics") for item in app.text_area))
         saved = db.get_all_songs().iloc[0]
+        self.assertEqual(saved.source_domain, app.session_state["selected_domain"])
         snapshot = json.loads(saved.refinement_report)
         self.assertEqual(snapshot["report"]["context"]["target_words"], batch)
         self.assertEqual(snapshot["report"]["overall_score"], 95)

@@ -7,12 +7,19 @@ import re
 from typing import Any, Mapping, Optional
 
 
+def is_draft_heading(line: str) -> bool:
+    """Recognize explicit draft labels, never arbitrary bold lyric lines."""
+    return line.strip().casefold() in {"**النسخة النهائية**", "**final version**"}
+
+
 def lyrics_signature(text: str) -> tuple[str, ...]:
     """Ignore layout/section labels, but preserve wording, order and repetitions."""
     lines = []
     for line in (text or "").splitlines():
         stripped = line.strip()
         lower = stripped.lower()
+        if not lines and is_draft_heading(stripped):
+            continue
         if lower.startswith(("[words used]", "[words left out]")):
             break
         if lower.startswith(("[title]:", "[genre]:", "[suno style]:")):

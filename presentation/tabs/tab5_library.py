@@ -42,6 +42,9 @@ def _authenticity_stat(row):
 def _render_overview(row):
     song_id = int(row["id"])
     lyrics = row["lyrics"] or ""
+    with st.container(border=True):
+        st.markdown(":material/category: **Song category**")
+        st.write(row.get("source_domain") or "Not tagged")
     all_ngsl = set().union(*(_words(row.get(field)) for field in ("target_words", "bonus_words", "reused_words")))
     render_domain_breakdown_section(db.compute_domain_breakdown(sorted(all_ngsl)), title="Domain breakdown", compact=True)
     snapshot = parse_refinement_snapshot(row.get("refinement_report"))
@@ -105,17 +108,24 @@ def render_tab_library():
             st.caption("Approve your first song in Commit Lab to save its lyrics, vocabulary, critic report and production packages.")
         return
     songs = songs.reset_index(drop=True)
+    if "source_domain" not in songs:
+        songs["source_domain"] = None
+    category_labels = songs["source_domain"].fillna("").replace("", "Not tagged")
     songs["row_num"] = songs["id"].rank(method="dense", ascending=True).astype(int)
     with st.container(key="library_toolbar"):
         a, b = st.columns([2, 1])
         query = a.text_input("Search songs", placeholder="Title, lyrics or vocabulary…", key="library_search", icon=":material/search:")
         order = b.selectbox("Sort by", ["Newest first", "Oldest first", "Title A–Z"], key="library_sort")
+        category = st.selectbox("Song category", ["All categories"] + sorted(category_labels.unique()), key="library_category_filter",
+            help="The category selected in Studio, independent of the vocabulary breakdown.")
     filtered = songs
     if query.strip():
         mask = pd.Series(False, index=songs.index)
         for field in ("title", "lyrics", "target_words", "bonus_words", "reused_words", "extra_words"):
             mask |= songs[field].fillna("").astype(str).str.contains(query.strip(), case=False, regex=False)
         filtered = songs[mask]
+    if category != "All categories":
+        filtered = filtered[category_labels.loc[filtered.index] == category]
     if order == "Oldest first":
         filtered = filtered.sort_values("id")
     elif order == "Title A–Z":

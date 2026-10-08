@@ -109,6 +109,26 @@ class LibraryLayoutTests(unittest.TestCase):
         self.assertIn("30 left", html)
         self.assertIn('aria-valuenow="0.0"', sidebar_domain_progress("Empty", {"total": 0, "used": 0}))
 
+    def test_category_edit_filter_and_unrelated_edit_preserves_tag(self):
+        app = self.open_song()
+        app.button_group(key=f"library_section_{self.song_id}").set_value("Edit").run()
+        app.selectbox(key=f"edit_category_{self.song_id}").select("Science, Tech & Academia")
+        next(button for button in app.button if "Save updates" in button.label).click().run()
+        self.assertFalse(app.exception)
+        row = db.get_all_songs().query("id == @self.song_id").iloc[0]
+        self.assertEqual(row.source_domain, "Science, Tech & Academia")
+        db.update_song(self.song_id, row.title, row.lyrics, row.target_words)
+        self.assertEqual(db.get_all_songs().query("id == @self.song_id").iloc[0].source_domain, row.source_domain)
+        app.selectbox(key="library_category_filter").select("Science, Tech & Academia").run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.selectbox(key="library_selected_song").value, self.song_id)
+        app.text_input(key="library_search").set_value("Another morning").run()
+        self.assertTrue(any("No songs match" in info.value for info in app.info))
+        app.text_input(key="library_search").set_value("").run()
+        app.selectbox(key="library_category_filter").select("Not tagged").run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.selectbox(key="library_selected_song").value, self.other_id)
+
 
 if __name__ == "__main__":
     unittest.main()

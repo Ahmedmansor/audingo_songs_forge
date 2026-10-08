@@ -6,8 +6,22 @@ import db
 from scripts.lyrics_graph import run_refinement_graph, run_critic_only, compute_line_status
 from domain.services.prompt_service import build_manual_surgical_prompt
 from constants import get_category_profile
-from domain.services.refinement_archive import report_applies_to_draft, lyrics_signature
+from domain.services.refinement_archive import report_applies_to_draft, lyrics_signature, is_draft_heading
 from presentation.components.session import apply_pending_workflow_reset, sync_active_session
+
+
+def send_lyrics_to_commit(lyrics: str, draft: str):
+    """Transfer reviewed lyrics and the title stripped before critic evaluation."""
+    st.session_state["raw_lyrics_input"] = lyrics
+    st.session_state["commit_lyrics"] = lyrics
+    st.session_state["analysis_results"] = None
+    title_match = re.search(r"^[ \t]*\[title\][ \t]*:[ \t]*([^\r\n]+)", draft, re.IGNORECASE | re.MULTILINE)
+    if title_match and title_match.group(1).strip():
+        title = title_match.group(1).strip()
+        st.session_state["song_title_input"] = title
+        st.session_state["commit_song_title_input_field"] = title
+        st.session_state["title_has_error"] = False
+
 
 def render_tab_refinement():
     st.subheader("Find the right words.")
@@ -131,6 +145,8 @@ def render_tab_refinement():
             for l in raw_text.splitlines():
                 s = l.strip()
                 s_lower = s.lower()
+                if not any(line.strip() for line in lines) and is_draft_heading(s):
+                    continue
                 if s_lower.startswith("[words used]") or s_lower.startswith("[words left out]"):
                     break
                 if s_lower.startswith("[title]:") or s_lower.startswith("[genre]:") or s_lower.startswith("[suno style]:") or s_lower == "[lyrics]:":
@@ -268,9 +284,7 @@ def render_tab_refinement():
                         st.rerun()
 
                 if st.button(":material/arrow_forward: Send reviewed lyrics to Commit Lab", width="stretch"):
-                    st.session_state["raw_lyrics_input"] = critic_report.get("raw_lyrics", "")
-                    st.session_state["commit_lyrics"] = st.session_state["raw_lyrics_input"]
-                    st.session_state["analysis_results"] = None
+                    send_lyrics_to_commit(critic_report.get("raw_lyrics", ""), draft)
                     st.toast("تم إرسال الكلمات إلى Commit Lab لمراجعة المفردات والاعتماد.")
 
                 dropped = critic_report.get("dropped_words", [])
@@ -319,9 +333,7 @@ def render_tab_refinement():
                             st.rerun()
                     with col_btn2:
                         if st.button(":material/arrow_forward: إرسال لمعمل الاعتماد (Commit Lab)", width="stretch", help="إرسال الكلمات المصقولة مباشرة إلى Tab 4 لحفظها واعتمادها"):
-                            st.session_state["raw_lyrics_input"] = lyrics_text
-                            st.session_state["commit_lyrics"] = lyrics_text
-                            st.session_state["analysis_results"] = None
+                            send_lyrics_to_commit(lyrics_text, draft)
                             st.toast("🚀 تم الإرسال إلى Commit Lab! افتح Tab 4 لحفظ الأغنية.")
 
                 # External AI Surgical Prompt Exporter (Collapsed by default)

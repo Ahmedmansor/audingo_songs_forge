@@ -135,6 +135,19 @@ CATEGORY_PROFILES = {
     "Science, Tech & Academia": {
         "setting": "lab, classroom, study group, tech team, research project",
         "register": FIELD,
+        "critic_guidance": (
+            "Accept moderately formal, educated spoken English in this category; street slang is not the standard. "
+            "Judge the actual story, including personal or family scenes involving academic or technical lives; "
+            "the suggested settings are examples, not mandatory locations. "
+            "Do not deduct merely because storage, assumption, connect, scientist, university, input, database, "
+            "necessary, analysis, or progress sounds academic, technical, or professional. "
+            "For example, 'These boxes sat in storage for years.', 'I made a bad assumption.', "
+            "'He taught at the university.', 'He always wanted my input,' and 'Not everything needs analysis.' "
+            "can be natural in a family reflection. These are calibration examples, not guaranteed scores. "
+            "Technical vocabulary does not inherently break an emotional mood. "
+            "Still flag a genuinely wrong meaning, unnatural collocation, unclear reference, or unsupported story jump; "
+            "explain the specific problem rather than calling a word formal, clinical, or corporate."
+        ),
         "default_story": "A relatable story set in a lab, classroom, or tech team facing a real challenge together.",
         "critic_name": "🔬 Science & Tech Critic",
     },

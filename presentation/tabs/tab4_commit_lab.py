@@ -49,6 +49,7 @@ def render_tab_commit_lab():
         return
 
     st.caption(f"Genre: {st.session_state.get('selected_genre', '')} · Voice: {st.session_state.get('selected_vocalist', '')} · Structure: {st.session_state.get('selected_structure', '')}")
+    st.caption(f"Song category: {st.session_state.get('selected_domain') or 'Not tagged'} · Selected in Studio; independent of vocabulary percentages.")
     if st.session_state.get("custom_concept"):
         st.write(st.session_state.custom_concept)
     nlp = load_nlp()
@@ -349,6 +350,7 @@ def render_tab_commit_lab():
                     song_structure=current_structure,
                     creative_concept=current_concept,
                     refinement_report=refinement_snapshot,
+                    source_domain=st.session_state.get("selected_domain") or None,
                 )
 
                 current_vocalist = st.session_state.get("selected_vocalist", "Male")
