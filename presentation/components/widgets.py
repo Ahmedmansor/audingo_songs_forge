@@ -242,6 +242,148 @@ def render_copy_words_toolbar(words: List[str]):
     components.html(html_code, height=44, scrolling=False)
 
 
+def render_floating_audit_prompt_fab(target_words: Optional[List[str]] = None):
+    """
+    Renders a sleek, persistent floating action button (FAB) in the Studio tab.
+    Clicking the button immediately copies the strict SONG AUDIT PROMPT to the clipboard.
+    """
+    from domain.services.prompt_service import build_song_audit_prompt
+
+    prompt_text = build_song_audit_prompt(target_words=target_words)
+    prompt_json = json.dumps(prompt_text)
+
+    html_code = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta charset="utf-8">
+    <style>
+      body {{ margin: 0; padding: 0; background: transparent; overflow: hidden; }}
+    </style>
+    </head>
+    <body>
+    <script>
+    (function() {{
+      const promptText = {prompt_json};
+      const doc = window.parent.document;
+      if (!doc) return;
+
+      const BTN_ID = 'audingo-floating-audit-btn';
+      let btn = doc.getElementById(BTN_ID);
+
+      if (!btn) {{
+        btn = doc.createElement('button');
+        btn.id = BTN_ID;
+        btn.type = 'button';
+        btn.setAttribute('aria-label', 'Copy Song Audit Prompt');
+        doc.body.appendChild(btn);
+      }}
+
+      // Apply sleek, Apple-inspired styles with high z-index and subtle glassmorphic blur
+      btn.style.position = 'fixed';
+      btn.style.bottom = '26px';
+      btn.style.right = '28px';
+      btn.style.zIndex = '999999';
+      btn.style.display = 'inline-flex';
+      btn.style.alignItems = 'center';
+      btn.style.justifyContent = 'center';
+      btn.style.gap = '8px';
+      btn.style.padding = '10px 18px';
+      btn.style.borderRadius = '999px';
+      btn.style.background = 'linear-gradient(135deg, #0066CC 0%, #004D99 100%)';
+      btn.style.color = '#FFFFFF';
+      btn.style.border = '1px solid rgba(255, 255, 255, 0.25)';
+      btn.style.boxShadow = '0 8px 24px rgba(0, 102, 204, 0.4), 0 3px 8px rgba(0, 0, 0, 0.2)';
+      btn.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+      btn.style.fontSize = '0.86rem';
+      btn.style.fontWeight = '650';
+      btn.style.letterSpacing = '-0.01em';
+      btn.style.cursor = 'pointer';
+      btn.style.transition = 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)';
+      btn.style.userSelect = 'none';
+
+      const idleHtml = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg><span>📋 نسخ برومبت التدقيق (Audit Prompt)</span>';
+      const successHtml = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>✅ تم النسخ إلى الحافظة!</span>';
+
+      btn.innerHTML = idleHtml;
+
+      btn.onmouseenter = function() {{
+        btn.style.transform = 'translateY(-2px) scale(1.02)';
+        btn.style.boxShadow = '0 12px 28px rgba(0, 102, 204, 0.5), 0 4px 10px rgba(0, 0, 0, 0.22)';
+      }};
+      btn.onmouseleave = function() {{
+        btn.style.transform = 'translateY(0) scale(1)';
+        btn.style.boxShadow = '0 8px 24px rgba(0, 102, 204, 0.4), 0 3px 8px rgba(0, 0, 0, 0.2)';
+      }};
+
+      function copyText() {{
+        function indicate() {{
+          btn.style.background = 'linear-gradient(135deg, #10B981 0%, #059669 100%)';
+          btn.style.boxShadow = '0 8px 24px rgba(16, 185, 129, 0.45)';
+          btn.innerHTML = successHtml;
+          setTimeout(() => {{
+            btn.style.background = 'linear-gradient(135deg, #0066CC 0%, #004D99 100%)';
+            btn.style.boxShadow = '0 8px 24px rgba(0, 102, 204, 0.4), 0 3px 8px rgba(0, 0, 0, 0.2)';
+            btn.innerHTML = idleHtml;
+          }}, 2400);
+        }}
+
+        if (window.parent && window.parent.navigator && window.parent.navigator.clipboard) {{
+          window.parent.navigator.clipboard.writeText(promptText)
+            .then(indicate)
+            .catch(() => execFallback(promptText, indicate));
+        }} else if (navigator.clipboard && navigator.clipboard.writeText) {{
+          navigator.clipboard.writeText(promptText)
+            .then(indicate)
+            .catch(() => execFallback(promptText, indicate));
+        }} else {{
+          execFallback(promptText, indicate);
+        }}
+      }}
+
+      function execFallback(text, onSuccess) {{
+        try {{
+          const ta = doc.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          ta.style.top = '-9999px';
+          doc.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          const res = doc.execCommand('copy');
+          doc.body.removeChild(ta);
+          if (res) onSuccess();
+        }} catch(e) {{
+          console.error('Fallback copy error:', e);
+        }}
+      }}
+
+      btn.onclick = copyText;
+
+      // Automatically hide the button when switching to other tabs
+      const tabs = doc.querySelectorAll('[data-testid="stTabs"] [role="tab"]');
+      tabs.forEach(tab => {{
+        tab.addEventListener('click', function() {{
+          setTimeout(() => {{
+            const activeTab = doc.querySelector('[data-testid="stTabs"] [aria-selected="true"]');
+            if (activeTab && !activeTab.textContent.includes('Studio')) {{
+              btn.style.display = 'none';
+            }} else {{
+              btn.style.display = 'inline-flex';
+            }}
+          }}, 120);
+        }});
+      }});
+    }})();
+    </script>
+    </body>
+    </html>
+    """
+    components.html(html_code, height=0, scrolling=False)
+
+
 def render_domain_breakdown_section(
     domain_data: Dict[str, Any],
     title: str = "🎯 Song Vocabulary Domain Register",

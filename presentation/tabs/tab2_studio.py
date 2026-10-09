@@ -11,6 +11,7 @@ import gemini_client
 from presentation.components.widgets import (
     render_copy_words_toolbar,
     render_domain_breakdown_section,
+    render_floating_audit_prompt_fab,
 )
 from presentation.components.session import sync_active_session, set_target_batch
 from presentation.components.dialogs import confirm_studio_reset_dialog, execute_studio_action
@@ -45,6 +46,9 @@ def render_tab_studio():
     """Renders the Target Word Selection, Batch Management, and AI Prompt Generator."""
     if st.session_state.get("studio_toast_msg"):
         st.toast(st.session_state.pop("studio_toast_msg"))
+
+    active_target_words = [w["word"] for w in st.session_state.target_batch] if st.session_state.get("target_batch") else []
+    render_floating_audit_prompt_fab(active_target_words)
 
     st.subheader("Make room for your next idea.")
     st.caption("Choose your words, shape the mood, and craft your song.")
@@ -667,5 +671,11 @@ def render_tab_studio():
             st.markdown("#### :material/edit_note: 3. Master Lyrics Prompt (Copy & Paste into Claude / GPT-4o):")
             st.caption("Full prompt containing all 20 target vocabulary words, real-world narrative concept, and strict Logic Gate:")
             st.code(st.session_state.master_prompt, language="markdown")
+
+            st.markdown("<hr style='margin: 18px 0; border-color: var(--studio-line);'>", unsafe_allow_html=True)
+
+            st.markdown("#### :material/fact_check: 4. Strict Song Audit Prompt (Ready to paste into Claude / ChatGPT):")
+            st.caption("برومبت التدقيق النقدي الشامل لمراجعة الأغنية، المقاطع الصوتية، الطبيعية، وترابط القصة:")
+            st.code(prompt_builder.build_song_audit_prompt(current_words), language="markdown")
     else:
         st.info("👉 Click **[Pull 20 Words]** above to select a batch of 20 unused words and begin.")

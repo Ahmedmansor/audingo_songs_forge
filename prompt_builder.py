@@ -7,10 +7,12 @@ from domain.services.prompt_service import (
     SUNO_GENRE_PRESETS,
     build_suno_style_prompt,
     generate_master_prompt,
+    build_song_audit_prompt,
 )
 
 __all__ = [
     "SUNO_GENRE_PRESETS",
     "build_suno_style_prompt",
     "generate_master_prompt",
+    "build_song_audit_prompt",
 ]

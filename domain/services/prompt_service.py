@@ -307,6 +307,13 @@ def generate_master_prompt(
             "- STRICT PROHIBITION AGAINST LAZY SYNONYM REPLACEMENT: Never substitute a target word with a casual, generic synonym! For example, do NOT write 'make sure' when you have 'ensure'; do NOT write 'chance' when you have 'opportunity'; do NOT write 'this place' or 'here' when you have 'laboratory'; do NOT write 'enough' when you have 'sufficient'; do NOT write 'look at' or 'go through' when you have 'evaluate' or 'observe'; do NOT write 'aim' when you have 'objective'; do NOT write 'rules' when you have 'guideline'. Use the exact target words actively and authentically in their professional dialogue.\n"
             "- EDUCATED VOCABULARY IS NOT STIFF: Educated, professional terms in this field are natural spoken English for real researchers/specialists and do NOT violate Red Line 1. Drop a word ONLY as an absolute last resort if it genuinely cannot fit without distorting syntax or breaking the scene. Never drop words merely out of convenience or laziness.\n"
         )
+    elif selected_domain == "Basic / Neutral":
+        target_words_philosophy = (
+            "- HIGH VOCABULARY INTEGRATION BENCHMARK (15 to 18 words): In this Basic / Neutral category, words are foundational, universal everyday vocabulary. They naturally fit into virtually ANY ordinary real-life scenario, conversation, or relationship story without forcing. Your benchmark is to naturally integrate at least 15 to 18 of the 20 target words into the characters' spoken dialogue.\n"
+            "- MANDATORY ALTERNATIVE CONTEXT RETRY BEFORE DROPPING: Because these words represent core everyday English, there is almost always an authentic conversational place for them. Before dropping any word, you MUST try at least two different natural conversational contexts (e.g. a direct question between characters, a natural emotional reaction, a practical observation, or dialogue from another speaker).\n"
+            "- BASIC EVERYDAY WORDS ARE NATURALLY CONVERSATIONAL: Common, foundational words are the bread and butter of fluent spoken English and do NOT violate Red Line 1. Drop a word ONLY as an absolute last resort if every possible conversational placement sounds distorted or breaks the story. Never drop basic words out of laziness, rush, or convenience.\n"
+            "- STRICT PROHIBITION AGAINST LAZY SYNONYM REPLACEMENT: Never substitute a target word with an alternate word just to avoid fitting it. Use the exact target words directly in dialogue.\n"
+        )
     else:
         target_words_philosophy = (
             "- The words are drawn randomly from a larger database. The goal is NOT to use all of them. The goal is a perfect song: natural lines and a connected story always come before word coverage.\n"
@@ -391,3 +398,56 @@ Text in parentheses below are instructions about line counts. Never print them.
 [Words left out]: ...
 """
     return prompt
+
+
+def build_song_audit_prompt(target_words: Optional[List[str]] = None) -> str:
+    """Constructs the strict Song Audit Prompt for copy-pasting into external LLMs (Claude/ChatGPT)."""
+    words_joined = ", ".join(target_words) if target_words else ""
+    target_words_note = f"\n- Current Target Words to verify: {words_joined}\n" if words_joined else ""
+    return f"""ممنوع الركاكة, محتوي تعليمي حقيقي لمتعلمين اللغة الانجليزية الي يحفظ سطر نتاكد انه سطر حقيقي بيتم استعماله في الحياة و سطر مشهور, الابتعاد عن السطور و الكلام المغمور الي في الكتب  و الروايات الكلاسيكية, التركيز علي الانجليزي المتعارف عليه. و القصة مترابطة بدون وجود اي شذوذ فيها
+
+# SONG AUDIT PROMPT
+
+Audit the song above. Do not rewrite it yet. Be strict and honest. Do not say “excellent” unless every check passes.
+
+STEP 1: LINE-BY-LINE TABLE
+
+For every line (skip repeated Chorus and Pre-Chorus after the first time), output:
+
+Line | Syllables (written out, e.g. fed-er-al = 3) | Total | Natural? | Speaker would know this? | Issue
+
+Count syllables by writing each word’s syllables out. Never estimate.
+Flag any line outside 6-9 syllables.
+“Natural?” means a native speaker would say this exact sentence to this person in this scene. Flag stiff, inverted, poetic, or padded lines.
+“Speaker would know this?” means the character saying it could realistically know it at that point in the scene.
+
+STEP 2: STORY CHECK
+Is it one place, one continuous situation, in time order?
+Is every character named or clearly identified? Any unexplained “he” or “they”?
+Does every line advance or deepen the story? Any sudden jump or contradiction?
+Does the story use the scene details from the brief (setting, objects, atmosphere)?
+
+STEP 3: DIALECT AND CLEANLINESS
+Any American/British mixing (vocabulary, spelling, grammar)?
+Any profanity or sensitive wording that is not an ordinary everyday expression?
+
+STEP 4: TARGET WORDS
+{target_words_note}For each target word, state: used or left out.
+
+Used: is it in its everyday meaning, or forced?
+Left out: was a different natural context tried first? If a natural place exists, propose the line.
+List any extra non-target words that appear naturally (for coverage tracking).
+
+STEP 5: VERDICT
+List every failing line with a one-line fix.
+Give a final verdict: PASS (zero issues) or FAIL (issues remain).
+Then output the corrected final song in the original output format, changing only the failing lines and keeping the rest intact.
+
+
+Keep the response concise. No long explanations.
+
+Write explanations in Arabic, keep lyrics in English.
+متحرقش كلام كتير في الرد كفاية التعديلات السابق و الجديد و النسخة المحدثة  فقط 
+في البورد بيتاعتي علشان الزقه براحتي
+"""
+

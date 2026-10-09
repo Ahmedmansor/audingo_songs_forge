@@ -110,9 +110,19 @@ CREATIVE DIVERSITY & EXPANSION PRINCIPLE (تنوع إبداعي لا نهائي 
      * High-school robotics competition pits, science fair mentors, or chemistry lab patent preparations.
    - In "Business & Career", explore creative agency pitches, logistics shipping docks, artisan manufacturing floors, coffee roasteries, trade show booths, culinary kitchen rushes, or real estate negotiations.
    - In "Law, Politics & Society", explore investigative newsrooms, consumer protection hearings, public library board debates, tenant rights clinics, or environmental advocacy rallies.
+   - In "Basic / Neutral", explore the rich texture of authentic everyday human life (INVENT, NEVER COPY):
+     * Driveway DIY car repairs, garage tool organizing, or fixing a sputtering lawnmower with a neighbor.
+     * Commuter train platform delays, subway transfer banter, or shared bus terminal encounters.
+     * Late-night laundromats folding clothes while trading candid life stories over coffee.
+     * Moving into a first apartment, assembling flat-pack furniture, or unpacking kitchen boxes together.
+     * Supermarket checkout mishaps, forgotten shopping lists, or cooking dinner with improvisational ingredients.
+     * Community garden weeding, dog park morning encounters, or neighborhood yard sales.
+     * Kitchen table budget spreadsheets, sorting utility bills, or planning a weekend road trip.
+     * Hardware store advice, repairing a leaky faucet, or painting a hallway together.
+     * Front porch sunset reflections, unwinding after a long shift, or resolving an everyday misunderstanding.
 
 2. DOMAIN FIDELITY WITHOUT MONOTONY:
-   - The scene MUST genuinely belong to the world of "{domain}" (do NOT drift into generic bedroom packing, domestic breakups, or vague daydreaming).
+   - The scene MUST genuinely belong to the world of "{domain}" (do NOT drift into surreal fantasies, dictionary lectures, or detached daydreaming).
    - Each story must have its own distinct characters, specific equipment/tools, sensory details, and unique conflict tailored to the 20 words.
 
 3. NATURAL STAGE FOR ALL 20 TARGET WORDS:
@@ -492,11 +502,30 @@ def curate_thematic_vocabulary_batch(
         )
         directive = profile.get("domain_directive", "")
 
+        if domain_focus == "Basic / Neutral":
+            drift_rule = "- Ground the scenario in authentic everyday life, conversations, and human experiences. Avoid abstract fantasies or overly academic lectures."
+            scenario_instruction = f"""1. SCENARIO FIRST (Anchor the Scene in Everyday Life — INVENT, DO NOT COPY):
+   - First, scan the candidate words to discover a concrete, relatable everyday human scenario that connects the highest quality candidates together.
+   - Use the representative settings and conflict archetypes as creative inspiration, but NEVER copy them mechanically! Invent a fresh, believable situation tailored specifically to the words in front of you.
+   - Anchor the scene with specific human characters facing a real situation together in natural spoken English."""
+            practicality_guidance = f"""- Select words that are foundational, high-utility, and natural in real-life spoken American English.
+   - Because these words represent everyday communication, look for natural conversational synergy between them across spoken dialogue, questions, and reactions.
+   - REJECT only words that are archaic, dictionary-definition-only, or impossible to use naturally in conversation without forcing unnatural phrasing or broken rhymes ("من غير ما نحشر كلمة بالعافية")."""
+        else:
+            drift_rule = "- DO NOT drift into generic street arguments, domestic chores, or unrelated casual tropes."
+            scenario_instruction = f"""1. SCENARIO FIRST (Anchor the Scene in {domain_focus}):
+   - First, scan the candidate words to discover a concrete, relatable human scenario within '{domain_focus}' that connects the highest quality candidates together.
+   - Ground the scene in authentic settings and conflict archetypes like those specified above (e.g. lab pressures, code bugs, clinical trials, academic defenses, specialized teamwork, or organizational decisions).
+   - Anchor the scene with specific human collaborators facing a real situation together. Avoid vague, detached, or generic storylines."""
+            practicality_guidance = f"""- Select words that are useful, frequent, and natural in real-life spoken American English within the '{domain_focus}' context.
+   - In specialized professional or academic domains, educated spoken dialogue (lab, collegiate, or tech dialogue) is the intended standard. Do NOT reject words merely because they sound educated, technical, or specialized (e.g. analysis, database, connect, progress, storage, input, specialist). Native speakers use these words constantly in these environments!
+   - REJECT only words that are archaic, dictionary-definition-only, or impossible to use naturally in conversation without forcing unnatural phrasing or broken rhymes ("من غير ما نحشر كلمة بالعافية")."""
+
         domain_instruction = f"""
 PRIMARY THEMATIC DOMAIN FOCUS: {domain_focus}
 - The user specifically requested a vocabulary batch and story grounded in the '{domain_focus}' domain.
 - The curated theme, story concept, and 20 words MUST be firmly situated in this world.
-- DO NOT drift into generic street arguments, domestic chores, or unrelated casual tropes.
+{drift_rule}
 
 DOMAIN DIRECTIVE & REGISTER GUIDANCE:
 {directive}
@@ -507,14 +536,6 @@ REPRESENTATIVE REAL-WORLD SETTINGS (Use as inspiration for infinite creative div
 AUTHENTIC CONFLICT & SCENARIO ARCHETYPES:
 {conflicts_bullets}
 """
-        scenario_instruction = f"""1. SCENARIO FIRST (Anchor the Scene in {domain_focus}):
-   - First, scan the candidate words to discover a concrete, relatable human scenario within '{domain_focus}' that connects the highest quality candidates together.
-   - Ground the scene in authentic settings and conflict archetypes like those specified above (e.g. lab pressures, code bugs, clinical trials, academic defenses, specialized teamwork, or organizational decisions).
-   - Anchor the scene with specific human collaborators facing a real situation together. Avoid vague, detached, or generic storylines."""
-
-        practicality_guidance = f"""- Select words that are useful, frequent, and natural in real-life spoken American English within the '{domain_focus}' context.
-   - In specialized professional or academic domains, educated spoken dialogue (lab, collegiate, or tech dialogue) is the intended standard. Do NOT reject words merely because they sound educated, technical, or specialized (e.g. analysis, database, connect, progress, storage, input, specialist). Native speakers use these words constantly in these environments!
-   - REJECT only words that are archaic, dictionary-definition-only, or impossible to use naturally in conversation without forcing unnatural phrasing or broken rhymes ("من غير ما نحشر كلمة بالعافية")."""
     else:
         domain_instruction = """
 PRIMARY THEMATIC FOCUS:

@@ -135,14 +135,33 @@ CATEGORY_PROFILES = {
             "Everyday home, neighborhood, or shared social setting",
             "A casual coffee break, walk, or phone call between close friends",
             "A family gathering or roommates handling everyday tasks together",
+            "Kitchen table on a Sunday evening planning a weekly budget or sorting through old receipts",
+            "Neighborhood driveway or garage on a Saturday morning fixing a sputtering lawnmower or car with a neighbor",
+            "Subway platform or delayed commuter train where two travelers or coworkers share an unexpected honest conversation",
+            "Hardware store aisle or home workshop trying to figure out the right tools for a DIY weekend repair",
+            "Laundromat late at night waiting for the spin cycle while trading stories about work and family",
+            "Local park bench, community garden plot, or dog-walking trail meeting a neighbor at dusk",
+            "Supermarket checkout line or grocery parking lot dealing with a runaway cart, spilled groceries, or a forgotten wallet",
+            "Moving day living room surrounded by taped cardboard boxes, deciding what to keep and what to give away",
+            "Front porch or apartment balcony at sunset sharing leftover takeout while unwinding after a tough week",
+            "Rainy roadside or 24-hour gas station waiting out a sudden summer downpour while grabbing coffee",
         ],
         "story_conflict_archetypes": [
             "A relatable personal dilemma, decision, or shared moment between friends or family",
             "Overcoming a daily obstacle through mutual support and clear communication",
+            "Two friends resolving an awkward miscommunication over loaned money or an unkept promise with honest, clear words",
+            "Roommates or partners negotiating domestic chores and personal space without turning it into an argument",
+            "A neighbor offering unexpected hands-on help when another is overwhelmed by a sudden household breakdown",
+            "Two siblings going through inherited family items in the attic, balancing nostalgia against practical decluttering",
+            "A person wrestling with whether to take a modest life risk (moving, changing routine) and seeking a trusted friend's candid advice",
+            "Overcoming unexpected daily frustration (bad weather, flat tire, missed bus) by laughing it off and teaming up to fix it",
         ],
         "domain_directive": (
             "Use clear, natural spoken English suitable for everyday life. "
-            "Prioritize conversational dialogue that any native speaker would say to a friend."
+            "Prioritize conversational dialogue that any native speaker would say to a friend. "
+            "Because these words are universal, foundational everyday terms, integrate them actively into characters' dialogue, questions, and reactions. "
+            "INVENT, DO NOT COPY: The setting and conflict examples are structural springboards, never a fixed menu to copy mechanically. "
+            "Observe the underlying human patterns and invent a fresh, original real-life scenario tailored uniquely to the given words."
         ),
     },
     "Science, Tech & Academia": {
