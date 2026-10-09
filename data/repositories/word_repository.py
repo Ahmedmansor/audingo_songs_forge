@@ -88,7 +88,7 @@ def get_domain_counts(db_path: Path = DB_PATH) -> Dict[str, int]:
 
 
 def get_domain_detailed_stats(db_path: Path = DB_PATH) -> Dict[str, Dict[str, Any]]:
-    """Return detailed statistics per COCA domain: total, used, unused, percent_used."""
+    """Return detailed statistics per COCA domain: total, used, unused, percent_used, and song_count."""
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -101,6 +101,21 @@ def get_domain_detailed_stats(db_path: Path = DB_PATH) -> Dict[str, Dict[str, An
             GROUP BY dom
         """)
         rows = cursor.fetchall()
+
+        song_counts = {}
+        try:
+            cursor.execute("""
+                SELECT
+                    TRIM(source_domain) as dom,
+                    COUNT(*) as song_count
+                FROM songs
+                WHERE source_domain IS NOT NULL AND TRIM(source_domain) != ''
+                GROUP BY dom
+            """)
+            song_counts = {r["dom"]: r["song_count"] for r in cursor.fetchall() if r["dom"]}
+        except Exception:
+            pass
+
         result = {}
         for r in rows:
             dom = r["dom"]
@@ -112,13 +127,20 @@ def get_domain_detailed_stats(db_path: Path = DB_PATH) -> Dict[str, Dict[str, An
                 "total": tot,
                 "used": usd,
                 "unused": uns,
-                "percent_used": round(pct_used, 1)
+                "percent_used": round(pct_used, 1),
+                "song_count": song_counts.get(dom, 0),
             }
         
         # Ensure all defined domains exist in result dict
         for d in DOMAINS:
             if d not in result:
-                result[d] = {"total": 0, "used": 0, "unused": 0, "percent_used": 0.0}
+                result[d] = {
+                    "total": 0,
+                    "used": 0,
+                    "unused": 0,
+                    "percent_used": 0.0,
+                    "song_count": song_counts.get(d, 0),
+                }
                 
         return result
 

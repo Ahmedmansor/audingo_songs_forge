@@ -179,7 +179,7 @@ def render_library_editor(row):
             st.warning("Please enter and save target words above first before running Gemini analysis.")
         else:
             with st.spinner("Analyzing target vocabulary with Gemini..."):
-                res = gemini_client.analyze_vocabulary_mood(target_words_to_analyze)
+                res = gemini_client.analyze_vocabulary_mood(target_words_to_analyze, domain=saved_category or "Basic / Neutral")
                 if res.get("success"):
                     db.update_song(
                         song_id=song_id,

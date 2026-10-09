@@ -44,8 +44,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 [data-testid="stDataFrame"] { border-radius: 14px; overflow: hidden; }
 .domain-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 20px 0 12px; }
 .domain-card { padding: 22px; border: 1px solid var(--studio-line); border-radius: 20px; background: var(--studio-surface); min-width: 0; }
-.domain-top { display: flex; align-items: center; gap: 12px; min-height: 46px; }
+.domain-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 46px; }
+.domain-top-left { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
 .domain-top h4 { margin: 0; padding: 0; font-size: .9rem; font-weight: 600; letter-spacing: -.015em; }
+.domain-song-pill { flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; font-size: .74rem; padding: 3px 9px; border-radius: 999px; background: var(--studio-bg); border: 1px solid var(--studio-line); color: var(--studio-muted); font-weight: 550; font-variant-numeric: tabular-nums; white-space: nowrap; transition: all 160ms ease; }
+.domain-song-pill.active { background: var(--studio-tint); color: var(--studio-blue); border-color: rgba(59, 130, 246, 0.35); font-weight: 600; }
 .icon-tile { width: 40px; height: 40px; display: grid; place-items: center; background: var(--studio-bg); color: var(--studio-blue); border-radius: 12px; flex-shrink: 0; }
 .domain-value { font-size: 2rem; font-weight: 600; letter-spacing: -.045em; margin: 18px 0; font-variant-numeric: tabular-nums; }
 .domain-value span { display: block; font-size: .78rem; font-weight: 400; color: var(--studio-muted); letter-spacing: 0; }

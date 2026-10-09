@@ -28,10 +28,26 @@ def icon_svg(name="wave", color=None):
     return f'<img class="studio-icon" src="data:image/svg+xml;base64,{encoded}" width="24" height="24" alt="" aria-hidden="true">'
 
 
+_MUSIC_ICON = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" '
+    'fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" '
+    'style="vertical-align: -1px; margin-right: 3px;" aria-hidden="true">'
+    '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'
+    '</svg>'
+)
+
+
 def domain_card(name, data):
     percent = max(0, min(float(data.get("percent_used", 0)), 100))
+    song_count = int(data.get("song_count", 0))
+    song_label = "song" if song_count == 1 else "songs"
+    pill_class = "domain-song-pill active" if song_count > 0 else "domain-song-pill"
+    pill_icon = _MUSIC_ICON if song_count > 0 else ""
     return f'''<article class="domain-card">
-<div class="domain-top"><span class="icon-tile">{icon_svg(name)}</span><h4>{escape(name)}</h4></div>
+<div class="domain-top">
+  <div class="domain-top-left"><span class="icon-tile">{icon_svg(name)}</span><h4>{escape(name)}</h4></div>
+  <span class="{pill_class}" title="{song_count} {song_label} created in this category">{pill_icon}{song_count} {song_label}</span>
+</div>
 <div class="domain-value">{data.get("unused", 0):,}<span>words remaining</span></div>
 <div class="domain-track" role="progressbar" aria-label="{escape(name)} mastery" aria-valuenow="{percent:.1f}" aria-valuemin="0" aria-valuemax="100"><span style="width:{percent:.1f}%"></span></div>
 <div class="domain-caption"><span>{percent:.1f}% mastered</span><span>{data.get("used", 0):,} / {data.get("total", 0):,}</span></div>

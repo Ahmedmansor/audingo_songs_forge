@@ -167,6 +167,9 @@ def build_manual_surgical_prompt(
                 annotated_lines.append(f"[⚠️ OPTIONAL POLISH] {raw_l}")
     annotated_lyrics_block = "\n".join(annotated_lines)
 
+    domain_dir = p.get("domain_directive", "")
+    domain_guidance_str = f" {domain_dir}" if domain_dir else ""
+
     return f"""You are an expert English linguist and a professional ESL teacher who edits song lyrics for learners.
 Your mission is to perform SURGICAL REPAIRS on the song lyrics below.
 
@@ -178,7 +181,7 @@ Every target word that is currently in the lyrics MUST be preserved. Do not add 
 
 CONTEXTUAL ANCHORS:
 - Theme: "{domain_to_use}"
-- Category guidance: Setting: {p['setting']}. Register: {p['register']}.
+- Category guidance: Setting: {p['setting']}. Register: {p['register']}.{domain_guidance_str}
 - Musical Genre: "{genre}"
 - Core Story / Setting / Concept: "{story_concept}"
 - Dialect: American English (never mix dialects; use one consistent variety of English)
@@ -294,6 +297,10 @@ def generate_master_prompt(
         "the Final Chorus may change one line for progression.\n"
     ) if "[Chorus]" in structure_formatted else ""
 
+    domain_directive = p.get("domain_directive", "")
+    domain_guidance_txt = f" {domain_directive}" if domain_directive else ""
+    domain_target_rule = f"- Domain-specific guidance: {domain_directive}\n" if domain_directive else ""
+
     prompt = f"""# SONG DRAFT PROMPT (ESL LEARNING)
 
 Write one original song for an English learner.
@@ -305,7 +312,7 @@ The song tells one believable real-life story that fits the theme and uses the t
 ## INPUTS
 - Target words: {words_list_formatted}
 - Theme: {selected_domain}
-- Category guidance: Setting: {p['setting']}. Register: {p['register']}.
+- Category guidance: Setting: {p['setting']}. Register: {p['register']}.{domain_guidance_txt}
 - Story: {story_text}
 - Genre: {genre}
 - Mood: {mood_str}
@@ -329,7 +336,7 @@ If a target word can only be used by crossing a red line, drop it. Red lines alw
 ## TARGET WORDS
 - The words are drawn randomly from a larger database. The goal is NOT to use all of them. The goal is a perfect song: natural lines and a connected story always come before word coverage.
 - Coverage is tracked across the whole song collection, and a separate verification step counts which target words were used and which extra database words appeared naturally. Do not chase a count.
-- Before dropping any word, first try to use it in a different context or story detail. Try at least two other natural contexts (a different speaker, a different line, a different angle on the scene).
+{domain_target_rule}- Before dropping any word, first try to use it in a different context or story detail. Try at least two other natural contexts (a different speaker, a different line, a different angle on the scene).
 - Drop a word only if every attempt sounds forced, awkward, or breaks the story.
 - Never force a word in just for coverage.
 - If a character's role matches a target word (for example, a "director" character and the word "director"), use it.

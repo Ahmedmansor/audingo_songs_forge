@@ -305,7 +305,11 @@ def render_tab_studio():
                     st.warning("⚠️ No active target batch found.")
                 else:
                     with st.spinner("🔍 Auditing 20 words against story scenario with Gemini Flash..."):
-                        audit_res = gemini_client.audit_words_against_story(current_words, concept_val)
+                        audit_res = gemini_client.audit_words_against_story(
+                            current_words,
+                            concept_val,
+                            domain=st.session_state.selected_domain
+                        )
                         st.session_state.word_fit_audit = audit_res
                         sync_active_session()
                         st.rerun()
@@ -521,7 +525,10 @@ def render_tab_studio():
             st.markdown("Analyze the 20 target words to get an emotional breakdown, genre, and structure.")
             if st.button(":material/auto_awesome: Run Gemini Analysis", type="secondary", width="stretch"):
                 with st.spinner("Analyzing vocabulary mood with Gemini Flash..."):
-                    res = gemini_client.analyze_vocabulary_mood(current_words)
+                    res = gemini_client.analyze_vocabulary_mood(
+                        current_words,
+                        domain=st.session_state.selected_domain
+                    )
                     st.session_state.mood_analysis = res
                     st.session_state.word_fit_audit = None
                     if res.get("genre"):

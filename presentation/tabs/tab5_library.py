@@ -6,6 +6,7 @@ import math
 import pandas as pd
 import streamlit as st
 import db
+from constants import DOMAINS, DOMAIN_CONFIG
 from presentation.components.identity import icon_svg
 from presentation.components.widgets import format_cairo_display_time, render_domain_breakdown_section
 from presentation.components.refinement_report import render_saved_refinement_report
@@ -23,6 +24,79 @@ SECTIONS = {
 
 def _words(value):
     return [word.strip() for word in (value or "").split(",") if word.strip()]
+
+
+def _render_library_category_distribution(songs: pd.DataFrame):
+    """Render stacked percentage distribution and badges for all song categories in the library."""
+    if songs.empty:
+        return
+    total_songs = len(songs)
+    cat_series = songs["source_domain"].fillna("").replace("", "Not tagged")
+    cat_counts = cat_series.value_counts()
+
+    ordered_cats = [d for d in DOMAINS if d in cat_counts]
+    for c in cat_counts.index:
+        if c not in ordered_cats and c != "Not tagged":
+            ordered_cats.append(c)
+    if "Not tagged" in cat_counts and "Not tagged" not in ordered_cats:
+        ordered_cats.append("Not tagged")
+
+    bar_segments = []
+    badges = []
+
+    for cat in ordered_cats:
+        cnt = int(cat_counts.get(cat, 0))
+        if cnt == 0:
+            continue
+        pct = (cnt / total_songs) * 100.0
+        cfg = DOMAIN_CONFIG.get(cat, {
+            "emoji": "🏷️",
+            "color": "var(--studio-muted)",
+            "bg": "rgba(148, 163, 184, 0.12)",
+            "border": "rgba(148, 163, 184, 0.3)",
+        })
+        emoji = cfg.get("emoji", "🏷️")
+        color = cfg.get("color", "var(--studio-muted)")
+        bg = cfg.get("bg", "rgba(148, 163, 184, 0.12)")
+        border = cfg.get("border", "rgba(148, 163, 184, 0.3)")
+        song_lbl = "song" if cnt == 1 else "songs"
+
+        title_attr = escape(f"{emoji} {cat}: {pct:.1f}% ({cnt} {song_lbl})", quote=True)
+        bar_segments.append(
+            f'<div style="width: {pct:.2f}%; height: 100%; background: {color};" title="{title_attr}"></div>'
+        )
+        badges.append(
+            f'<span style="background: {bg}; color: {color}; border: 1px solid {border}; '
+            f'padding: 3px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; '
+            f'display: inline-flex; align-items: center; gap: 4px;">'
+            f'{emoji} {escape(cat)}: <b>{pct:.1f}%</b> <small style="opacity: 0.8;">({cnt})</small>'
+            f'</span>'
+        )
+
+    bar_html = "".join(bar_segments)
+    badges_html = " ".join(badges)
+    total_lbl = "song" if total_songs == 1 else "songs"
+
+    box_html = (
+        f'<div style="background: var(--studio-bg); border: 1px solid rgba(148, 163, 184, 0.18); '
+        f'border-radius: 12px; padding: 10px 14px; margin: 8px 0 14px 0;">'
+        f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; flex-wrap: wrap; gap: 6px;">'
+        f'<span style="font-size: 0.84rem; font-weight: 700; color: var(--studio-ink); display: inline-flex; align-items: center; gap: 6px;">'
+        f'📊 <b>Library Category Distribution</b>'
+        f'</span>'
+        f'<span style="font-size: 0.78rem; font-weight: 600; color: var(--studio-muted);">'
+        f'{total_songs} {total_lbl} total'
+        f'</span>'
+        f'</div>'
+        f'<div style="width: 100%; height: 8px; border-radius: 6px; overflow: hidden; display: flex; background: var(--studio-track); margin-bottom: 8px;">'
+        f'{bar_html}'
+        f'</div>'
+        f'<div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">'
+        f'{badges_html}'
+        f'</div>'
+        f'</div>'
+    )
+    st.markdown(box_html, unsafe_allow_html=True)
 
 
 def _authenticity_stat(row):
@@ -112,6 +186,7 @@ def render_tab_library():
         songs["source_domain"] = None
     category_labels = songs["source_domain"].fillna("").replace("", "Not tagged")
     songs["row_num"] = songs["id"].rank(method="dense", ascending=True).astype(int)
+    _render_library_category_distribution(songs)
     with st.container(key="library_toolbar"):
         a, b = st.columns([2, 1])
         query = a.text_input("Search songs", placeholder="Title, lyrics or vocabulary…", key="library_search", icon=":material/search:")
@@ -135,8 +210,23 @@ def render_tab_library():
         st.info("No songs match this search. Try another word.")
         return
     records = {int(row["id"]): row for _, row in filtered.iterrows()}
-    selected = st.selectbox("Open a song", options=list(records),
-        format_func=lambda song_id: f"#{records[song_id]['row_num']} · {records[song_id]['title']}", key="library_selected_song")
+
+    def _format_song_option(song_id: int) -> str:
+        r = records[song_id]
+        total_new = len(_words(r.get("target_words"))) + len(_words(r.get("bonus_words")))
+        words_label = "word" if total_new == 1 else "words"
+        words_txt = f"+{total_new} {words_label}" if total_new > 0 else "0 words"
+        dom = r.get("source_domain") or "Not tagged"
+        cfg = DOMAIN_CONFIG.get(dom, {})
+        emoji = cfg.get("emoji", "🏷️") if dom != "Not tagged" else "🏷️"
+        return f"#{r['row_num']} • {r['title']}  ·  {words_txt}  ·  {emoji} {dom}"
+
+    selected = st.selectbox(
+        "Open a song",
+        options=list(records),
+        format_func=_format_song_option,
+        key="library_selected_song",
+    )
     row = records[selected]
     counts = [len(_words(row.get(field))) for field in ("target_words", "bonus_words", "reused_words", "extra_words")]
     date = format_cairo_display_time(row["created_at"])

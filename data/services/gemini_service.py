@@ -8,7 +8,13 @@ import os
 from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
 
-from constants import GENRES, SONG_STRUCTURES, MOOD_CATEGORIES, GEMINI_MODEL_CANDIDATES
+from constants import (
+    GENRES,
+    SONG_STRUCTURES,
+    MOOD_CATEGORIES,
+    GEMINI_MODEL_CANDIDATES,
+    get_category_profile,
+)
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -25,12 +31,19 @@ def get_gemini_client():
     return genai.Client(api_key=api_key)
 
 
-def build_analysis_prompt(words: List[str]) -> str:
-    """Build the JSON schema instruction prompt for Gemini."""
+def build_analysis_prompt(words: List[str], domain: str = "Basic / Neutral") -> str:
+    """Build the JSON schema instruction prompt for Gemini, anchored in the selected vocabulary domain."""
     words_str = ", ".join(words)
     genres_str = "\n".join(f"- {g}" for g in GENRES)
     structures_str = "\n".join(f"- {s}" for s in SONG_STRUCTURES)
     moods_str = "\n".join(f"- {m}" for m in MOOD_CATEGORIES)
+
+    profile = get_category_profile(domain)
+    settings_examples = profile.get("story_settings_examples", [])
+    settings_bullets = "\n".join(f"  * {s}" for s in settings_examples) if settings_examples else f"  * {profile.get('setting', 'Authentic real-world situations')}"
+    conflicts = profile.get("story_conflict_archetypes", [])
+    conflicts_bullets = "\n".join(f"  * {c}" for c in conflicts) if conflicts else "  * A realistic human challenge or decision"
+    directive = profile.get("domain_directive", "")
 
     return f"""You are an elite music producer, ESL pedagogy specialist, and master lyricist analyzing a specific vocabulary batch for educational songwriting.
 
@@ -69,22 +82,57 @@ CRITICAL DIRECTIVE 2: DIVERSE GENRE MATCHING (BREAK THE ACOUSTIC / INDIE-POP MON
   * Relaxed, mellow, introspective, everyday coffee shop -> "Lo-Fi / Chillhop", "Melodic Chill Electronic", "Jazz / Bossa Nova", "Reggae / Tropical Pop"
   * Rootsy storytelling, everyday blue-collar struggles, journey -> "Country / Americana", "Acoustic / Folk"
 
-CRITICAL STORY CONCEPT INSTRUCTIONS (SPECIFIC, HIGH-FIDELITY STORYLINE ROADMAP):
-The creative story concept must be CONCRETE, VIVID, and SPECIFIC — NEVER generic or vague.
+CRITICAL DIRECTIVE 3: CRITICAL STORY CONCEPT INSTRUCTIONS (SPECIFIC, HIGH-FIDELITY STORYLINE ROADMAP):
+The creative story concept must be CONCRETE, VIVID, and SPECIFIC — NEVER generic, vague, or detached from the category.
 It serves as the narrative anchor for both the lyricist and the vocabulary audit.
+
+ACTIVE CATEGORY DOMAIN: "{domain}"
+
+ILLUSTRATIVE SETTINGS (SPRINGBOARDS FOR INSPIRATION — DO NOT LIMIT YOURSELF TO THESE EXACT BULLETS):
+{settings_bullets}
+
+CORE CONFLICT & DRAMATIC STAKES (ILLUSTRATIVE ARCHETYPES):
+{conflicts_bullets}
+
+DOMAIN-SPECIFIC VOCABULARY & DIALOGUE DIRECTIVE:
+{directive}
+
+CREATIVE DIVERSITY & EXPANSION PRINCIPLE (تنوع إبداعي لا نهائي في نفس السياق):
+1. THE BULLETS ABOVE ARE INSPIRATIONAL EXAMPLES, NOT A CLOSED LIST:
+   - We produce a massive library of songs; NEVER mechanically copy or loop through the exact same 4-5 bullet points!
+   - Understand the *ecosystem and spirit* of "{domain}" and invent fresh, diverse, realistic situations within that world that naturally fit the specific 20 target words in front of you.
+   - For example, in "Science, Tech & Academia", explore the wide universe of science and discovery:
+     * Marine biology research vessels, field ecology stations, or archaeological excavations.
+     * Cybersecurity war-rooms responding to an alert, or server data centers during a cooling failure.
+     * Architecture studios reviewing structural blueprints, or aeronautics flight simulation testing.
+     * Astronomy observatories tracking an anomaly, or meteorology teams tracking an incoming storm.
+     * Pharmaceutical trial reviews, hospital radiology/pathology clinics, or university lecture debate halls.
+     * High-school robotics competition pits, science fair mentors, or chemistry lab patent preparations.
+   - In "Business & Career", explore creative agency pitches, logistics shipping docks, artisan manufacturing floors, coffee roasteries, trade show booths, culinary kitchen rushes, or real estate negotiations.
+   - In "Law, Politics & Society", explore investigative newsrooms, consumer protection hearings, public library board debates, tenant rights clinics, or environmental advocacy rallies.
+
+2. DOMAIN FIDELITY WITHOUT MONOTONY:
+   - The scene MUST genuinely belong to the world of "{domain}" (do NOT drift into generic bedroom packing, domestic breakups, or vague daydreaming).
+   - Each story must have its own distinct characters, specific equipment/tools, sensory details, and unique conflict tailored to the 20 words.
+
+3. NATURAL STAGE FOR ALL 20 TARGET WORDS:
+   - The scenario must give the characters believable, authentic reasons to speak the 20 target words in real dialogue.
+   - Do NOT choose an unrelated storyline where target words would feel forced or out of place.
+
 In "creative_concept", construct a rich, highly specific 3-4 sentence scenario that explicitly defines:
 1. Specific Characters & Relationship:
-   - Concrete roles or identities and their dynamic (e.g. "Two childhood friends, Maya and Liam, packing up their shared apartment before Liam moves across the country", "A junior technician and her retired mentor troubleshooting a stalled workshop engine before dawn", "A young line cook facing a tough evening rush while trying to reconcile with his brother").
+   - Concrete roles matching the domain (e.g., two marine researchers, a security analyst and systems lead, two architecture partners).
 2. Tangible Physical Setting & Sensory Atmosphere:
-   - Anchor the scene in a concrete time, place, and sensory environment (e.g. "A rainy Tuesday night around a crowded kitchen table with taped cardboard boxes", "The counter of a late-night diner with cooling cups of black coffee as headlights sweep past the window").
+   - Anchor the scene in a concrete time, place, and sensory environment belonging to this domain (e.g. "An astronomy observatory control deck at 3 AM with flickering telemetry monitors as rain lashes the dome").
 3. Core Human Stakes & Dramatic Tension:
-   - Identify the immediate emotional or practical dilemma (e.g. "A hard unspoken truth about why one of them is leaving", "Fear of failing the upcoming trade exam coupled with mutual reassurance", "A sudden unexpected expense forcing a difficult family compromise").
+   - Identify the immediate emotional or practical dilemma (e.g. "An unexpected data discrepancy hours before the press briefing", "A difficult choice between two competing hypotheses").
 4. Clear Narrative Progression:
    - Opening Situation: The immediate setting and action where characters talk.
    - Turning Point: The pivotal realization or honest conversation that shifts the mood.
    - Resolution / Outlook: The quiet decision or shared determination they reach.
 5. Real Spoken Dialogue Anchors:
-   - The scene must naturally inspire everyday spoken American English lines that an ESL learner could memorize and use in real life ("We don't have to figure it all out tonight", "Can I ask you something honest?", "Let's take it one step at a time").
+   - The scene must naturally inspire everyday spoken American English lines that an ESL learner could memorize and use in real life ("We don't have to figure it all out tonight", "Can I ask you something honest?", "Let's test this from a different angle").
+
 - STRICT PROHIBITIONS:
   * NO vague one-liners like "Someone faces challenges in life and finds hope".
   * NO corporate textbook clichés or abstract surreal fantasies.
@@ -102,15 +150,15 @@ Return a valid JSON object with the following exact schema:
 """
 
 
-def analyze_vocabulary_mood(words: List[str]) -> Dict[str, Any]:
+def analyze_vocabulary_mood(words: List[str], domain: str = "Basic / Neutral") -> Dict[str, Any]:
     """
-    Send the 20 words to Gemini to get mood breakdown, genre, and structure recommendations.
+    Send the 20 words to Gemini to get mood breakdown, genre, structure, and domain-anchored story concept.
     Cycles through preferred models if rate limits or errors occur.
     """
     from google.genai import types
 
     client = get_gemini_client()
-    prompt = build_analysis_prompt(words)
+    prompt = build_analysis_prompt(words, domain=domain)
     
     last_error = None
     
@@ -417,13 +465,67 @@ def curate_thematic_vocabulary_batch(
     verbs_str = ", ".join(candidate_verbs)
     adjs_str = ", ".join(candidate_adjs)
 
+    is_specialized = bool(
+        domain_focus
+        and domain_focus != "All Domains"
+        and "الكل" not in domain_focus
+        and "All" not in domain_focus
+    )
+
     domain_instruction = ""
-    if domain_focus and domain_focus != "All Domains" and "الكل" not in domain_focus and "All" not in domain_focus:
+    scenario_instruction = ""
+    practicality_guidance = ""
+
+    if is_specialized:
+        profile = get_category_profile(domain_focus)
+        settings_examples = profile.get("story_settings_examples", [])
+        settings_bullets = (
+            "\n".join(f"  * {s}" for s in settings_examples)
+            if settings_examples
+            else f"  * {profile.get('setting', 'Real-world situations in this domain')}"
+        )
+        conflicts = profile.get("story_conflict_archetypes", [])
+        conflicts_bullets = (
+            "\n".join(f"  * {c}" for c in conflicts)
+            if conflicts
+            else "  * A realistic human challenge or decision in this field"
+        )
+        directive = profile.get("domain_directive", "")
+
         domain_instruction = f"""
-PRIMARY THEMATIC DOMAIN FOCUS:
-- The user requested words specifically revolving around the '{domain_focus}' domain.
-- Ensure the curated theme, story concept, and 20 words are deeply anchored in the world of {domain_focus}.
+PRIMARY THEMATIC DOMAIN FOCUS: {domain_focus}
+- The user specifically requested a vocabulary batch and story grounded in the '{domain_focus}' domain.
+- The curated theme, story concept, and 20 words MUST be firmly situated in this world.
+- DO NOT drift into generic street arguments, domestic chores, or unrelated casual tropes.
+
+DOMAIN DIRECTIVE & REGISTER GUIDANCE:
+{directive}
+
+REPRESENTATIVE REAL-WORLD SETTINGS (Use as inspiration for infinite creative diversity; do NOT repeat blindly):
+{settings_bullets}
+
+AUTHENTIC CONFLICT & SCENARIO ARCHETYPES:
+{conflicts_bullets}
 """
+        scenario_instruction = f"""1. SCENARIO FIRST (Anchor the Scene in {domain_focus}):
+   - First, scan the candidate words to discover a concrete, relatable human scenario within '{domain_focus}' that connects the highest quality candidates together.
+   - Ground the scene in authentic settings and conflict archetypes like those specified above (e.g. lab pressures, code bugs, clinical trials, academic defenses, specialized teamwork, or organizational decisions).
+   - Anchor the scene with specific human collaborators facing a real situation together. Avoid vague, detached, or generic storylines."""
+
+        practicality_guidance = f"""- Select words that are useful, frequent, and natural in real-life spoken American English within the '{domain_focus}' context.
+   - In specialized professional or academic domains, educated spoken dialogue (lab, collegiate, or tech dialogue) is the intended standard. Do NOT reject words merely because they sound educated, technical, or specialized (e.g. analysis, database, connect, progress, storage, input, specialist). Native speakers use these words constantly in these environments!
+   - REJECT only words that are archaic, dictionary-definition-only, or impossible to use naturally in conversation without forcing unnatural phrasing or broken rhymes ("من غير ما نحشر كلمة بالعافية")."""
+    else:
+        domain_instruction = """
+PRIMARY THEMATIC FOCUS:
+- Everyday human life, relatable situations, and authentic spoken communication.
+"""
+        scenario_instruction = """1. SCENARIO FIRST (Anchor the Scene):
+   - First, scan the candidate words to discover a concrete, relatable, everyday human scenario that connects the highest quality candidates together (e.g. resolving a misunderstanding with a friend, an overdue late-night conversation, a big career or personal decision, family life).
+   - Anchor the scene with specific human characters facing a real situation together."""
+
+        practicality_guidance = """- Select words that are useful, frequent, and natural in real-life spoken American English.
+   - REJECT words that are hyper-technical, archaic, or awkward to use in a song without forcing weird rhymes or distorted word order ("من غير ما نحشر كلمة بالعافية")."""
 
     prompt = f"""You are an elite ESL vocabulary curator, master curriculum director, and hit songwriter for Audingo.
 
@@ -446,19 +548,21 @@ CANDIDATE ADJECTIVES ({len(candidate_adjs)} available):
 {adjs_str}
 
 INTELLIGENT SELECTION METHODOLOGY:
-1. SCENARIO FIRST (Anchor the Scene):
-   - First, scan the candidate words to discover a concrete, relatable, everyday human scenario that connects the highest quality candidates together (e.g. resolving a misunderstanding with a friend, an overdue late-night conversation, fixing something broken around the house, preparing for a high-stakes job interview, moving into a new neighborhood).
+{scenario_instruction}
+
 2. HIGH MUTUAL COLLOCABILITY & NATURAL CHEMISTRY:
    - The chosen 20 words must feel like they naturally belong in the same conversation, room, and storyline.
-   - When native English speakers discuss this scenario, these words naturally roll off the tongue together:
-     * Verbs (6): Active, conversational actions the characters actually take or experience (e.g. explain, notice, decide, listen, call, wait). Avoid stiff or awkward verbs.
-     * Nouns (10): The physical objects, people, locations, or emotional stakes in this scene (e.g. door, table, message, friend, plan, morning, trouble).
-     * Adjectives (4): Relatable emotional states or concrete sensory qualities (e.g. quiet, tired, ready, clear).
+   - When speakers in this setting discuss this scenario, these words naturally roll off the tongue together:
+     * Verbs (6): Active, conversational actions the characters actually take or experience in this world. Avoid stiff, robotic, or awkward verbs.
+     * Nouns (10): The physical objects, people, locations, data, or emotional stakes in this scene.
+     * Adjectives (4): Relatable emotional states, sensory conditions, or situational qualities.
+
 3. ESL CONVERSATIONAL PRACTICALITY:
-   - Select words that are useful, frequent, and natural in real-life spoken American English.
-   - REJECT words that are hyper-technical, archaic, overly academic, or awkward to use in a song without forcing weird rhymes or distorted word order ("من غير ما نحشر كلمة بالعافية").
+   {practicality_guidance}
+
 4. DOMAIN & GENERAL BALANCE:
-   - When a domain focus is specified, anchor the core scenario in that world, while pairing specialized words with universal daily words so the song sounds like real people talking in that environment, not an encyclopedia.
+   - Weave together specialized domain terms with natural universal/neutral words (actions, objects, connectors) so the characters sound like real living human beings interacting in their environment, not an encyclopedia.
+
 5. STRICT MEMBERSHIP & EXACT COUNTS:
    - Every single selected word MUST be chosen verbatim from the candidate lists provided above.
    - Exactly 10 Nouns, Exactly 6 Verbs, Exactly 4 Adjectives. Total = 20 words.
@@ -520,9 +624,12 @@ Return a valid JSON object with the following exact schema:
     }
 
 
-def build_vocab_story_audit_prompt(words: List[str], story_concept: str) -> str:
+def build_vocab_story_audit_prompt(words: List[str], story_concept: str, domain: str = "Basic / Neutral") -> str:
     """Build the JSON prompt to audit 20 words against a story concept for natural conversational fit."""
     words_str = ", ".join(f'"{w}"' for w in words)
+    profile = get_category_profile(domain)
+    directive = profile.get("domain_directive", "")
+
     return f"""You are an elite ESL songwriting director, master linguist, and curriculum auditor for Audingo.
 
 AUDINGO EDUCATIONAL MISSION & PEDAGOGICAL PHILOSOPHY:
@@ -536,6 +643,8 @@ Therefore, each line in the song must:
 3. Employ target vocabulary words in their natural, everyday conversational meaning — WITHOUT forcing any word awkwardly into the sentence ("من غير ما نحشر كلمة بالعافية").
 
 INPUT DATA:
+- Active Category Domain: "{domain}"
+- Domain Directive: {directive}
 - Story / Creative Scenario:
 \"\"\"
 {story_concept}
@@ -558,7 +667,10 @@ CRITICAL AUDITING PHILOSOPHY: FAIRNESS, REALISTIC DIALOGUE & CONTEXTUAL PLAUSIBI
    - Common, versatile everyday words (e.g. "time", "day", "door", "friend", "water", "walk", "call", "talk", "happy", "look", "car", "wait", "listen", "home", "step", "answer", "mind", "hold", "clear", etc.) naturally fit into virtually ANY human story or conversation.
    - You MUST NEVER flag basic or neutral everyday words as "out of context" or "forced". They are the natural glue of all English communication.
 
-3. STRICT HIGH THRESHOLD FOR FLAGGING (ONLY FLAG GENUINE, INSURMOUNTABLE CLASHES):
+3. DOMAIN-AWARE VALIDITY:
+   - For "{domain}" (especially "Science, Tech & Academia" or "Business & Career"): Moderately formal, educated spoken English (e.g., formula, discovery, specialist, strategy, critical, demonstrate, analyze, database, perspective) is COMPLETELY NATURAL in this scene. Do NOT flag these words as "technical alienation" or "formal jargon" when the scene is set in this domain!
+
+4. STRICT HIGH THRESHOLD FOR FLAGGING (ONLY FLAG GENUINE, INSURMOUNTABLE CLASHES):
    - ONLY flag a word if it creates a severe, unbridgeable thematic or stylistic clash that would FORCE the songwriter to invent bizarre, artificial, or distorted sentences.
    - Examples of genuine clashes:
      * Extreme Technical / Domain Alienation: Hyper-specialized jargon (e.g. "photosynthesis", "subpoena", "mitochondria", "amortization") in an intimate emotional scene, casual small talk, or simple street setting where native speakers would never use such terms.
@@ -566,7 +678,7 @@ CRITICAL AUDITING PHILOSOPHY: FAIRNESS, REALISTIC DIALOGUE & CONTEXTUAL PLAUSIBI
      * Severe Narrative Incoherence: A word whose literal meaning is completely irreconcilable with the characters, location, or conflict of the story.
    - BENEFIT OF THE DOUBT: If you can imagine even one natural, realistic line of dialogue or setting description in this scene that uses the word naturally, IT PASSES.
 
-4. SPECIFIC & CONSTRUCTIVE FEEDBACK FOR FLAGGED WORDS (محدد ودقيق):
+5. SPECIFIC & CONSTRUCTIVE FEEDBACK FOR FLAGGED WORDS (محدد ودقيق):
    - For any word genuinely flagged, provide:
      * Precise explanation: 1-2 clear, objective sentences explaining why this word cannot plausibly fit into natural spoken dialogue in this specific scene without sounding strained or artificial.
      * Constructive guidance: Explicitly state whether swapping the word with a fresh unused word is recommended, or if there is a narrow specific angle to make it work.
@@ -586,16 +698,16 @@ Return a valid JSON object matching this exact schema:
 """
 
 
-def audit_words_against_story(words: List[str], story_concept: str) -> Dict[str, Any]:
+def audit_words_against_story(words: List[str], story_concept: str, domain: str = "Basic / Neutral") -> Dict[str, Any]:
     """
     Audit 20 target vocabulary words against a story/creative concept.
     Flags words that feel forced, overly technical, or out of context for natural everyday dialogue,
-    while exempting basic/neutral words.
+    while exempting basic/neutral words and respecting domain-appropriate vocabulary.
     """
     from google.genai import types
 
     client = get_gemini_client()
-    prompt = build_vocab_story_audit_prompt(words, story_concept)
+    prompt = build_vocab_story_audit_prompt(words, story_concept, domain=domain)
     last_error = None
 
     for model_name in PREFERRED_MODELS:
