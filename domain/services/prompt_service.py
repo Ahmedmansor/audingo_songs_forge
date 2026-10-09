@@ -301,6 +301,18 @@ def generate_master_prompt(
     domain_guidance_txt = f" {domain_directive}" if domain_directive else ""
     domain_target_rule = f"- Domain-specific guidance: {domain_directive}\n" if domain_directive else ""
 
+    if selected_domain == "Science, Tech & Academia":
+        target_words_philosophy = (
+            "- HIGH VOCABULARY INTEGRATION BENCHMARK (14 to 17 words): In this technical/academic category, your benchmark is to naturally integrate at least 14 to 17 of the 20 target words into the collaborators' spoken dialogue.\n"
+            "- STRICT PROHIBITION AGAINST LAZY SYNONYM REPLACEMENT: Never substitute a target word with a casual, generic synonym! For example, do NOT write 'make sure' when you have 'ensure'; do NOT write 'chance' when you have 'opportunity'; do NOT write 'this place' or 'here' when you have 'laboratory'; do NOT write 'enough' when you have 'sufficient'; do NOT write 'look at' or 'go through' when you have 'evaluate' or 'observe'; do NOT write 'aim' when you have 'objective'; do NOT write 'rules' when you have 'guideline'. Use the exact target words actively and authentically in their professional dialogue.\n"
+            "- EDUCATED VOCABULARY IS NOT STIFF: Educated, professional terms in this field are natural spoken English for real researchers/specialists and do NOT violate Red Line 1. Drop a word ONLY as an absolute last resort if it genuinely cannot fit without distorting syntax or breaking the scene. Never drop words merely out of convenience or laziness.\n"
+        )
+    else:
+        target_words_philosophy = (
+            "- The words are drawn randomly from a larger database. The goal is NOT to use all of them. The goal is a perfect song: natural lines and a connected story always come before word coverage.\n"
+            "- Coverage is tracked across the whole song collection, and a separate verification step counts which target words were used and which extra database words appeared naturally. Do not chase a count.\n"
+        )
+
     prompt = f"""# SONG DRAFT PROMPT (ESL LEARNING)
 
 Write one original song for an English learner.
@@ -334,9 +346,7 @@ The song tells one believable real-life story that fits the theme and uses the t
 If a target word can only be used by crossing a red line, drop it. Red lines always beat word coverage.
 
 ## TARGET WORDS
-- The words are drawn randomly from a larger database. The goal is NOT to use all of them. The goal is a perfect song: natural lines and a connected story always come before word coverage.
-- Coverage is tracked across the whole song collection, and a separate verification step counts which target words were used and which extra database words appeared naturally. Do not chase a count.
-{domain_target_rule}- Before dropping any word, first try to use it in a different context or story detail. Try at least two other natural contexts (a different speaker, a different line, a different angle on the scene).
+{target_words_philosophy}{domain_target_rule}- Before dropping any word, first try to use it in a different context or story detail. Try at least two other natural contexts (a different speaker, a different line, a different angle on the scene).
 - Drop a word only if every attempt sounds forced, awkward, or breaks the story.
 - Never force a word in just for coverage.
 - If a character's role matches a target word (for example, a "director" character and the word "director"), use it.
