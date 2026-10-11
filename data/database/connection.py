@@ -87,7 +87,11 @@ def init_db(db_path: Path = DB_PATH) -> None:
                 song_structure TEXT,
                 creative_concept TEXT,
                 reused_words TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                refinement_report TEXT,
+                source_domain TEXT,
+                suno_lyrics TEXT,
+                is_suno_completed INTEGER DEFAULT 0
             )
         """)
 
@@ -112,6 +116,10 @@ def init_db(db_path: Path = DB_PATH) -> None:
             cursor.execute("ALTER TABLE songs ADD COLUMN refinement_report TEXT")
         if "source_domain" not in existing_cols:
             cursor.execute("ALTER TABLE songs ADD COLUMN source_domain TEXT")
+        if "suno_lyrics" not in existing_cols:
+            cursor.execute("ALTER TABLE songs ADD COLUMN suno_lyrics TEXT")
+        if "is_suno_completed" not in existing_cols:
+            cursor.execute("ALTER TABLE songs ADD COLUMN is_suno_completed INTEGER DEFAULT 0")
 
         # 4. app_state table
         cursor.execute("""

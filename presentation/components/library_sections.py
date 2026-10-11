@@ -73,6 +73,8 @@ def render_library_editor(row):
     bonus_words_raw = row.get("bonus_words") or ""
     reused_words_raw = row.get("reused_words") or ""
     extra_words_raw = row.get("extra_words") or ""
+    suno_lyrics_val = row.get("suno_lyrics") or ""
+    is_suno_done_val = bool(row.get("is_suno_completed", 0))
 
     with st.form(key=f"edit_form_{song_id}"):
         st.markdown(f"#### Editing song #{row_num} — {song_title}")
@@ -138,11 +140,28 @@ def render_library_editor(row):
                 key=f"edit_extras_{song_id}"
             )
 
-        new_lyrics = st.text_area(
-            "Song Lyrics:",
-            value=lyrics_text,
-            height=200,
-            key=f"edit_lyrics_{song_id}"
+        col_edit_lyr1, col_edit_lyr2 = st.columns(2)
+        with col_edit_lyr1:
+            new_lyrics = st.text_area(
+                "Song Lyrics (Original):",
+                value=lyrics_text,
+                height=220,
+                key=f"edit_lyrics_{song_id}"
+            )
+        with col_edit_lyr2:
+            new_suno_lyrics = st.text_area(
+                "Suno Lyrics (سونو):",
+                value=suno_lyrics_val,
+                height=220,
+                key=f"edit_suno_lyrics_{song_id}",
+                help="Suno-formatted lyrics with custom prompts/tags."
+            )
+
+        suno_completed_chk = st.checkbox(
+            "🎵 Produced on Suno (تم عمل الأغنية على سونو)",
+            value=is_suno_done_val,
+            key=f"edit_suno_completed_{song_id}",
+            help="Check this box when you've finished producing this track on Suno."
         )
 
         sync_ngsl_chk = st.checkbox(
@@ -167,6 +186,8 @@ def render_library_editor(row):
                 creative_concept=new_concept.strip(),
                 sync_ngsl_usage=sync_ngsl_chk,
                 source_domain=new_category,
+                suno_lyrics=new_suno_lyrics.strip(),
+                is_suno_completed=suno_completed_chk,
             )
             updated_title = new_title.strip() or song_title
             st.session_state["lib_toast_msg"] = f"Song #{row_num} ('{updated_title}') updated successfully!"

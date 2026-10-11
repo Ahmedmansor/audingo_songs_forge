@@ -3,12 +3,19 @@
 from html import escape
 import json
 import math
+import re
 import pandas as pd
 import streamlit as st
 import db
 from constants import DOMAINS, DOMAIN_CONFIG
 from presentation.components.identity import icon_svg
-from presentation.components.widgets import format_cairo_display_time, render_domain_breakdown_section
+from presentation.components.widgets import (
+    format_cairo_display_time,
+    render_domain_breakdown_section,
+    render_floating_library_song_fab,
+    render_library_lyrics_copy_toolbar,
+    render_simple_copy_button,
+)
 from presentation.components.refinement_report import render_saved_refinement_report
 from presentation.components.library_sections import render_library_editor, render_library_production
 from domain.services.refinement_archive import parse_refinement_snapshot, report_matches_lyrics
@@ -20,6 +27,16 @@ SECTIONS = {
     "Production": ":material/graphic_eq: Production",
     "Edit": ":material/edit_note: Edit",
 }
+
+LYRICS_TAG_REGEX = re.compile(r"(\[[^\]\n]+\])")
+
+
+def format_lyrics_with_tags(raw_lyrics: str) -> str:
+    """Format lyrics by escaping HTML and highlighting bracketed structure tags."""
+    if not raw_lyrics:
+        return ""
+    escaped = escape(raw_lyrics)
+    return LYRICS_TAG_REGEX.sub(r'<span class="lyrics-tag">\1</span>', escaped)
 
 
 def _words(value):
@@ -127,8 +144,20 @@ def _render_overview(row):
     left, right = st.columns([1.5, 1])
     with left:
         with st.container(border=True):
-            st.markdown(":material/lightbulb: **The story**")
-            st.write(row.get("creative_concept") or "No story concept recorded yet.")
+            story_text = (row.get("creative_concept") or "").strip()
+            hdr_col, copy_col = st.columns([1.5, 1], vertical_alignment="center")
+            with hdr_col:
+                st.markdown(":material/lightbulb: **The story**")
+            with copy_col:
+                if story_text:
+                    render_simple_copy_button(
+                        text=story_text,
+                        label="Copy Story",
+                        copied_label="Copied!",
+                        button_id=f"story_{song_id}",
+                        align="flex-end",
+                    )
+            st.write(story_text or "No story concept recorded yet.")
     with right:
         with st.container(border=True):
             st.markdown(":material/tune: **Musical direction**")
@@ -146,12 +175,71 @@ def _render_overview(row):
             with st.expander(":material/auto_awesome: Mood & musical analysis", expanded=False):
                 frame = pd.DataFrame(values.items(), columns=["Mood", "Percentage"]).sort_values("Percentage", ascending=False)
                 st.bar_chart(frame.set_index("Mood"), horizontal=True, height=220)
-    line_count = sum(bool(line.strip()) for line in lyrics.splitlines())
-    with st.expander(f":material/lyrics: Lyrics · {line_count} lines", expanded=False):
-        with st.container(height=360):
-            st.html(f'<div class="library-lyrics">{escape(lyrics)}</div>')
     name = "".join(c for c in row["title"] if c.isalnum() or c in " _-").strip().replace(" ", "_")
-    st.download_button("Download lyrics", data=lyrics, file_name=f"{name or 'song'}.txt", mime="text/plain", icon=":material/download:", key=f"dl_song_{song_id}")
+    line_count = sum(bool(line.strip()) for line in lyrics.splitlines())
+    suno_lyrics = (row.get("suno_lyrics") or "").strip()
+
+    col_orig, col_suno = st.columns(2)
+    with col_orig:
+        with st.expander(f":material/lyrics: Original Lyrics · {line_count} lines", expanded=False):
+            render_library_lyrics_copy_toolbar(title=row.get("title", ""), lyrics=lyrics, song_id=f"in_{song_id}", align="flex-start")
+            with st.container(height=360):
+                st.html(f'<div class="library-lyrics">{format_lyrics_with_tags(lyrics)}</div>')
+        c_copy1, c_dl1 = st.columns([2, 1], vertical_alignment="center")
+        with c_copy1:
+            render_library_lyrics_copy_toolbar(title=row.get("title", ""), lyrics=lyrics, song_id=f"out_{song_id}", align="flex-start")
+        with c_dl1:
+            st.download_button("Download", data=lyrics, file_name=f"{name or 'song'}.txt", mime="text/plain", icon=":material/download:", key=f"dl_song_{song_id}", width="stretch")
+
+    with col_suno:
+        if suno_lyrics:
+            suno_count = sum(bool(line.strip()) for line in suno_lyrics.splitlines())
+            with st.expander(f":material/graphic_eq: Suno Lyrics · {suno_count} lines", expanded=False):
+                render_library_lyrics_copy_toolbar(
+                    title=row.get("title", ""),
+                    lyrics=suno_lyrics,
+                    song_id=f"in_suno_{song_id}",
+                    align="flex-start",
+                    primary_label="Copy Title & Suno",
+                    secondary_label="Suno Only",
+                )
+                with st.container(height=360):
+                    st.html(f'<div class="library-lyrics">{format_lyrics_with_tags(suno_lyrics)}</div>')
+            c_copy2, c_dl2 = st.columns([2, 1], vertical_alignment="center")
+            with c_copy2:
+                render_library_lyrics_copy_toolbar(
+                    title=row.get("title", ""),
+                    lyrics=suno_lyrics,
+                    song_id=f"out_suno_{song_id}",
+                    align="flex-start",
+                    primary_label="Copy Title & Suno",
+                    secondary_label="Suno Only",
+                )
+            with c_dl2:
+                st.download_button("Download", data=suno_lyrics, file_name=f"{name or 'song'}_suno.txt", mime="text/plain", icon=":material/download:", key=f"dl_suno_{song_id}", width="stretch")
+        else:
+            with st.expander(":material/graphic_eq: Suno Lyrics · Not added", expanded=False):
+                st.info("No Suno lyrics saved yet. Click below to paste them for the first time. Once saved, edits can be made from the Edit tab.")
+                if st.button("➕ Paste / Add Suno lyrics", key=f"btn_add_suno_{song_id}", type="primary", width="stretch"):
+                    from presentation.components.dialogs import add_suno_lyrics_dialog
+                    add_suno_lyrics_dialog(song_id, row.get("title", ""))
+
+    is_suno_done = bool(row.get("is_suno_completed", 0))
+
+    def _toggle_suno_status():
+        val = st.session_state[f"chk_suno_status_{song_id}"]
+        db.update_suno_status(song_id, val)
+        st.session_state["library_selected_song"] = song_id
+        st.session_state["lib_toast_msg"] = "Marked as produced on Suno! 🎵" if val else "Unmarked Suno completion status."
+
+    with st.container(border=True):
+        st.checkbox(
+            "🎵 **Produced on Suno** (تم إنتاجها على سونو)",
+            value=is_suno_done,
+            key=f"chk_suno_status_{song_id}",
+            on_change=_toggle_suno_status,
+            help="Check this box when you have finished generating this song on Suno."
+        )
 
 
 def _render_vocabulary(row):
@@ -219,11 +307,16 @@ def render_tab_library():
         dom = r.get("source_domain") or "Not tagged"
         cfg = DOMAIN_CONFIG.get(dom, {})
         emoji = cfg.get("emoji", "🏷️") if dom != "Not tagged" else "🏷️"
-        return f"#{r['row_num']} • {r['title']}  ·  {words_txt}  ·  {emoji} {dom}"
+        suno_flag = "  ·  ✅ Suno" if r.get("is_suno_completed") else ""
+        return f"#{r['row_num']} • {r['title']}  ·  {words_txt}  ·  {emoji} {dom}{suno_flag}"
+
+    options_list = list(records)
+    if "library_selected_song" not in st.session_state or st.session_state["library_selected_song"] not in options_list:
+        st.session_state["library_selected_song"] = options_list[0]
 
     selected = st.selectbox(
         "Open a song",
-        options=list(records),
+        options=options_list,
         format_func=_format_song_option,
         key="library_selected_song",
     )
@@ -235,11 +328,18 @@ def render_tab_library():
     metrics.extend(zip(counts, ("Target words", "New bonus", "Reused", "Extra words")))
     tones = ("total", "authenticity", "target", "bonus", "reused", "extra")
     stats = ''.join(f'<div class="library-stat-{tone}"><b>{escape(str(value))}</b><span>{label}</span></div>' for tone, (value, label) in zip(tones, metrics))
-    st.html(f'''<article class="library-song-card">
+    suno_badge = ' <span style="background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.35); padding: 1px 7px; border-radius: 10px; font-size: 0.74rem; font-weight: 700; display: inline-flex; align-items: center; gap: 3px; vertical-align: middle; margin-left: 6px;">🎵 Suno Done</span>' if row.get("is_suno_completed") else ""
+    st.html(f'''<article class="library-song-card" id="library-song-hero-card">
 <div class="library-song-heading"><span class="library-song-mark">{icon_svg()}</span><div>
 <div class="studio-eyebrow">SONG {int(row['row_num']):02d} / AUDINGO</div>
-<h3>{escape(row['title'])}</h3><p>{escape(row.get('genre') or 'Your original song')} · {escape(str(date))} · Cairo</p>
+<h3>{escape(row['title'])}{suno_badge}</h3><p>{escape(row.get('genre') or 'Your original song')} · {escape(str(date))} · Cairo</p>
 </div></div><div class="library-song-stats">{stats}</div></article>''')
+    render_floating_library_song_fab(
+        song_id=selected,
+        row_num=int(row["row_num"]),
+        title=row["title"],
+        is_suno_completed=bool(row.get("is_suno_completed")),
+    )
     section = st.segmented_control("Song details", list(SECTIONS), default="Overview", required=True,
         format_func=SECTIONS.get, key=f"library_section_{selected}", width="stretch", wrap=True, label_visibility="collapsed")
     with st.container(key="library_detail"):

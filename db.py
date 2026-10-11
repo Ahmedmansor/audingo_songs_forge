@@ -35,6 +35,8 @@ from data.repositories.song_repository import (
     update_song,
     delete_song,
     migrate_past_songs_bonus_words,
+    update_suno_status,
+    save_suno_lyrics,
 )
 
 from data.repositories.variant_repository import (

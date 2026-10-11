@@ -260,3 +260,29 @@ def confirm_studio_reset_dialog(action: str):
             st.session_state.pop("pending_studio_reset_action", None)
             st.rerun()
 
+
+@st.dialog("🎵 Add Suno Lyrics")
+def add_suno_lyrics_dialog(song_id: int, song_title: str):
+    """Modal dialog for pasting Suno lyrics for a song for the first time."""
+    st.markdown(f"#### Add Suno Lyrics for **{song_title}**")
+    st.caption("Paste your Suno-adapted lyrics below. Once saved, they will be displayed in Overview and can be edited from the Edit tab.")
+    suno_input = st.text_area(
+        "Suno Lyrics:",
+        placeholder="Paste your lyrics with Suno tags, structure brackets, or style notes...",
+        height=260,
+        key=f"dlg_suno_input_{song_id}",
+    )
+    dlg_c1, dlg_c2 = st.columns(2)
+    with dlg_c1:
+        if st.button("💾 Save Suno Lyrics", type="primary", width="stretch", key=f"dlg_save_suno_{song_id}"):
+            if suno_input.strip():
+                db.save_suno_lyrics(song_id, suno_input.strip())
+                st.session_state["lib_toast_msg"] = f"Suno lyrics saved for '{song_title}'!"
+                st.rerun()
+            else:
+                st.warning("Please paste Suno lyrics before saving.")
+    with dlg_c2:
+        if st.button(":material/cancel: Cancel", width="stretch", key=f"dlg_cancel_suno_{song_id}"):
+            st.rerun()
+
+

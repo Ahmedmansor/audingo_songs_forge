@@ -33,7 +33,11 @@ def render_sidebar():
         )
         st.html(rows)
         st.space("small")
-        if os.environ.get("GEMINI_API_KEY"):
+        from data.services.gemini_service import get_gemini_api_keys
+        active_keys = get_gemini_api_keys()
+        if len(active_keys) > 1:
+            st.caption(f":material/check_circle: Gemini · {len(active_keys)} API keys configured (Auto-Rotating)")
+        elif len(active_keys) == 1:
             st.caption(":material/check_circle: Gemini · API key configured")
         else:
             st.caption(":material/key: Add a Gemini API key in .env to enable AI tools.")

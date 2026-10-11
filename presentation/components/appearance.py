@@ -78,9 +78,29 @@ _SWITCH = st.components.v2.component(
       // Default to dark once; respect subsequent browser choices.
       let preference;
       try { preference = localStorage.getItem(key); } catch (_) {}
-      if (!preference && data.mode !== 'dark') select('dark');
-      else if (!preference) { try { localStorage.setItem(key, 'dark'); } catch (_) {} }
-      return stop;
+      // Right-align Suno completed badge in selectbox dropdown options
+      function formatSunoOptions() {
+        doc.querySelectorAll('div[role="option"]').forEach(opt => {
+          if (opt.dataset.sunoFormatted) return;
+          const inner = opt.firstElementChild;
+          if (inner && inner.textContent && inner.textContent.includes('  ·  ✅ Suno')) {
+            opt.dataset.sunoFormatted = 'true';
+            const parts = inner.textContent.split('  ·  ✅ Suno');
+            if (parts.length >= 2) {
+              inner.style.display = 'flex';
+              inner.style.justifyContent = 'space-between';
+              inner.style.alignItems = 'center';
+              inner.style.width = '100%';
+              inner.innerHTML = `<span>${parts[0]}</span><span class="suno-select-badge">✅ Suno</span>`;
+            }
+          }
+        });
+      }
+      const listboxObserver = new MutationObserver(formatSunoOptions);
+      listboxObserver.observe(doc.body, {childList: true, subtree: true});
+      formatSunoOptions();
+
+      return () => { stop(); listboxObserver.disconnect(); };
     }
     """,
 )

@@ -22,13 +22,36 @@ logger = logging.getLogger(__name__)
 PREFERRED_MODELS = GEMINI_MODEL_CANDIDATES
 
 
-def get_gemini_client():
-    """Initialize and return google-genai Client."""
+def get_gemini_api_keys() -> List[str]:
+    """Retrieve all available Gemini API keys from environment or .env in order."""
+    from dotenv import load_dotenv
+    load_dotenv(override=False)
+
+    keys = []
+    k1 = (os.environ.get("GEMINI_API_KEY") or "").strip()
+    if k1:
+        keys.append(k1)
+    k2 = (os.environ.get("GEMINI_API_KEY_2") or "").strip()
+    if k2 and k2 not in keys:
+        keys.append(k2)
+    for i in range(3, 10):
+        extra_k = (os.environ.get(f"GEMINI_API_KEY_{i}") or "").strip()
+        if extra_k and extra_k not in keys:
+            keys.append(extra_k)
+
+    return keys
+
+
+def get_gemini_client(api_key: Optional[str] = None):
+    """Initialize and return google-genai Client with specified or primary key."""
     from google import genai
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
+    if api_key:
+        return genai.Client(api_key=api_key)
+
+    keys = get_gemini_api_keys()
+    if not keys:
         raise ValueError("GEMINI_API_KEY is not set in environment or .env file.")
-    return genai.Client(api_key=api_key)
+    return genai.Client(api_key=keys[0])
 
 
 def build_analysis_prompt(words: List[str], domain: str = "Basic / Neutral") -> str:
@@ -108,18 +131,39 @@ CREATIVE DIVERSITY & EXPANSION PRINCIPLE (تنوع إبداعي لا نهائي 
      * Astronomy observatories tracking an anomaly, or meteorology teams tracking an incoming storm.
      * Pharmaceutical trial reviews, hospital radiology/pathology clinics, or university lecture debate halls.
      * High-school robotics competition pits, science fair mentors, or chemistry lab patent preparations.
-   - In "Business & Career", explore creative agency pitches, logistics shipping docks, artisan manufacturing floors, coffee roasteries, trade show booths, culinary kitchen rushes, or real estate negotiations.
-   - In "Law, Politics & Society", explore investigative newsrooms, consumer protection hearings, public library board debates, tenant rights clinics, or environmental advocacy rallies.
-   - In "Basic / Neutral", explore the rich texture of authentic everyday human life (INVENT, NEVER COPY):
+   - In "Business & Career", explore creative agency pitches, logistics shipping docks, artisan manufacturing floors, coffee roasteries, trade show booths, culinary restaurant kitchen rushes, hotel guest diplomacy, freelance contract negotiations, or performance reviews.
+   - In "Law, Politics & Society", explore investigative newsrooms, consumer protection hearings, public library board debates, tenant rights clinics, environmental advocacy field offices, courthouse corridors, municipal town halls, or grassroots phone banks.
+   - In "Emotions & Relationships", explore profound human vulnerability and genuine connection:
+     * Late-night drives confessing hidden feelings, dawn conversations on lake shores, diner booths hashing out life decisions.
+     * Hospital rooms holding hands in quiet solidarity, balcony talks during crowded family gatherings, apologizing on midnight neighborhood walks.
+     * Bridging long distances across time zones, forgiving past broken promises, or gently accepting that paths have changed without losing love.
+   - In "Street & Daily Life", explore the vibrant pulse of urban neighborhoods and everyday community grit:
+     * Crowded subway cars during delays trading jokes, barbershops and salons debating neighborhood life, late-night food trucks.
+     * Farmer's markets bargaining on crisp mornings, laundromats and mailrooms solving parcel mix-ups, convenience store aisles at 2 AM.
+     * Pickup basketball games at dusk blowing off work steam, helping neighbors carry groceries up walk-up stairs, or block cleanups.
+   - In "Basic / Neutral", explore the rich texture of authentic everyday human life across the FULL emotional spectrum (INVENT, NEVER COPY):
      * Driveway DIY car repairs, garage tool organizing, or fixing a sputtering lawnmower with a neighbor.
      * Commuter train platform delays, subway transfer banter, or shared bus terminal encounters.
      * Late-night laundromats folding clothes while trading candid life stories over coffee.
-     * Moving into a first apartment, assembling flat-pack furniture, or unpacking kitchen boxes together.
+     * Late-night highway drive or parked at a roadside rest stop, talking through major life crossroads.
      * Supermarket checkout mishaps, forgotten shopping lists, or cooking dinner with improvisational ingredients.
      * Community garden weeding, dog park morning encounters, or neighborhood yard sales.
      * Kitchen table budget spreadsheets, sorting utility bills, or planning a weekend road trip.
      * Hardware store advice, repairing a leaky faucet, or painting a hallway together.
      * Front porch sunset reflections, unwinding after a long shift, or resolving an everyday misunderstanding.
+     * Quiet hospital waiting rooms late at night, whispering comfort while waiting for difficult news.
+     * An old diner booth at 1 AM over lukewarm coffee, two friends clearing up months of unspoken distance or burnout.
+     * Empty train station platform or bus depot at dawn, watching taillights pull away after a painful goodbye.
+     * Quiet kitchen table at 2 AM with cold tea, sitting with grief or a heavy heart after a relationship ends.
+     * A quiet hospital corridor or pharmacy counter, waiting for test results and whispering steady reassurance.
+     * Rainy park bench or quiet porch, sitting with an empty chair and speaking memories to someone who is gone.
+     * Busy airport departure gate during a weather delay, two travelers having an unexpectedly candid talk.
+     * Standing over the kitchen sink washing dinner dishes together, admitting a mistake and apologizing.
+     * Workplace breakroom between shifts, two colleagues sharing a sandwich and talking through family pressure.
+     * Waiting under a shared umbrella at a windy bus stop in the rain, laughing off a rough day at work.
+     * Sitting on front porch steps early on a Sunday morning, talking through doubts about a new job or relationship.
+     * STRICT BAN ON CLICHÉ FIXATIONS (NO CARDBOARD BOXES / PACKING MOVING BOXES / ATTIC DECLUTTERING):
+       Do NOT default to the lazy cliché of 'two friends sitting on the floor surrounded by cardboard boxes' or 'packing boxes before moving' or 'sorting attic relics'. Real human life takes place across hundreds of dynamic, varied environments — diners, cars, bus stops, clinics, kitchens, breakrooms, and front porches!
 
 2. DOMAIN FIDELITY WITHOUT MONOTONY:
    - The scene MUST genuinely belong to the world of "{domain}" (do NOT drift into surreal fantasies, dictionary lectures, or detached daydreaming).
@@ -163,73 +207,58 @@ Return a valid JSON object with the following exact schema:
 def analyze_vocabulary_mood(words: List[str], domain: str = "Basic / Neutral") -> Dict[str, Any]:
     """
     Send the 20 words to Gemini to get mood breakdown, genre, structure, and domain-anchored story concept.
-    Cycles through preferred models if rate limits or errors occur.
+    Uses ROUTINE_STUDIO_CHAIN with multi-key rotation, prioritizing fast/light models to preserve top models for critic.
     """
-    from google.genai import types
+    from data.services.fallback_engine import generate_with_fallback, ROUTINE_STUDIO_CHAIN
 
-    client = get_gemini_client()
     prompt = build_analysis_prompt(words, domain=domain)
     
-    last_error = None
-    
-    for model_name in PREFERRED_MODELS:
-        try:
-            logger.info("Calling Gemini with model: %s", model_name)
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.85,
-                ),
-            )
-            raw = response.text.strip()
+    try:
+        raw, model_idx = generate_with_fallback(
+            prompt=prompt,
+            model_chain=ROUTINE_STUDIO_CHAIN,
+            start_index=0,
+            require_json=True,
+            temperature=0.85,
+        )
+        
+        data = json.loads(raw)
+        model_name = ROUTINE_STUDIO_CHAIN[model_idx]
+        
+        genre = data.get("genre", GENRES[0])
+        if genre not in GENRES:
+            genre = GENRES[0]
             
-            if raw.startswith("```"):
-                lines = raw.splitlines()
-                raw = "\n".join(
-                    line for line in lines if not line.strip().startswith("```")
-                ).strip()
-                
-            data = json.loads(raw)
+        structure = data.get("song_structure", SONG_STRUCTURES[0])
+        if structure not in SONG_STRUCTURES:
+            structure = SONG_STRUCTURES[0]
             
-            genre = data.get("genre", GENRES[0])
-            if genre not in GENRES:
-                genre = GENRES[0]
-                
-            structure = data.get("song_structure", SONG_STRUCTURES[0])
-            if structure not in SONG_STRUCTURES:
-                structure = SONG_STRUCTURES[0]
-                
-            mood_breakdown = data.get("mood_breakdown", {})
-            
-            return {
-                "success": True,
-                "model_used": model_name,
-                "mood_breakdown": mood_breakdown,
-                "genre": genre,
-                "song_structure": structure,
-                "creative_concept": data.get("creative_concept", "")
-            }
-        except Exception as exc:
-            logger.warning("Failed with model %s: %s. Trying next fallback model...", model_name, exc)
-            last_error = exc
-            continue
-
-    return {
-        "success": False,
-        "error": str(last_error),
-        "model_used": "Fallback Defaults",
-        "mood_breakdown": {
-            "Happy": 30,
-            "Energetic": 30,
-            "Uplifting / Inspiring": 20,
-            "Chill / Relaxed": 20
-        },
-        "genre": GENRES[0],
-        "song_structure": SONG_STRUCTURES[0],
-        "creative_concept": "A vibrant and catchy song weaving the target vocabulary together."
-    }
+        mood_breakdown = data.get("mood_breakdown", {})
+        
+        return {
+            "success": True,
+            "model_used": model_name,
+            "mood_breakdown": mood_breakdown,
+            "genre": genre,
+            "song_structure": structure,
+            "creative_concept": data.get("creative_concept", "")
+        }
+    except Exception as exc:
+        logger.warning("Failed in analyze_vocabulary_mood: %s", exc)
+        return {
+            "success": False,
+            "error": str(exc),
+            "model_used": "Fallback Defaults",
+            "mood_breakdown": {
+                "Happy": 30,
+                "Energetic": 30,
+                "Uplifting / Inspiring": 20,
+                "Chill / Relaxed": 20
+            },
+            "genre": GENRES[0],
+            "song_structure": SONG_STRUCTURES[0],
+            "creative_concept": "A vibrant and catchy song weaving the target vocabulary together."
+        }
 
 
 def build_poster_prompt_instruction(title: str, lyrics: str, genre: str, vocalist: str) -> str:
@@ -503,13 +532,15 @@ def curate_thematic_vocabulary_batch(
         directive = profile.get("domain_directive", "")
 
         if domain_focus == "Basic / Neutral":
-            drift_rule = "- Ground the scenario in authentic everyday life, conversations, and human experiences. Avoid abstract fantasies or overly academic lectures."
+            drift_rule = "- Ground the scenario in authentic everyday life, conversations, and human experiences (embracing both daily warmth and poignant moments of grief, sadness, or quiet goodbyes). Avoid abstract fantasies or overly academic lectures. BAN ON LAZY CLICHÉS: Strictly avoid defaulting to cardboard boxes, moving apartments, or sorting attic boxes."
             scenario_instruction = f"""1. SCENARIO FIRST (Anchor the Scene in Everyday Life — INVENT, DO NOT COPY):
    - First, scan the candidate words to discover a concrete, relatable everyday human scenario that connects the highest quality candidates together.
+   - FULL EMOTIONAL PALETTE (EMBRACE SADNESS & POIGNANCY): Embrace sad, poignant, melancholic, or heartbreaking everyday moments (e.g. parting ways, hospital waiting rooms, coping with grief, quiet loneliness) just as naturally as daily routines. Sadness is an authentic pillar of everyday human experience.
+   - STRICT BAN ON LAZY TROPES: Avoid the cliché of 'two friends sitting on the floor packing cardboard boxes' or 'sorting attic relics'. Real life happens in cars, diners, bus stops, clinics, kitchens, breakrooms, and front porches!
    - Use the representative settings and conflict archetypes as creative inspiration, but NEVER copy them mechanically! Invent a fresh, believable situation tailored specifically to the words in front of you.
    - Anchor the scene with specific human characters facing a real situation together in natural spoken English."""
             practicality_guidance = f"""- Select words that are foundational, high-utility, and natural in real-life spoken American English.
-   - Because these words represent everyday communication, look for natural conversational synergy between them across spoken dialogue, questions, and reactions.
+   - Because these words represent everyday communication, look for natural conversational synergy between them across spoken dialogue, questions, and reactions in both upbeat and poignant emotional contexts.
    - REJECT only words that are archaic, dictionary-definition-only, or impossible to use naturally in conversation without forcing unnatural phrasing or broken rhymes ("من غير ما نحشر كلمة بالعافية")."""
         else:
             drift_rule = "- DO NOT drift into generic street arguments, domestic chores, or unrelated casual tropes."
@@ -598,51 +629,38 @@ Return a valid JSON object with the following exact schema:
 }}
 """
 
-    client = get_gemini_client()
-    last_error = None
+    from data.services.fallback_engine import generate_with_fallback, ROUTINE_STUDIO_CHAIN
 
-    for model_name in PREFERRED_MODELS:
-        try:
-            logger.info("Calling Gemini for thematic curation with model: %s", model_name)
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.45,
-                ),
-            )
-            raw = response.text.strip()
-            if raw.startswith("```"):
-                lines = raw.splitlines()
-                raw = "\n".join(
-                    line for line in lines if not line.strip().startswith("```")
-                ).strip()
-
-            data = json.loads(raw)
-            return {
-                "success": True,
-                "model_used": model_name,
-                "selected_nouns": data.get("selected_nouns", candidate_nouns[:10]),
-                "selected_verbs": data.get("selected_verbs", candidate_verbs[:6]),
-                "selected_adjectives": data.get("selected_adjectives", candidate_adjs[:4]),
-                "theme_name": data.get("theme_name", "Everyday Life & Human Stories"),
-                "theme_description": data.get("theme_description", "")
-            }
-        except Exception as exc:
-            logger.warning("Thematic curation failed with model %s: %s", model_name, exc)
-            last_error = exc
-            continue
-
-    return {
-        "success": False,
-        "error": str(last_error),
-        "selected_nouns": candidate_nouns[:10],
-        "selected_verbs": candidate_verbs[:6],
-        "selected_adjectives": candidate_adjs[:4],
-        "theme_name": "Everyday Life & Human Stories",
-        "theme_description": "A diverse snapshot of everyday real-life experiences."
-    }
+    try:
+        raw, model_idx = generate_with_fallback(
+            prompt=prompt,
+            model_chain=ROUTINE_STUDIO_CHAIN,
+            start_index=0,
+            require_json=True,
+            temperature=0.45,
+        )
+        data = json.loads(raw)
+        model_name = ROUTINE_STUDIO_CHAIN[model_idx]
+        return {
+            "success": True,
+            "model_used": model_name,
+            "selected_nouns": data.get("selected_nouns", candidate_nouns[:10]),
+            "selected_verbs": data.get("selected_verbs", candidate_verbs[:6]),
+            "selected_adjectives": data.get("selected_adjectives", candidate_adjs[:4]),
+            "theme_name": data.get("theme_name", "Everyday Life & Human Stories"),
+            "theme_description": data.get("theme_description", "")
+        }
+    except Exception as exc:
+        logger.warning("Thematic curation failed: %s", exc)
+        return {
+            "success": False,
+            "error": str(exc),
+            "selected_nouns": candidate_nouns[:10],
+            "selected_verbs": candidate_verbs[:6],
+            "selected_adjectives": candidate_adjs[:4],
+            "theme_name": "Everyday Life & Human Stories",
+            "theme_description": "A diverse snapshot of everyday real-life experiences."
+        }
 
 
 def build_vocab_story_audit_prompt(words: List[str], story_concept: str, domain: str = "Basic / Neutral") -> str:
@@ -724,54 +742,41 @@ def audit_words_against_story(words: List[str], story_concept: str, domain: str 
     Audit 20 target vocabulary words against a story/creative concept.
     Flags words that feel forced, overly technical, or out of context for natural everyday dialogue,
     while exempting basic/neutral words and respecting domain-appropriate vocabulary.
+    Uses ROUTINE_STUDIO_CHAIN to preserve top models for the final lyric critic.
     """
-    from google.genai import types
+    from data.services.fallback_engine import generate_with_fallback, ROUTINE_STUDIO_CHAIN
 
-    client = get_gemini_client()
     prompt = build_vocab_story_audit_prompt(words, story_concept, domain=domain)
-    last_error = None
 
-    for model_name in PREFERRED_MODELS:
-        try:
-            logger.info("Calling Gemini for vocab-story audit with model: %s", model_name)
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.3,
-                ),
+    try:
+        raw, model_idx = generate_with_fallback(
+            prompt=prompt,
+            model_chain=ROUTINE_STUDIO_CHAIN,
+            start_index=0,
+            require_json=True,
+            temperature=0.3,
+        )
+        data = json.loads(raw)
+        model_name = ROUTINE_STUDIO_CHAIN[model_idx]
+        flagged = data.get("flagged_words", [])
+        all_fit = data.get("all_fit", len(flagged) == 0)
+
+        return {
+            "success": True,
+            "model_used": model_name,
+            "all_fit": all_fit and len(flagged) == 0,
+            "flagged_words": flagged,
+            "summary": data.get(
+                "summary",
+                "All words fit the scenario naturally." if not flagged else f"{len(flagged)} word(s) flagged."
             )
-            raw = response.text.strip()
-            if raw.startswith("```"):
-                lines = raw.splitlines()
-                raw = "\n".join(
-                    line for line in lines if not line.strip().startswith("```")
-                ).strip()
-
-            data = json.loads(raw)
-            flagged = data.get("flagged_words", [])
-            all_fit = data.get("all_fit", len(flagged) == 0)
-
-            return {
-                "success": True,
-                "model_used": model_name,
-                "all_fit": all_fit and len(flagged) == 0,
-                "flagged_words": flagged,
-                "summary": data.get(
-                    "summary",
-                    "All words fit the scenario naturally." if not flagged else f"{len(flagged)} word(s) flagged."
-                )
-            }
-        except Exception as exc:
-            logger.warning("Vocab-story audit failed with model %s: %s", model_name, exc)
-            last_error = exc
-            continue
-
-    return {
-        "success": False,
-        "error": str(last_error),
-        "all_fit": True,
-        "flagged_words": [],
-        "summary": "Could not complete audit due to service error."
-    }
+        }
+    except Exception as exc:
+        logger.warning("Vocab-story audit failed: %s", exc)
+        return {
+            "success": False,
+            "error": str(exc),
+            "all_fit": True,
+            "flagged_words": [],
+            "summary": "Could not complete audit due to service error."
+        }

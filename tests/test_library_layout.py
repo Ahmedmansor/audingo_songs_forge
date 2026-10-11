@@ -129,6 +129,62 @@ class LibraryLayoutTests(unittest.TestCase):
         self.assertFalse(app.exception)
         self.assertEqual(app.selectbox(key="library_selected_song").value, self.other_id)
 
+    def test_suno_lyrics_and_completion_flow(self):
+        # 1. Verify initially no Suno lyrics and not completed
+        row = db.get_all_songs().query("id == @self.song_id").iloc[0]
+        self.assertEqual(row.suno_lyrics, "")
+        self.assertEqual(int(row.is_suno_completed), 0)
+
+        # 2. Save Suno lyrics and mark as completed
+        db.save_suno_lyrics(self.song_id, "[Verse 1]\nModified for Suno\n[Chorus]\nSuno melody")
+        db.update_suno_status(self.song_id, True)
+
+        row = db.get_all_songs().query("id == @self.song_id").iloc[0]
+        self.assertIn("Modified for Suno", row.suno_lyrics)
+        self.assertEqual(int(row.is_suno_completed), 1)
+
+        # 3. Open in Library: card has badge and Suno lyrics renders in overview
+        app = self.open_song()
+        card = app.get("html")[0].proto.body
+        self.assertIn("🎵 Suno Done", card)
+        # Should now have 3 html blocks: card, original lyrics, suno lyrics
+        self.assertEqual(len(app.get("html")), 3)
+
+        # 4. In Edit tab, edit Suno lyrics and uncheck completion
+        app.button_group(key=f"library_section_{self.song_id}").set_value("Edit").run()
+        self.assertFalse(app.exception)
+        app.text_area(key=f"edit_suno_lyrics_{self.song_id}").set_value("New Suno Edit").run()
+        app.checkbox(key=f"edit_suno_completed_{self.song_id}").uncheck().run()
+        next(button for button in app.button if "Save updates" in button.label).click().run()
+        self.assertFalse(app.exception)
+
+        row = db.get_all_songs().query("id == @self.song_id").iloc[0]
+        self.assertEqual(row.suno_lyrics, "New Suno Edit")
+        self.assertEqual(int(row.is_suno_completed), 0)
+
+    def test_overview_shows_story_and_copy_button(self):
+        app = self.open_song()
+        # Verify the story text is present in the rendered markdown
+        markdowns = [md.value for md in app.markdown]
+        self.assertTrue(any("The story" in val for val in markdowns))
+        # Verify iframe component for copying story was rendered
+        iframes = app.get("iframe")
+        self.assertTrue(len(iframes) >= 1)
+        # Check that story text appears in iframe proto or html
+        story_iframe_found = any("Friends cook dinner." in getattr(iframe.proto, "srcdoc", "") for iframe in iframes)
+        self.assertTrue(story_iframe_found)
+
+    def test_library_floating_song_fab_renders(self):
+        app = self.open_song()
+        # Verify that the hero card has the id attribute
+        cards = [h.proto.body for h in app.get("html")]
+        self.assertTrue(any('id="library-song-hero-card"' in card for card in cards))
+        # Verify the floating FAB component was injected via iframe
+        iframes = app.get("iframe")
+        fab_found = any("audingo-floating-library-song-btn" in getattr(iframe.proto, "srcdoc", "") for iframe in iframes)
+        self.assertTrue(fab_found)
+
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -8,6 +8,8 @@ LIGHT = {
     "pink": "#AF3150", "green-bg": "#EAF5EE", "amber-bg": "#FFF4DC",
     "red-bg": "#FFF0EE", "neutral-bg": "#ECECEE", "neutral-ink": "#515154",
     "track": "#E8E8ED", "sidebar": "#FBFBFD", "mark": "#1D1D1F",
+    "tag-orange": "#D9480F", "tag-orange-bg": "rgba(217, 72, 15, 0.08)",
+    "tag-orange-border": "rgba(217, 72, 15, 0.28)",
 }
 DARK = {
     "bg": "#161617", "surface": "#232325", "ink": "#F5F5F7",
@@ -17,6 +19,8 @@ DARK = {
     "pink": "#F2A8BC", "green-bg": "#233C2C", "amber-bg": "#423621",
     "red-bg": "#442A29", "neutral-bg": "#303033", "neutral-ink": "#D1D1D6",
     "track": "#3D3D42", "sidebar": "#1C1C1E", "mark": "#343437",
+    "tag-orange": "#FF922B", "tag-orange-bg": "rgba(255, 146, 43, 0.12)",
+    "tag-orange-border": "rgba(255, 146, 43, 0.32)",
 }
 
 

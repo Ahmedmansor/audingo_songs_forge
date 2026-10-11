@@ -100,6 +100,20 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .library-song-stats .library-stat-extra b { color: var(--studio-amber); }
 .library-song-stats span { display: block; font-size: .75rem; color: var(--studio-muted); margin-top: 2px; }
 .library-lyrics { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--studio-ink); font-size: 1rem; line-height: 1.85; padding: 8px; }
+.library-lyrics .lyrics-tag {
+    color: var(--studio-tag-orange, #FF922B);
+    background: var(--studio-tag-orange-bg, rgba(255, 146, 43, 0.12));
+    border: 1px solid var(--studio-tag-orange-border, rgba(255, 146, 43, 0.32));
+    padding: 1px 8px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.93em;
+    letter-spacing: 0.015em;
+    display: inline-block;
+    margin: 2px 0;
+    line-height: 1.5;
+    user-select: text;
+}
 .library-word-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .library-word-list > span { margin: 0; }
 .st-key-library_detail { margin-top: 10px; }
@@ -130,3 +144,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 @media (prefers-reduced-motion: reduce) {
     .stApp *, .stApp *::before, .stApp *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+.suno-select-badge {
+    color: #10B981;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+

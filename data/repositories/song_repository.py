@@ -82,9 +82,17 @@ def get_all_songs(db_path: Path = DB_PATH) -> pd.DataFrame:
     """Retrieve all saved songs from the database, sorted newest first."""
     with get_connection(db_path) as conn:
         df = pd.read_sql_query(
-            "SELECT id, title, lyrics, target_words, bonus_words, reused_words, extra_words, mood_breakdown, genre, song_structure, creative_concept, created_at, refinement_report, source_domain FROM songs ORDER BY id DESC",
+            "SELECT id, title, lyrics, target_words, bonus_words, reused_words, extra_words, mood_breakdown, genre, song_structure, creative_concept, created_at, refinement_report, source_domain, suno_lyrics, is_suno_completed FROM songs ORDER BY id DESC",
             conn
         )
+        if "suno_lyrics" not in df.columns:
+            df["suno_lyrics"] = ""
+        else:
+            df["suno_lyrics"] = df["suno_lyrics"].fillna("")
+        if "is_suno_completed" not in df.columns:
+            df["is_suno_completed"] = 0
+        else:
+            df["is_suno_completed"] = df["is_suno_completed"].fillna(0).astype(int)
         return df
 
 
@@ -103,6 +111,8 @@ def update_song(
     sync_ngsl_usage: bool = True,
     db_path: Path = DB_PATH,
     source_domain: Optional[str] = None,
+    suno_lyrics: Optional[str] = None,
+    is_suno_completed: Optional[bool] = None,
 ) -> bool:
     """Update an existing song's details and metadata in SQLite."""
     with get_connection(db_path) as conn:
@@ -142,6 +152,10 @@ def update_song(
             updates.append(("creative_concept", creative_concept))
         if source_domain is not None:
             updates.append(("source_domain", source_domain or None))
+        if suno_lyrics is not None:
+            updates.append(("suno_lyrics", suno_lyrics))
+        if is_suno_completed is not None:
+            updates.append(("is_suno_completed", 1 if is_suno_completed else 0))
             
         set_clause = ", ".join(f"{col} = ?" for col, _ in updates)
         params = [val for _, val in updates] + [song_id]
@@ -156,6 +170,22 @@ def update_song(
                     list(added_targets)
                 )
                 
+        conn.commit()
+        return True
+
+
+def update_suno_status(song_id: int, is_completed: bool, db_path: Path = DB_PATH) -> bool:
+    """Update whether a song has been produced on Suno."""
+    with get_connection(db_path) as conn:
+        conn.cursor().execute("UPDATE songs SET is_suno_completed = ? WHERE id = ?", (1 if is_completed else 0, song_id))
+        conn.commit()
+        return True
+
+
+def save_suno_lyrics(song_id: int, suno_lyrics: str, db_path: Path = DB_PATH) -> bool:
+    """Save modified Suno lyrics for an existing song."""
+    with get_connection(db_path) as conn:
+        conn.cursor().execute("UPDATE songs SET suno_lyrics = ? WHERE id = ?", (suno_lyrics, song_id))
         conn.commit()
         return True
 

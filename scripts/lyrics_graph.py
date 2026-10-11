@@ -6,7 +6,11 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List, TypedDict, Optional
 from google.genai import types
 from data.services.gemini_service import get_gemini_client
-from data.services.fallback_engine import generate_with_fallback, MASTER_FALLBACK_CHAIN
+from data.services.fallback_engine import (
+    generate_with_fallback,
+    MASTER_FALLBACK_CHAIN,
+    CRITIC_FALLBACK_CHAIN,
+)
 from domain.services.prompt_service import ESL_GOAL_BLOCK
 from constants import get_category_profile
 
@@ -183,13 +187,14 @@ OUTPUT JSON SCHEMA:
     try:
         raw_response, new_model_idx = generate_with_fallback(
             prompt, 
-            start_index=state["active_model_index"], 
-            require_json=True
+            start_index=0, 
+            require_json=True,
+            model_chain=CRITIC_FALLBACK_CHAIN
         )
-        state["active_model_index"] = new_model_idx
+        critic_model_name = CRITIC_FALLBACK_CHAIN[new_model_idx]
         state["total_requests"] = state.get("total_requests", 0) + 1
         if "models_used" not in state: state["models_used"] = []
-        state["models_used"].append(MASTER_FALLBACK_CHAIN[new_model_idx])
+        state["models_used"].append(critic_model_name)
         
         critic_report = json.loads(raw_response)
         
@@ -216,7 +221,7 @@ OUTPUT JSON SCHEMA:
             "request_num": state["total_requests"],
             "loop": state.get("iterations", 1),
             "agent": "Critic Agent (الناقد الصارم)",
-            "model": MASTER_FALLBACK_CHAIN[new_model_idx],
+            "model": critic_model_name,
             "action": f"Scored lyrics: {critic_report.get('overall_score', 0)}% ({len(critic_report.get('lines_review', []))} lines evaluated)"
         })
         
@@ -460,7 +465,12 @@ OUTPUT JSON SCHEMA:
 }}
 """
 
-    raw_response, model_idx = generate_with_fallback(prompt, require_json=True)
+    raw_response, model_idx = generate_with_fallback(
+        prompt, 
+        start_index=0, 
+        require_json=True,
+        model_chain=CRITIC_FALLBACK_CHAIN
+    )
     end_time = time.time()
     
     critic_report = json.loads(raw_response)
@@ -502,7 +512,7 @@ OUTPUT JSON SCHEMA:
         "flagged_count": flagged_count,
         "dropped_words": critic_report.get("dropped_words", []),
         "raw_lyrics": draft,
-        "model_used": MASTER_FALLBACK_CHAIN[model_idx],
+        "model_used": CRITIC_FALLBACK_CHAIN[model_idx],
         "time_taken": round(end_time - start_time, 1)
     }
 
