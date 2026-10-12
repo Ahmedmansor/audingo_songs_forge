@@ -362,7 +362,8 @@ If a target word can only be used by crossing a red line, drop it. Red lines alw
 - Use one consistent variety of English in the whole song. Never mix American and British forms.
 
 ## STORY RULES
-- Plan the story silently first: setting, characters, 5-6 events in time order, ending, and where each target word fits naturally.
+- Strictly adhere to the established Story Concept: "{story_text}".
+- Words First Principle: Target words must appear in their authentic, natural spoken meaning. The story scenario gives characters real, believable reasons to speak them; never distort a word's meaning or force awkward syntax.
 - Every character who speaks or is mentioned must be named or clearly identified. No unexplained "he" or "they."
 - One place, one continuous situation. Memories are allowed only if they directly support the conflict.
 - Every line advances or deepens the story. No random imagery, no jumps outside it.

@@ -14,6 +14,7 @@ from constants import (
     MOOD_CATEGORIES,
     GEMINI_MODEL_CANDIDATES,
     get_category_profile,
+    sample_domain_creative_sparks,
 )
 
 load_dotenv()
@@ -54,7 +55,11 @@ def get_gemini_client(api_key: Optional[str] = None):
     return genai.Client(api_key=keys[0])
 
 
-def build_analysis_prompt(words: List[str], domain: str = "Basic / Neutral") -> str:
+def build_analysis_prompt(
+    words: List[str],
+    domain: str = "Basic / Neutral",
+    sparks: Optional[Dict[str, Any]] = None,
+) -> str:
     """Build the JSON schema instruction prompt for Gemini, anchored in the selected vocabulary domain."""
     words_str = ", ".join(words)
     genres_str = "\n".join(f"- {g}" for g in GENRES)
@@ -62,15 +67,37 @@ def build_analysis_prompt(words: List[str], domain: str = "Basic / Neutral") -> 
     moods_str = "\n".join(f"- {m}" for m in MOOD_CATEGORIES)
 
     profile = get_category_profile(domain)
-    settings_examples = profile.get("story_settings_examples", [])
-    settings_bullets = "\n".join(f"  * {s}" for s in settings_examples) if settings_examples else f"  * {profile.get('setting', 'Authentic real-world situations')}"
-    conflicts = profile.get("story_conflict_archetypes", [])
-    conflicts_bullets = "\n".join(f"  * {c}" for c in conflicts) if conflicts else "  * A realistic human challenge or decision"
+    if sparks is None:
+        sparks = sample_domain_creative_sparks(domain)
+
+    settings_bullets = (
+        "\n".join(f"  * {s}" for s in sparks.get("sampled_settings", []))
+        if sparks.get("sampled_settings")
+        else f"  * {profile.get('setting', 'Authentic real-world situations')}"
+    )
+    conflicts_bullets = (
+        "\n".join(f"  * {c}" for c in sparks.get("sampled_conflicts", []))
+        if sparks.get("sampled_conflicts")
+        else "  * A realistic human challenge or decision"
+    )
     directive = profile.get("domain_directive", "")
+
+    char_setup = sparks.get("character_setup", {})
+    char_label = char_setup.get("label", "Two people in direct conversation")
+    char_instruction = char_setup.get("instruction", "Two clearly identified characters talk face to face.")
+
+    arc_setup = sparks.get("arc", {})
+    arc_name = arc_setup.get("name", "Classic Resolution")
+    arc_flow = arc_setup.get("arc", "Problem -> turning point -> quiet determination")
+    arc_flavor = arc_setup.get("ending_flavor", "Characters find a way forward together.")
+
+    time_str = sparks.get("time", "An authentic time of day matching the scene")
+    props_str = ", ".join(sparks.get("props", [])) if sparks.get("props") else "Tangible everyday objects matching the scene"
 
     return f"""You are an elite music producer, ESL pedagogy specialist, and master lyricist analyzing a specific vocabulary batch for educational songwriting.
 
-CONTEXT: These words will be crafted into a radio-ready song designed for English language learners. The song must weave these words into authentic, practical real-life human experiences and conversational dialogue — NOT in abstract metaphors or fantasy tropes.
+AUDINGO EDUCATIONAL MISSION:
+The song must weave these 20 target words into an authentic, practical real-life human experience with natural conversational dialogue. English language learners must be able to memorize ANY single line and use it naturally in real life.
 
 Here is the batch of 20 target vocabulary words:
 {words_str}
@@ -84,7 +111,13 @@ Available Song Structures:
 Available Mood Categories (Percentages MUST sum up to exactly 100):
 {moods_str}
 
-CRITICAL DIRECTIVE 1: FULL HUMAN EMOTIONAL SPECTRUM (DO NOT DEFAULT TO HAPPY / UPLIFTING):
+CRITICAL PRINCIPLE 1: TARGET WORDS LEAD THE STORY (WORDS FIRST, SCENARIO SECOND):
+- Examine the 20 target vocabulary words in front of you first.
+- The story scenario MUST naturally call for characters to speak these exact words with their genuine, everyday meanings in spoken dialogue.
+- NEVER bend, distort, or force target words into an unnatural or mismatched setting.
+- The thematic domain '{domain}' and the sampled creative sparks below are catalysts to inspire a concrete, vivid scene — choose a storyline where these 20 words fit like a glove.
+
+CRITICAL DIRECTIVE 2: FULL HUMAN EMOTIONAL SPECTRUM (DO NOT DEFAULT TO HAPPY / UPLIFTING):
 - Real human life encompasses a rich tapestry of emotions:
   * Sadness, heartbreak, painful goodbyes, disappointment, separation, loneliness, or grieving a loss -> MUST select "Sad / Heartbroken" or "Nostalgic / Melancholic".
   * Deep nostalgia, reminiscing on old memories, homesickness, childhood, longing -> "Nostalgic / Melancholic".
@@ -96,7 +129,7 @@ CRITICAL DIRECTIVE 1: FULL HUMAN EMOTIONAL SPECTRUM (DO NOT DEFAULT TO HAPPY / U
 - If the words convey struggle, hardship, difficulty, loss, or heavy emotional weight, DO NOT force an artificial happy ending or default to "Uplifting". Dive deep into authentic poignant sentiment!
 - Be decisive in your percentages: let the dominant emotional tone lead strongly (e.g., 60-80%).
 
-CRITICAL DIRECTIVE 2: DIVERSE GENRE MATCHING (BREAK THE ACOUSTIC / INDIE-POP MONOPOLY):
+CRITICAL DIRECTIVE 3: DIVERSE GENRE MATCHING (BREAK THE ACOUSTIC / INDIE-POP MONOPOLY):
 - DO NOT default repeatedly to "Acoustic / Folk" or "Indie Pop". Actively choose from the diverse genre palette based on emotional fit:
   * Emotional heartbreak, sorrow, or grand vocal moments -> "Cinematic / Ballad", "R&B / Contemporary Soul", "Lo-Fi / Chillhop", "Country / Americana"
   * Romantic, tender, or soulful moments -> "R&B / Contemporary Soul", "Jazz / Bossa Nova", "Pop"
@@ -105,87 +138,34 @@ CRITICAL DIRECTIVE 2: DIVERSE GENRE MATCHING (BREAK THE ACOUSTIC / INDIE-POP MON
   * Relaxed, mellow, introspective, everyday coffee shop -> "Lo-Fi / Chillhop", "Melodic Chill Electronic", "Jazz / Bossa Nova", "Reggae / Tropical Pop"
   * Rootsy storytelling, everyday blue-collar struggles, journey -> "Country / Americana", "Acoustic / Folk"
 
-CRITICAL DIRECTIVE 3: CRITICAL STORY CONCEPT INSTRUCTIONS (SPECIFIC, HIGH-FIDELITY STORYLINE ROADMAP):
-The creative story concept must be CONCRETE, VIVID, and SPECIFIC — NEVER generic, vague, or detached from the category.
-It serves as the narrative anchor for both the lyricist and the vocabulary audit.
-
 ACTIVE CATEGORY DOMAIN: "{domain}"
 
-ILLUSTRATIVE SETTINGS (SPRINGBOARDS FOR INSPIRATION — DO NOT LIMIT YOURSELF TO THESE EXACT BULLETS):
+CREATIVE INSPIRATION SPARKS FOR THIS BATCH (DOMAIN-TAILORED):
+- Suggested Time of Day: {time_str}
+- Character Setup: {char_label} — {char_instruction}
+- Narrative Arc & Resolution Tone: {arc_name} ({arc_flow}) — Ending flavor: {arc_flavor}
+- Authentic Sensory Props (Touchstones to ground the physical scene): {props_str}
+
+SAMPLE SETTINGS (INSPIRATION SPRINGBOARDS):
 {settings_bullets}
 
-CORE CONFLICT & DRAMATIC STAKES (ILLUSTRATIVE ARCHETYPES):
+SAMPLE CONFLICT ARCHETYPES:
 {conflicts_bullets}
 
 DOMAIN-SPECIFIC VOCABULARY & DIALOGUE DIRECTIVE:
 {directive}
 
-CREATIVE DIVERSITY & EXPANSION PRINCIPLE (تنوع إبداعي لا نهائي في نفس السياق):
-1. THE BULLETS ABOVE ARE INSPIRATIONAL EXAMPLES, NOT A CLOSED LIST:
-   - We produce a massive library of songs; NEVER mechanically copy or loop through the exact same 4-5 bullet points!
-   - Understand the *ecosystem and spirit* of "{domain}" and invent fresh, diverse, realistic situations within that world that naturally fit the specific 20 target words in front of you.
-   - For example, in "Science, Tech & Academia", explore the wide universe of science and discovery:
-     * Marine biology research vessels, field ecology stations, or archaeological excavations.
-     * Cybersecurity war-rooms responding to an alert, or server data centers during a cooling failure.
-     * Architecture studios reviewing structural blueprints, or aeronautics flight simulation testing.
-     * Astronomy observatories tracking an anomaly, or meteorology teams tracking an incoming storm.
-     * Pharmaceutical trial reviews, hospital radiology/pathology clinics, or university lecture debate halls.
-     * High-school robotics competition pits, science fair mentors, or chemistry lab patent preparations.
-   - In "Business & Career", explore creative agency pitches, logistics shipping docks, artisan manufacturing floors, coffee roasteries, trade show booths, culinary restaurant kitchen rushes, hotel guest diplomacy, freelance contract negotiations, or performance reviews.
-   - In "Law, Politics & Society", explore investigative newsrooms, consumer protection hearings, public library board debates, tenant rights clinics, environmental advocacy field offices, courthouse corridors, municipal town halls, or grassroots phone banks.
-   - In "Emotions & Relationships", explore profound human vulnerability and genuine connection:
-     * Late-night drives confessing hidden feelings, dawn conversations on lake shores, diner booths hashing out life decisions.
-     * Hospital rooms holding hands in quiet solidarity, balcony talks during crowded family gatherings, apologizing on midnight neighborhood walks.
-     * Bridging long distances across time zones, forgiving past broken promises, or gently accepting that paths have changed without losing love.
-   - In "Street & Daily Life", explore the vibrant pulse of urban neighborhoods and everyday community grit:
-     * Crowded subway cars during delays trading jokes, barbershops and salons debating neighborhood life, late-night food trucks.
-     * Farmer's markets bargaining on crisp mornings, laundromats and mailrooms solving parcel mix-ups, convenience store aisles at 2 AM.
-     * Pickup basketball games at dusk blowing off work steam, helping neighbors carry groceries up walk-up stairs, or block cleanups.
-   - In "Basic / Neutral", explore the rich texture of authentic everyday human life across the FULL emotional spectrum (INVENT, NEVER COPY):
-     * Driveway DIY car repairs, garage tool organizing, or fixing a sputtering lawnmower with a neighbor.
-     * Commuter train platform delays, subway transfer banter, or shared bus terminal encounters.
-     * Late-night laundromats folding clothes while trading candid life stories over coffee.
-     * Late-night highway drive or parked at a roadside rest stop, talking through major life crossroads.
-     * Supermarket checkout mishaps, forgotten shopping lists, or cooking dinner with improvisational ingredients.
-     * Community garden weeding, dog park morning encounters, or neighborhood yard sales.
-     * Kitchen table budget spreadsheets, sorting utility bills, or planning a weekend road trip.
-     * Hardware store advice, repairing a leaky faucet, or painting a hallway together.
-     * Front porch sunset reflections, unwinding after a long shift, or resolving an everyday misunderstanding.
-     * Quiet hospital waiting rooms late at night, whispering comfort while waiting for difficult news.
-     * An old diner booth at 1 AM over lukewarm coffee, two friends clearing up months of unspoken distance or burnout.
-     * Empty train station platform or bus depot at dawn, watching taillights pull away after a painful goodbye.
-     * Quiet kitchen table at 2 AM with cold tea, sitting with grief or a heavy heart after a relationship ends.
-     * A quiet hospital corridor or pharmacy counter, waiting for test results and whispering steady reassurance.
-     * Rainy park bench or quiet porch, sitting with an empty chair and speaking memories to someone who is gone.
-     * Busy airport departure gate during a weather delay, two travelers having an unexpectedly candid talk.
-     * Standing over the kitchen sink washing dinner dishes together, admitting a mistake and apologizing.
-     * Workplace breakroom between shifts, two colleagues sharing a sandwich and talking through family pressure.
-     * Waiting under a shared umbrella at a windy bus stop in the rain, laughing off a rough day at work.
-     * Sitting on front porch steps early on a Sunday morning, talking through doubts about a new job or relationship.
-     * STRICT BAN ON CLICHÉ FIXATIONS (NO CARDBOARD BOXES / PACKING MOVING BOXES / ATTIC DECLUTTERING):
-       Do NOT default to the lazy cliché of 'two friends sitting on the floor surrounded by cardboard boxes' or 'packing boxes before moving' or 'sorting attic relics'. Real human life takes place across hundreds of dynamic, varied environments — diners, cars, bus stops, clinics, kitchens, breakrooms, and front porches!
-
-2. DOMAIN FIDELITY WITHOUT MONOTONY:
-   - The scene MUST genuinely belong to the world of "{domain}" (do NOT drift into surreal fantasies, dictionary lectures, or detached daydreaming).
-   - Each story must have its own distinct characters, specific equipment/tools, sensory details, and unique conflict tailored to the 20 words.
-
-3. NATURAL STAGE FOR ALL 20 TARGET WORDS:
-   - The scenario must give the characters believable, authentic reasons to speak the 20 target words in real dialogue.
-   - Do NOT choose an unrelated storyline where target words would feel forced or out of place.
-
-In "creative_concept", construct a rich, highly specific 3-4 sentence scenario that explicitly defines:
+In "creative_concept", construct a rich, highly specific 3-4 sentence narrative scenario that explicitly defines:
 1. Specific Characters & Relationship:
-   - Concrete roles matching the domain (e.g., two marine researchers, a security analyst and systems lead, two architecture partners).
+   - Specific roles matching '{domain}' and the character setup above.
 2. Tangible Physical Setting & Sensory Atmosphere:
-   - Anchor the scene in a concrete time, place, and sensory environment belonging to this domain (e.g. "An astronomy observatory control deck at 3 AM with flickering telemetry monitors as rain lashes the dome").
+   - Anchor the scene in a concrete time, place, and sensory environment belonging to this domain, drawing from the suggested time and props.
 3. Core Human Stakes & Dramatic Tension:
-   - Identify the immediate emotional or practical dilemma (e.g. "An unexpected data discrepancy hours before the press briefing", "A difficult choice between two competing hypotheses").
+   - Identify the immediate emotional or practical dilemma that naturally requires the 20 target words to be spoken.
 4. Clear Narrative Progression:
-   - Opening Situation: The immediate setting and action where characters talk.
-   - Turning Point: The pivotal realization or honest conversation that shifts the mood.
-   - Resolution / Outlook: The quiet decision or shared determination they reach.
+   - Follow the narrative arc ({arc_name}) towards its specified resolution flavor ({arc_flavor}).
 5. Real Spoken Dialogue Anchors:
-   - The scene must naturally inspire everyday spoken American English lines that an ESL learner could memorize and use in real life ("We don't have to figure it all out tonight", "Can I ask you something honest?", "Let's test this from a different angle").
+   - The scene must naturally inspire everyday spoken American English lines that an ESL learner could memorize and use in real life.
 
 - STRICT PROHIBITIONS:
   * NO vague one-liners like "Someone faces challenges in life and finds hope".
@@ -204,15 +184,22 @@ Return a valid JSON object with the following exact schema:
 """
 
 
-def analyze_vocabulary_mood(words: List[str], domain: str = "Basic / Neutral") -> Dict[str, Any]:
+def analyze_vocabulary_mood(
+    words: List[str],
+    domain: str = "Basic / Neutral",
+    sparks: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """
     Send the 20 words to Gemini to get mood breakdown, genre, structure, and domain-anchored story concept.
     Uses ROUTINE_STUDIO_CHAIN with multi-key rotation, prioritizing fast/light models to preserve top models for critic.
     """
     from data.services.fallback_engine import generate_with_fallback, ROUTINE_STUDIO_CHAIN
 
-    prompt = build_analysis_prompt(words, domain=domain)
-    
+    if sparks is None:
+        sparks = sample_domain_creative_sparks(domain)
+
+    prompt = build_analysis_prompt(words, domain=domain, sparks=sparks)
+
     try:
         raw, model_idx = generate_with_fallback(
             prompt=prompt,
@@ -221,27 +208,28 @@ def analyze_vocabulary_mood(words: List[str], domain: str = "Basic / Neutral") -
             require_json=True,
             temperature=0.85,
         )
-        
+
         data = json.loads(raw)
         model_name = ROUTINE_STUDIO_CHAIN[model_idx]
-        
+
         genre = data.get("genre", GENRES[0])
         if genre not in GENRES:
             genre = GENRES[0]
-            
+
         structure = data.get("song_structure", SONG_STRUCTURES[0])
         if structure not in SONG_STRUCTURES:
             structure = SONG_STRUCTURES[0]
-            
+
         mood_breakdown = data.get("mood_breakdown", {})
-        
+
         return {
             "success": True,
             "model_used": model_name,
             "mood_breakdown": mood_breakdown,
             "genre": genre,
             "song_structure": structure,
-            "creative_concept": data.get("creative_concept", "")
+            "creative_concept": data.get("creative_concept", ""),
+            "creative_sparks": sparks,
         }
     except Exception as exc:
         logger.warning("Failed in analyze_vocabulary_mood: %s", exc)
@@ -253,11 +241,14 @@ def analyze_vocabulary_mood(words: List[str], domain: str = "Basic / Neutral") -
                 "Happy": 30,
                 "Energetic": 30,
                 "Uplifting / Inspiring": 20,
-                "Chill / Relaxed": 20
+                "Chill / Relaxed": 20,
             },
             "genre": GENRES[0],
             "song_structure": SONG_STRUCTURES[0],
-            "creative_concept": "A vibrant and catchy song weaving the target vocabulary together."
+            "creative_concept": (
+                f"Two people in a grounded {domain} setting working through an honest conversation."
+            ),
+            "creative_sparks": sparks,
         }
 
 
@@ -532,11 +523,11 @@ def curate_thematic_vocabulary_batch(
         directive = profile.get("domain_directive", "")
 
         if domain_focus == "Basic / Neutral":
-            drift_rule = "- Ground the scenario in authentic everyday life, conversations, and human experiences (embracing both daily warmth and poignant moments of grief, sadness, or quiet goodbyes). Avoid abstract fantasies or overly academic lectures. BAN ON LAZY CLICHÉS: Strictly avoid defaulting to cardboard boxes, moving apartments, or sorting attic boxes."
+            drift_rule = "- Ground the scenario in authentic everyday life, conversations, and human experiences (embracing both daily warmth and poignant moments of grief, sadness, or quiet goodbyes). Avoid abstract fantasies or overly academic lectures. CREATIVE EXPANSION: Draw from the full landscape of varied human environments across different times of day."
             scenario_instruction = f"""1. SCENARIO FIRST (Anchor the Scene in Everyday Life — INVENT, DO NOT COPY):
    - First, scan the candidate words to discover a concrete, relatable everyday human scenario that connects the highest quality candidates together.
-   - FULL EMOTIONAL PALETTE (EMBRACE SADNESS & POIGNANCY): Embrace sad, poignant, melancholic, or heartbreaking everyday moments (e.g. parting ways, hospital waiting rooms, coping with grief, quiet loneliness) just as naturally as daily routines. Sadness is an authentic pillar of everyday human experience.
-   - STRICT BAN ON LAZY TROPES: Avoid the cliché of 'two friends sitting on the floor packing cardboard boxes' or 'sorting attic relics'. Real life happens in cars, diners, bus stops, clinics, kitchens, breakrooms, and front porches!
+   - FULL EMOTIONAL PALETTE (EMBRACE SADNESS & POIGNANCY): Embrace sad, poignant, melancholic, or heartbreaking everyday moments (e.g. parting ways, hospital clinics, coping with grief, quiet loneliness) just as naturally as daily routines. Sadness is an authentic pillar of everyday human experience.
+   - CREATIVE EXPANSION: Explore diverse settings across morning, afternoon, evening, and night — busy morning markets, school pickup lines, sunlit garages, dinner tables, clinics, and highway drives.
    - Use the representative settings and conflict archetypes as creative inspiration, but NEVER copy them mechanically! Invent a fresh, believable situation tailored specifically to the words in front of you.
    - Anchor the scene with specific human characters facing a real situation together in natural spoken English."""
             practicality_guidance = f"""- Select words that are foundational, high-utility, and natural in real-life spoken American English.
