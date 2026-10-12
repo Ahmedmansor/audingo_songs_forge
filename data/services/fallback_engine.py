@@ -13,11 +13,12 @@ logger = logging.getLogger(__name__)
 # Ordered from STRONGEST to WEAKEST
 # The system will always try the strongest first. If it fails (quota/limits), 
 # it gracefully degrades to the next available model.
-# Dedicated Critic Fallback Chain: Prioritizes Gemini 3.8 Flash, 3.7 Flash, and 3.6 Flash for sharp, strict critique
+# Dedicated Critic Fallback Chain: Prioritizes Gemini 3.6 Flash (fastest high-IQ model at ~2s) 
+# and gracefully falls back to 3.7 Flash and 3.8 Flash without stalling on 503 server overloads.
 CRITIC_FALLBACK_CHAIN = [
-    "gemini-3.8-flash",
-    "gemini-3.7-flash",
     "gemini-3.6-flash",
+    "gemini-3.7-flash",
+    "gemini-3.8-flash",
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",

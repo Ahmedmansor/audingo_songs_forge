@@ -26,7 +26,7 @@ PREFERRED_MODELS = GEMINI_MODEL_CANDIDATES
 def get_gemini_api_keys() -> List[str]:
     """Retrieve all available Gemini API keys from environment or .env in order."""
     from dotenv import load_dotenv
-    load_dotenv(override=False)
+    load_dotenv(override=True)
 
     keys = []
     k1 = (os.environ.get("GEMINI_API_KEY") or "").strip()
