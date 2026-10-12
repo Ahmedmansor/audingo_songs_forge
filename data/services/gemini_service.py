@@ -113,7 +113,8 @@ Available Mood Categories (Percentages MUST sum up to exactly 100):
 
 CRITICAL PRINCIPLE 1: TARGET WORDS LEAD THE STORY (WORDS FIRST, SCENARIO SECOND):
 - Examine the 20 target vocabulary words in front of you first.
-- The story scenario MUST naturally call for characters to speak these exact words with their genuine, everyday meanings in spoken dialogue.
+- The story scenario MUST naturally provide a real-life situation where characters would speak these words during authentic conversation.
+- ABSOLUTELY DO NOT CRAM OR FORCE TARGET WORDS INTO THE CONCEPT SUMMARY: You are defining the movie pitch / stage setting (characters, situation, emotional stakes), NOT writing an ESL test paragraph. Writing a paragraph that packs 10-15 target words together results in an unnatural, robotic "incantation". Keep the concept summary clean, human, and cinematic. The words will be placed naturally into the full lyrics later.
 - NEVER bend, distort, or force target words into an unnatural or mismatched setting.
 - The thematic domain '{domain}' and the sampled creative sparks below are catalysts to inspire a concrete, vivid scene — choose a storyline where these 20 words fit like a glove.
 - THINK OUTSIDE THE BOX & PIVOT FREELY: If the 20 words suggest an unexpected, original real-life scenario within '{domain}' that differs from the suggested sparks, FOLLOW THE WORDS! Never trap yourself in the suggestions. Think outside the box and invent fresh events, settings, and conflicts that give these specific words their most natural, powerful home.
@@ -183,6 +184,7 @@ In "creative_concept", construct a rich, highly specific 3-4 sentence narrative 
    - The scene must naturally inspire everyday spoken American English lines that an ESL learner could memorize and use in real life.
 
 - STRICT PROHIBITIONS:
+  * NO VOCABULARY CRAMMING (ABSOLUTE ZERO WORD-SALAD): Do NOT attempt to cram, shoehorn, or force the 20 target words into this 3-4 sentence concept text! Doing so creates an absurd, robotic, unreadable "incantation" or vocabulary exam paragraph. The concept summary is merely the theatrical logline / stage setting (characters, situation, emotional stakes). The 20 words will be distributed naturally throughout the full song lyrics later by the lyricist, NOT jammed here. Write the concept in pure, effortless, organic human English.
   * NO verbatim copying: Do NOT copy-paste the suggested props, times, or example sentences word-for-word. They are sparks of inspiration to show the vibe — invent a fresh, original scenario whose physical details emerge naturally from your 20 target words.
   * NO vague one-liners like "Someone faces challenges in life and finds hope".
   * NO corporate textbook clichés or abstract surreal fantasies.
@@ -207,9 +209,9 @@ def analyze_vocabulary_mood(
 ) -> Dict[str, Any]:
     """
     Send the 20 words to Gemini to get mood breakdown, genre, structure, and domain-anchored story concept.
-    Uses ROUTINE_STUDIO_CHAIN with multi-key rotation, prioritizing fast/light models to preserve top models for critic.
+    Uses CRITIC_FALLBACK_CHAIN to prioritize top-tier models (3.8-flash, 3.7-flash, 3.6-flash) for deep, high-IQ narrative concepts.
     """
-    from data.services.fallback_engine import generate_with_fallback, ROUTINE_STUDIO_CHAIN
+    from data.services.fallback_engine import generate_with_fallback, CRITIC_FALLBACK_CHAIN
 
     if sparks is None:
         sparks = sample_domain_creative_sparks(domain)
@@ -219,14 +221,14 @@ def analyze_vocabulary_mood(
     try:
         raw, model_idx = generate_with_fallback(
             prompt=prompt,
-            model_chain=ROUTINE_STUDIO_CHAIN,
+            model_chain=CRITIC_FALLBACK_CHAIN,
             start_index=0,
             require_json=True,
             temperature=0.85,
         )
 
         data = json.loads(raw)
-        model_name = ROUTINE_STUDIO_CHAIN[model_idx]
+        model_name = CRITIC_FALLBACK_CHAIN[model_idx]
 
         genre = data.get("genre", GENRES[0])
         if genre not in GENRES:

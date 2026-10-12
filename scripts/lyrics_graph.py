@@ -40,7 +40,7 @@ def critic_calibration(profile: Dict[str, Any]) -> str:
 - Natural English includes educated and moderately formal speech when appropriate to the speaker and situation. Everyday meaning does not mean street slang.
 - Basic / Neutral vocabulary is valid in every category. Judge actual meaning and context, not category labels.
 - Ordinary pronouns and references are valid when clear in a real situation; the standalone test does not require every line to retell the story.
-- Normal chorus repetition is not an authenticity flaw. Flag repetition only if it creates a specific meaning or continuity problem.
+- Normal chorus repetition is not an authenticity flaw. CHORUS STORY TIMING IMMUNITY: A chorus is a recurring musical hook/refrain, NOT a linear plot beat. NEVER penalize, flag, or deduct points from chorus lines for chronological story order, narrative timing, or mentioning tools/actions before or after verses (e.g. asking for tools in Chorus 1 before a breakdown or in Chorus 3 after a fix is standard musical songwriting, NEVER a chronological contradiction). Do NOT critique story order or chronological timing in the chorus.
 - Support every deduction with a concrete defect.
 - Do not give 90+ to a line you cannot defend. A real song rarely has every line above 90. If almost all your scores are 90+, re-check yourself.
 - Do not apply multiple deductions for the same underlying defect.
@@ -150,7 +150,7 @@ Start every line at 100 and subtract:
 - Filler added for rhyme or rhythm, or vague when read alone ("I hope that you can see"): -20
 - Fails the standalone test (not useful or not understandable on its own): -20
 - Target word used in a forced, odd or non-everyday way (apply only to the target words above): -25
-- Contradicts the story or the narrator's stance, or jumps outside the story/setting: -25
+- Contradicts the story or the narrator's stance, or jumps outside the story/setting (evaluate verses and bridge for chronological story order; NEVER penalize chorus lines for chronological timing/order as chorus is a recurring hook): -25
 - Stiff form where a contraction is natural in this setting ("I am sorry", "do not"): -10
 - Mixes dialects in the line, or uses forms outside {dialect}: -15
 - Longer than 9 syllables or hard to sing/memorize: -10
@@ -434,7 +434,7 @@ Start every line at 100 and subtract:
 - Filler added for rhyme or rhythm, or vague when read alone ("I hope that you can see"): -20
 - Fails the standalone test (not useful or not understandable on its own): -20
 - Target word used in a forced, odd or non-everyday way (apply only to the target words above): -25
-- Contradicts the story or the narrator's stance, or jumps outside the story/setting: -25
+- Contradicts the story or the narrator's stance, or jumps outside the story/setting (evaluate verses and bridge for chronological story order; NEVER penalize chorus lines for chronological timing/order as chorus is a recurring hook): -25
 - Stiff form where a contraction is natural in this setting ("I am sorry", "do not"): -10
 - Mixes dialects in the line, or uses forms outside {dialect}: -15
 - Longer than 9 syllables or hard to sing/memorize: -10

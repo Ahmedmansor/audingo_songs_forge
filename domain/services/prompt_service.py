@@ -951,7 +951,7 @@ If a target word can only be used by crossing a red line, drop it. Red lines alw
 - Every line advances or deepens the story. No random imagery, no jumps outside it.
 
 ## LINE QUALITY RULES
-- Each line is 6-9 syllables. Verses all have the same number of lines.
+- Line length: 5-9 syllables per line. Short punchy lines (4-5 syllables) are completely welcome for conversational reactions, exclamations, and dialogue hooks. Verses all have the same number of lines.
 - Test every line: would a native speaker say this to the person in this scene? If not, rewrite it.
 - No: poetic or abstract metaphors, inverted word order, filler to fit rhyme ("this way", "I'd say", "all along" as padding), stacked clichés.
 - If a perfect rhyme forces an awkward line, use a near rhyme or rewrite both lines.
@@ -987,11 +987,11 @@ def build_song_audit_prompt(target_words: Optional[List[str]] = None) -> str:
     """Constructs the strict Song Audit Prompt for copy-pasting into external LLMs (Claude/ChatGPT)."""
     words_joined = ", ".join(target_words) if target_words else ""
     target_words_note = f"\n- Current Target Words to verify: {words_joined}\n" if words_joined else ""
-    return f"""ممنوع الركاكة, محتوي تعليمي حقيقي لمتعلمين اللغة الانجليزية الي يحفظ سطر نتاكد انه سطر حقيقي بيتم استعماله في الحياة و سطر مشهور, الابتعاد عن السطور و الكلام المغمور الي في الكتب  و الروايات الكلاسيكية, التركيز علي الانجليزي المتعارف عليه. و القصة مترابطة بدون وجود اي شذوذ فيها
+    return f"""ممنوع الركاكة, محتوي تعليمي حقيقي لمتعلمين اللغة الانجليزية الي يحفظ سطر نتاكد انه سطر حقيقي بيتم استعماله في الحياة و سطر مشهور, الابتعاد عن السطور و الكلام المغمور الي في الكتب و الروايات الكلاسيكية, التركيز علي الانجليزي المتعارف عليه. و القصة مترابطة بدون وجود اي شذوذ فيها
 
-# SONG AUDIT PROMPT
+# SONG AUDIT PROMPT (REFINEMENT SIEVE)
 
-Audit the song above. Do not rewrite it yet. Be strict and honest. Do not say “excellent” unless every check passes.
+Audit the song above. Do not rewrite it yet. Be strict, honest, and objective.
 
 STEP 1: LINE-BY-LINE TABLE
 
@@ -1000,12 +1000,18 @@ For every line (skip repeated Chorus and Pre-Chorus after the first time), outpu
 Line | Syllables (written out, e.g. fed-er-al = 3) | Total | Natural? | Speaker would know this? | Issue
 
 Count syllables by writing each word’s syllables out. Never estimate.
-Flag any line outside 6-9 syllables.
+Syllable Standard: 5-9 syllables per line. Short punchy dialogue lines (4-5 syllables) are completely fine and welcome for natural reactions, exclamations, and hooks (e.g. "There! The belt's back on!"). Flag lines ONLY if they are overcrowded (10+ syllables) or dragged out. NEVER flag or expand natural native contractions (such as turning "belt's" into "belt is") just to artificially add syllables.
 “Natural?” means a native speaker would say this exact sentence to this person in this scene. Flag stiff, inverted, poetic, or padded lines.
 “Speaker would know this?” means the character saying it could realistically know it at that point in the scene.
 
+CRITICAL CRITIC ALIGNMENT (SITUATIONAL REGISTER & AUTHENTICITY):
+The Strict Critic penalizes lines by 25 points for subtle register mismatches between the characters, setting, and wording. Ensure:
+1. SCENARIO REGISTER FIT: Characters must speak in the exact register that naturally fits their relationship and setting. In casual/family scenes, dialogue must sound conversational and intimate (avoiding bureaucratic office jargon, news-broadcast melodrama, or clinical detachment). In professional, technical, or legal scenes, characters naturally use the authentic terminology of their field without artificial stiffening.
+2. CONVERSATIONAL TARGET INTEGRATION: Target words must emerge naturally as genuine spoken statements, authentic reactions, questions, or dialogue between characters. Never tack on a target word as an artificial label, announcement, or awkward afterthought.
+3. ORGANIC SENTENCE STRUCTURE (NO CHOPPED JUXTAPOSITION): Multiple target words in a single line are completely acceptable ONLY if they flow together in one coherent, natural sentence (e.g. "My daughter gave me great advice"). Never chop a line into disjointed, abrupt fragments just to fit words together.
+
 STEP 2: STORY CHECK
-Is it one place, one continuous situation, in time order?
+Is it one place, one continuous situation, in time order? (Verses and Bridge develop linearly; Chorus is a recurring musical hook exempt from chronological plot timing).
 Is every character named or clearly identified? Any unexplained “he” or “they”?
 Does every line advance or deepen the story? Any sudden jump or contradiction?
 Does the story use the scene details from the brief (setting, objects, atmosphere)?
@@ -1014,23 +1020,31 @@ STEP 3: DIALECT AND CLEANLINESS
 Any American/British mixing (vocabulary, spelling, grammar)?
 Any profanity or sensitive wording that is not an ordinary everyday expression?
 
-STEP 4: TARGET WORDS
-{target_words_note}For each target word, state: used or left out.
+STEP 4: TARGET WORDS (ANTI-LAZINESS & JUSTIFICATION AUDIT)
+{target_words_note}For each target word, state: Used or Left out.
 
-Used: is it in its everyday meaning, or forced?
-Left out: was a different natural context tried first? If a natural place exists, propose the line.
-List any extra non-target words that appear naturally (for coverage tracking).
+- Used: verify it is in its natural, everyday conversational meaning.
+- Left out (PROTECT & JUSTIFY RULES):
+  1. PROTECTION OF WORKING WORDS: Never drop a target word that was already working naturally in the previous draft just because you are editing adjacent lines. Preserving working words is mandatory.
+  2. REASON REQUIRED FOR EVERY DROP: If a target word cannot be used naturally, state the exact 1-sentence incompatibility reason (e.g. "'facility' is too formal/corporate for a small family kitchen"). Dropping words without an incompatibility reason is lazy and forbidden.
+  3. TARGET WORD RESCUE: If a line containing a target word fails Step 1 (stiff, jargon, or syllable mismatch), fix the sentence structure using the Critic Alignment rules while keeping the target word, before deciding to drop it.
 
-STEP 5: VERDICT
-List every failing line with a one-line fix.
-Give a final verdict: PASS (zero issues) or FAIL (issues remain).
-Then output the corrected final song in the original output format, changing only the failing lines and keeping the rest intact.
+STEP 5: VERDICT & CONVERGENCE (STOPPING CRITERION)
+
+- If ANY line has genuine issues (overcrowded 10+ syllables, unnatural syntax, story contradiction, or Critic traps):
+  * List every failing line with a one-line fix.
+  * Give verdict: FAIL (Issues identified, applying fixes).
+  * Output the revised song in the original format, fixing ONLY the failing lines and keeping all passing lines and working target words strictly intact.
+
+- CONVERGENCE RULE (BREAK THE INFINITE LOOP):
+  * If ALL lines in the song are already within natural rhythm (4-9 syllables), 100% natural spoken American English (zero Critic traps), and story-consistent:
+  * DO NOT invent cosmetic rewrites or subjective word substitutions.
+  * You MUST declare: VERDICT: PASS (READY FOR SUNO PRODUCTION).
+  * Output the final song cleanly without alterations.
 
 
-Keep the response concise. No long explanations.
-
+Keep the response concise. No long philosophical explanations.
 Write explanations in Arabic, keep lyrics in English.
-متحرقش كلام كتير في الرد كفاية التعديلات السابق و الجديد و النسخة المحدثة  فقط 
-في البورد بيتاعتي علشان الزقه براحتي
+متحرقش كلام كتير في الرد، كفاية التعديلات (السابق والجديد) والنسخة المحدثة فقط في البورد علشان ألزقه براحتي.
 """
 
