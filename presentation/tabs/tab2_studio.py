@@ -639,7 +639,9 @@ def render_tab_studio():
                 )
                 suno_text = prompt_builder.build_suno_style_prompt(
                     genre=st.session_state.selected_genre,
-                    vocalist=st.session_state.selected_vocalist
+                    vocalist=st.session_state.selected_vocalist,
+                    mood_analysis=mood_dict,
+                    creative_concept=concept,
                 )
                 poster_text = gemini_client.generate_studio_poster_prompt(
                     concept=concept,
@@ -656,9 +658,19 @@ def render_tab_studio():
             st.markdown("#### :material/music_note: 1. Suno AI Music Style Prompt (Ready to Paste into Suno):")
             st.caption("Dense, keyword-rich Suno style prompt (< 120 chars) tailored to your selected genre, tempo, and vocal clarity:")
             
+            mood_dict_val = (
+                st.session_state.mood_analysis.get("mood_breakdown", st.session_state.mood_analysis)
+                if (st.session_state.mood_analysis and isinstance(st.session_state.mood_analysis, dict))
+                else {}
+            )
+            concept_val = st.session_state.custom_concept.strip() or (
+                st.session_state.mood_analysis.get("creative_concept", "") if st.session_state.mood_analysis else ""
+            )
             suno_prompt_val = st.session_state.studio_suno_prompt or prompt_builder.build_suno_style_prompt(
                 genre=st.session_state.selected_genre,
-                vocalist=st.session_state.selected_vocalist
+                vocalist=st.session_state.selected_vocalist,
+                mood_analysis=mood_dict_val,
+                creative_concept=concept_val,
             )
             suno_char_len = len(suno_prompt_val)
             suno_color = "#10B981" if suno_char_len <= 120 else "#EF4444"

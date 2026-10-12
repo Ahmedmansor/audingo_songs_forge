@@ -116,17 +116,31 @@ CRITICAL PRINCIPLE 1: TARGET WORDS LEAD THE STORY (WORDS FIRST, SCENARIO SECOND)
 - The story scenario MUST naturally call for characters to speak these exact words with their genuine, everyday meanings in spoken dialogue.
 - NEVER bend, distort, or force target words into an unnatural or mismatched setting.
 - The thematic domain '{domain}' and the sampled creative sparks below are catalysts to inspire a concrete, vivid scene — choose a storyline where these 20 words fit like a glove.
+- THINK OUTSIDE THE BOX & PIVOT FREELY: If the 20 words suggest an unexpected, original real-life scenario within '{domain}' that differs from the suggested sparks, FOLLOW THE WORDS! Never trap yourself in the suggestions. Think outside the box and invent fresh events, settings, and conflicts that give these specific words their most natural, powerful home.
 
-CRITICAL DIRECTIVE 2: FULL HUMAN EMOTIONAL SPECTRUM (DO NOT DEFAULT TO HAPPY / UPLIFTING):
+CRITICAL PRINCIPLE 1B: POLYSEMY & FREEDOM FROM TRAGEDY CLICHES (AVOID DEFAULTING TO HOSPITALS):
+- English vocabulary is remarkably versatile (polysemous) — embrace the full breadth of real-world meanings:
+  * "operation" does NOT mean medical surgery by default — it can be running a family motel or diner, food truck operations, warehouse logistics, a family farm, flight operations, or a weekend community project.
+  * "suffer" does NOT require a hospital bed — a garden suffers from drought, a sports team suffers a defeat, a budget suffers from costs, a business suffers a seasonal slump.
+  * "recover" is recovering lost items, bouncing back from jetlag/travel, recovering costs, or regaining momentum after a setback.
+  * "facility" is a sports complex, campus, hotel, community center, terminal, resort, or workshop.
+  * "accommodation" is travel lodging, hotel booking, or seating.
+  * "visitor" is a customer, tourist, friend visiting from out of town, or campus guest.
+- AVOID AUTOMATIC TRAGEDY TRAPS: Do NOT immediately trap the story in a sterile hospital waiting room, sick child in surgery, fatal illness, or weeping funeral unless the user explicitly requested a medical drama. In '{domain}' especially, explore the vibrant, grounded fabric of daily life (running a family lodge, road trips, athletic training, home renovations, airport reunions, seasonal campus move-in, neighborhood projects, shared meals).
+
+CRITICAL DIRECTIVE 2: FULL HUMAN EMOTIONAL SPECTRUM (HONOR TRUE CONTEXT, NO FORCED GLOOM):
 - Real human life encompasses a rich tapestry of emotions:
-  * Sadness, heartbreak, painful goodbyes, disappointment, separation, loneliness, or grieving a loss -> MUST select "Sad / Heartbroken" or "Nostalgic / Melancholic".
+  * Sadness, heartbreak, painful goodbyes, disappointment, separation, loneliness, or grieving a loss -> select "Sad / Heartbroken" or "Nostalgic / Melancholic".
   * Deep nostalgia, reminiscing on old memories, homesickness, childhood, longing -> "Nostalgic / Melancholic".
   * High-stakes personal crossroads, intense drama, heated arguments, confrontation, pressure -> "Dramatic / Intense" or "Dark / Moody".
   * Romantic chemistry, tender confessions, vulnerability, butterflies -> "Romantic / Sweet".
   * Pure funk, weekend party, high adrenaline, celebration, triumph -> "Energetic" or "Playful / Quirky".
   * Laid-back contentment, lazy rainy Sunday, unwinding after a long week -> "Chill / Relaxed".
   * Genuine optimism, breakthroughs, shared triumphs -> "Happy" or "Uplifting / Inspiring".
-- If the words convey struggle, hardship, difficulty, loss, or heavy emotional weight, DO NOT force an artificial happy ending or default to "Uplifting". Dive deep into authentic poignant sentiment!
+- EMOTIONAL PLURALITY (NO MONOPOLY ON EITHER UNREALISTIC JOY OR ARTIFICIAL GLOOM):
+  * If the target words naturally reflect genuine sorrow, heartbreak, or painful goodbyes, honor that poignant truth without forcing fake cheerful optimism.
+  * BUT do NOT artificially manufacture a tragic illness, hospital ICU, or funeral drama just because words like 'suffer' or 'tough' appear.
+  * Match the true, natural situational context of everyday life.
 - Be decisive in your percentages: let the dominant emotional tone lead strongly (e.g., 60-80%).
 
 CRITICAL DIRECTIVE 3: DIVERSE GENRE MATCHING (BREAK THE ACOUSTIC / INDIE-POP MONOPOLY):
@@ -155,6 +169,7 @@ SAMPLE CONFLICT ARCHETYPES:
 DOMAIN-SPECIFIC VOCABULARY & DIALOGUE DIRECTIVE:
 {directive}
 
+CRITICAL STORY CONCEPT INSTRUCTIONS (SPECIFIC, HIGH-FIDELITY STORYLINE ROADMAP):
 In "creative_concept", construct a rich, highly specific 3-4 sentence narrative scenario that explicitly defines:
 1. Specific Characters & Relationship:
    - Specific roles matching '{domain}' and the character setup above.
@@ -168,6 +183,7 @@ In "creative_concept", construct a rich, highly specific 3-4 sentence narrative 
    - The scene must naturally inspire everyday spoken American English lines that an ESL learner could memorize and use in real life.
 
 - STRICT PROHIBITIONS:
+  * NO verbatim copying: Do NOT copy-paste the suggested props, times, or example sentences word-for-word. They are sparks of inspiration to show the vibe — invent a fresh, original scenario whose physical details emerge naturally from your 20 target words.
   * NO vague one-liners like "Someone faces challenges in life and finds hope".
   * NO corporate textbook clichés or abstract surreal fantasies.
   * Make the scenario so vivid and specific that any songwriter instantly sees the entire scene unfold like a movie scene.
@@ -412,7 +428,8 @@ def build_variant_instruction(title: str, lyrics: str, genre: str, vocalist: str
 1. Must be strictly UNDER 120 characters.
 2. Format as a comma-separated list of keywords.
 3. Must explicitly include the {genre}, the {vocalist} lead vocals, and descriptors for clear, upfront vocals to ensure lyrical clarity.
-4. Include a steady BPM appropriate for the genre (e.g., 112 bpm).
+4. DYNAMIC TEMPO & BPM: Vary the BPM and groove naturally to match this specific song's emotional atmosphere (e.g. relaxed 98 bpm, driving 112 bpm, upbeat 118 bpm, bouncy 124 bpm, intimate 84 bpm). Do NOT default to a fixed 112 bpm.
+5. DIVERSE INSTRUMENTATION: Specify 2-3 distinct acoustic, electric, or synth instruments suited to the song's musical soul (e.g. nylon guitar, Rhodes piano, vintage Juno pads, slap bass, resonator guitar) rather than generic drums.
 
 [RULES FOR POSTER IMAGE PROMPT]
 1. Create a detailed, aesthetic visual prompt that perfectly matches the {genre} vibe and the lyrics theme.
@@ -432,6 +449,7 @@ You MUST output ONLY a valid JSON object with this exact schema:
 
 def generate_track_variant(title: str, lyrics: str, genre: str, vocalist: str) -> Dict[str, Any]:
     from google.genai import types
+    from domain.services.prompt_service import build_suno_style_prompt
 
     client = get_gemini_client()
     instruction = build_variant_instruction(title, lyrics, genre, vocalist)
@@ -478,7 +496,7 @@ def generate_track_variant(title: str, lyrics: str, genre: str, vocalist: str) -
     return {
         "success": False,
         "error": str(last_error),
-        "suno_prompt": f"{genre}, steady tempo, clear upfront {vocalist.lower()} vocals, clean mix",
+        "suno_prompt": build_suno_style_prompt(genre, vocalist, creative_concept=lyrics[:300] if lyrics else title),
         "poster_prompt": f"Cinematic album cover for '{title}', {genre} aesthetic, featuring {vocalist.lower()} artist, typography displaying '{title}', dramatic lighting, album art --ar 1:1"
     }
 

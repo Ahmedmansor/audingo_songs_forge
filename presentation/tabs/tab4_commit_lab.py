@@ -356,7 +356,12 @@ def render_tab_commit_lab():
                 current_vocalist = st.session_state.get("selected_vocalist", "Male")
                 saved_suno = (st.session_state.get("studio_suno_prompt") or "").strip()
                 if not saved_suno:
-                    saved_suno = prompt_builder.build_suno_style_prompt(current_genre, current_vocalist)
+                    saved_suno = prompt_builder.build_suno_style_prompt(
+                        genre=current_genre,
+                        vocalist=current_vocalist,
+                        mood_analysis=st.session_state.get("mood_analysis"),
+                        creative_concept=current_concept,
+                    )
 
                 saved_poster = (st.session_state.get("studio_poster_prompt") or "").strip()
                 if saved_poster:

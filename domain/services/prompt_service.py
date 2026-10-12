@@ -3,9 +3,11 @@ prompt_service.py — Constructs Suno AI style prompts and Master Prompts for ex
 """
 
 from typing import List, Dict, Any, Optional
+import random
 import re
 from constants import get_category_profile
 
+# Legacy presets retained for backwards compatibility
 SUNO_GENRE_PRESETS = {
     "Pop": "Pop, steady 116 bpm, clear upfront {voc} vocals, bright acoustic guitar, modern synth, clean punchy mix",
     "K-Pop Style (Clear English Vocals)": "K-Pop, steady 118 bpm, clear upfront {voc} vocals, punchy synth bass, crisp percussion, clean modern mix",
@@ -22,22 +24,597 @@ SUNO_GENRE_PRESETS = {
     "Melodic Chill Electronic": "Melodic chill electronic, steady 112 bpm, clear upfront {voc} vocals, soft piano, warm ambient pads, clean mix",
 }
 
+def detect_emotional_tone(
+    mood_analysis: Optional[Dict[str, Any]] = None,
+    creative_concept: str = ""
+) -> str:
+    """
+    Detects the dominant emotional tone from mood breakdown or story concept.
+    Returns one of: 'melancholic', 'energetic', 'romantic', 'dramatic', 'chill', 'uplifting', or 'balanced'.
+    """
+    scores = {
+        'melancholic': 0.0,
+        'energetic': 0.0,
+        'romantic': 0.0,
+        'dramatic': 0.0,
+        'chill': 0.0,
+        'uplifting': 0.0,
+    }
 
-def build_suno_style_prompt(genre: str, vocalist: str = "Male") -> str:
-    voc = vocalist.lower().strip()
-    template = SUNO_GENRE_PRESETS.get(
-        genre,
-        "{genre}, steady 112 bpm, clear upfront {voc} vocals, melodic instruments, clean mix",
-    )
-    if voc == "instrumental":
-        template = template.replace("clear upfront {voc} vocals", "instrumental, no vocals")
-    prompt = template.format(voc=voc, genre=genre)
+    if isinstance(mood_analysis, dict):
+        bd = mood_analysis.get('mood_breakdown', mood_analysis)
+        if isinstance(bd, dict):
+            scores['melancholic'] += float(bd.get('Sad / Heartbroken', 0)) * 1.6
+            scores['melancholic'] += float(bd.get('Nostalgic / Melancholic', 0)) * 1.2
+            scores['energetic'] += float(bd.get('Happy', 0)) * 1.0
+            scores['energetic'] += float(bd.get('Energetic', 0)) * 1.4
+            scores['energetic'] += float(bd.get('Playful / Quirky', 0)) * 1.1
+            scores['romantic'] += float(bd.get('Romantic / Sweet', 0)) * 1.5
+            scores['dramatic'] += float(bd.get('Dark / Moody', 0)) * 1.3
+            scores['dramatic'] += float(bd.get('Dramatic / Intense', 0)) * 1.4
+            scores['chill'] += float(bd.get('Chill / Relaxed', 0)) * 1.3
+            scores['uplifting'] += float(bd.get('Uplifting / Inspiring', 0)) * 1.2
 
-    # Trim whole comma-separated items instead of cutting mid-word
-    parts = prompt.split(", ")
-    while len(", ".join(parts)) > 200 and len(parts) > 1:
-        parts.pop()
-    return ", ".join(parts)
+    c_lower = (creative_concept or "").lower()
+    sad_words = ['goodbye', 'tears', 'crying', 'cry', 'loss', 'lost', 'grief', 'funeral', 'heartbreak', 'broken', 'sorrow', 'miss', 'missing', 'lonely', 'alone', 'regret', 'pain', 'depart', 'separate']
+    happy_words = ['party', 'celebrate', 'dance', 'laugh', 'laughing', 'joy', 'win', 'winning', 'champion', 'cheer', 'triumph', 'smile', 'smiling']
+    romantic_words = ['love', 'romantic', 'kiss', 'holding hands', 'confess', 'sweetheart', 'wedding', 'date', 'candlelit', 'tender', 'affection', 'darling']
+    dramatic_words = ['danger', 'threat', 'fight', 'argument', 'storm', 'chase', 'crisis', 'emergency', 'intense', 'stakes', 'clash', 'conflict']
+    chill_words = ['quiet', 'porch', 'coffee', 'tea', 'relax', 'rain', 'cozy', 'stroll', 'afternoon', 'weekend', 'peaceful', 'calm', 'breeze']
+    uplifting_words = ['hope', 'inspire', 'overcome', 'breakthrough', 'forward', 'rise', 'light', 'stronger', 'believe', 'healed']
+
+    for w in sad_words:
+        if w in c_lower: scores['melancholic'] += 25
+    for w in happy_words:
+        if w in c_lower: scores['energetic'] += 25
+    for w in romantic_words:
+        if w in c_lower: scores['romantic'] += 25
+    for w in dramatic_words:
+        if w in c_lower: scores['dramatic'] += 25
+    for w in chill_words:
+        if w in c_lower: scores['chill'] += 20
+    for w in uplifting_words:
+        if w in c_lower: scores['uplifting'] += 20
+
+    top_tone, top_score = max(scores.items(), key=lambda x: x[1])
+    if top_score >= 18:
+        return top_tone
+    return 'balanced'
+
+
+TEMPO_POOLS_BY_TONE = {
+    'melancholic': ['slow-burn 74 bpm', 'intimate 80 bpm', 'gentle 86 bpm', 'steady 90 bpm'],
+    'energetic': ['driving 116 bpm', 'upbeat 120 bpm', 'bouncy 124 bpm', 'high-energy 128 bpm'],
+    'romantic': ['tender 82 bpm', 'smooth 88 bpm', 'warm 94 bpm', 'gentle 100 bpm'],
+    'chill': ['laid-back 80 bpm', 'relaxed 86 bpm', 'mellow 92 bpm', 'chill 96 bpm'],
+    'dramatic': ['dark 78 bpm', 'building 86 bpm', 'driving 96 bpm', 'tense 106 bpm'],
+    'uplifting': ['steady 104 bpm', 'driving 110 bpm', 'inspiring 114 bpm', 'anthem 118 bpm'],
+    'balanced': ['steady 104 bpm', 'driving 112 bpm', 'upbeat 118 bpm', 'smooth 96 bpm'],
+}
+
+VOCAL_STYLES_BY_TONE = {
+    'male': {
+        'melancholic': ['intimate soulful male vocals', 'tender emotional male vocals', 'warm expressive male lead'],
+        'energetic': ['bright articulate male voice', 'clear upfront male vocals', 'punchy expressive male lead'],
+        'romantic': ['smooth resonant male lead', 'intimate soulful male vocals', 'warm expressive male lead'],
+        'chill': ['laid-back male vocals', 'smooth resonant male lead', 'intimate soulful male vocals'],
+        'dramatic': ['deep resonant male lead', 'crisp articulate male voice', 'expressive emotive male vocals'],
+        'uplifting': ['warm expressive male lead', 'clear upfront male vocals', 'soaring emotive male vocals'],
+        'balanced': ['clear upfront male vocals', 'warm expressive male lead', 'smooth resonant male lead'],
+    },
+    'female': {
+        'melancholic': ['intimate soulful female lead', 'tender emotional female voice', 'warm expressive female lead'],
+        'energetic': ['bright articulate female voice', 'clear upfront female vocals', 'energetic expressive female lead'],
+        'romantic': ['intimate soulful female lead', 'crisp airy female vocals', 'warm expressive female lead'],
+        'chill': ['crisp airy female vocals', 'mellow soulful female lead', 'relaxed female vocals'],
+        'dramatic': ['expressive emotive female vocals', 'crisp articulate female voice', 'resonant female lead'],
+        'uplifting': ['warm expressive female lead', 'clear upfront female vocals', 'soaring articulate female voice'],
+        'balanced': ['clear upfront female vocals', 'warm expressive female lead', 'crisp articulate female voice'],
+    },
+    'duet': {
+        'melancholic': ['tender male-female harmonies', 'intimate conversational duet'],
+        'energetic': ['clear male-female duet vocals', 'dynamic dual lead, clear lyrics'],
+        'romantic': ['intertwined male-female vocals', 'warm intimate duet harmonies'],
+        'chill': ['relaxed acoustic duet', 'conversational dual lead vocals'],
+        'dramatic': ['dramatic dual lead vocals', 'conversational high-stakes duet'],
+        'uplifting': ['harmonious uplifting duet', 'dynamic dual lead, clear lyrics'],
+        'balanced': ['clear male-female duet vocals', 'conversational dual lead vocals'],
+    },
+    'instrumental': {
+        'melancholic': ['instrumental, emotive lead melody', 'instrumental, gentle acoustic lead'],
+        'energetic': ['instrumental, driving melodic top line', 'instrumental, punchy synth lead'],
+        'romantic': ['instrumental, tender acoustic lead', 'instrumental, warm melodic top line'],
+        'chill': ['instrumental, mellow melodic top line', 'instrumental, relaxed lead'],
+        'dramatic': ['instrumental, dramatic cinematic lead', 'instrumental, intense melodic lead'],
+        'uplifting': ['instrumental, inspiring lead melody', 'instrumental, soaring lead'],
+        'balanced': ['instrumental, melodic top line', 'instrumental, acoustic lead'],
+    }
+}
+
+VOCAL_DELIVERY_STYLES = {
+    "male": ["clear upfront male vocals", "warm expressive male lead", "smooth resonant male lead"],
+    "female": ["clear upfront female vocals", "warm expressive female lead", "bright articulate female voice"],
+    "duet": ["clear male-female duet vocals", "conversational dual lead vocals"],
+    "instrumental": ["instrumental, melodic top line", "instrumental, acoustic lead"],
+}
+
+MIX_POOLS_BY_TONE = {
+    'melancholic': ['warm emotive mix', 'spacious intimate mix', 'clean acoustic mix'],
+    'energetic': ['punchy radio mix', 'bright modern mix', 'tight stereo mix'],
+    'romantic': ['silky smooth mix', 'warm soul mix', 'intimate room mix'],
+    'chill': ['cozy tape mix', 'clean airy mix', 'spacious ambient mix'],
+    'dramatic': ['dynamic cinematic mix', 'deep punchy mix', 'wide stereo mix'],
+    'uplifting': ['bright polished mix', 'spacious modern mix', 'clean radio mix'],
+    'balanced': ['clean radio mix', 'punchy stereo mix', 'bright polished mix'],
+}
+
+SUNO_GENRE_TONE_PALETTES = {
+    "Pop": {
+        "melancholic": {
+            "substyles": ["Acoustic pop ballad", "Emotive piano pop", "Melancholic pop"],
+            "instruments": ["felt piano, subtle strings, soft acoustic", "Rhodes keys, acoustic guitar, soft brushes", "delicate piano chords, subtle sub-bass, snaps"],
+        },
+        "energetic": {
+            "substyles": ["Dance-pop", "Upbeat radio pop", "Bright electro-pop"],
+            "instruments": ["acoustic guitar, bright synths, snaps", "deep synth bass, muted guitar, claps", "grand piano, punchy drums, synth lead"],
+        },
+        "romantic": {
+            "substyles": ["Sweet acoustic pop", "Romantic pop ballad", "Warm melodic pop"],
+            "instruments": ["warm acoustic guitar, soft piano, light snaps", "Rhodes keys, clean guitar, tight drums", "fingerstyle acoustic, soft pads, light percussion"],
+        },
+        "chill": {
+            "substyles": ["Chill bedroom pop", "Breezy indie pop", "Mellow acoustic pop"],
+            "instruments": ["fingerstyle acoustic, arps, deep sub", "warm electric piano, clean guitar, snaps", "mellow Rhodes, subtle beat, soft synth"],
+        },
+        "dramatic": {
+            "substyles": ["Dramatic cinematic pop", "Dark electro-pop", "Moody pop"],
+            "instruments": ["grand piano, heavy sub-bass, punchy drums", "soaring lead synth, driving bass, crisp snares", "dark synth pads, muted guitar, dramatic kick"],
+        },
+        "uplifting": {
+            "substyles": ["Uplifting radio pop", "Anthem pop hook", "Driving acoustic pop"],
+            "instruments": ["grand piano, punchy drums, synth lead", "acoustic guitar, bright synths, snaps", "building piano, soaring guitar, dynamic drums"],
+        },
+        "balanced": {
+            "substyles": ["Radio pop", "Acoustic pop", "Dance-pop", "Melodic pop"],
+            "instruments": ["acoustic guitar, bright synths, snaps", "Rhodes keys, clean guitar, tight drums", "deep synth bass, muted guitar, claps"],
+        },
+    },
+    "K-Pop Style (Clear English Vocals)": {
+        "melancholic": {
+            "substyles": ["K-Pop piano ballad", "Emotive K-Pop acoustic", "Heartfelt K-Pop"],
+            "instruments": ["emotive grand piano, subtle strings, soft percussion", "delicate synth plucks, acoustic guitar, sub-bass", "warm Rhodes chords, emotional strings, brush drums"],
+        },
+        "energetic": {
+            "substyles": ["K-Pop dance", "High-energy K-Pop", "K-Pop electro groove"],
+            "instruments": ["punchy 808 bass, crisp percussion, plucks", "trap-pop drums, brass synth hits, riffs", "groovy bass, four-on-the-floor kick, synths"],
+        },
+        "romantic": {
+            "substyles": ["Slick K-Pop R&B", "Romantic K-Pop groove", "Sweet K-Pop ballad"],
+            "instruments": ["slick R&B synth chords, electronic drums", "warm Rhodes piano, smooth 808s, guitar fills", "delicate synth bells, fingerstyle guitar, light beat"],
+        },
+        "chill": {
+            "substyles": ["Chill K-Pop groove", "Laid-back K-Pop R&B", "Sunset K-Pop"],
+            "instruments": ["mellow synth pads, soft 808 kick, clean guitar", "warm electric piano, rimshot groove, sub-bass"],
+        },
+        "dramatic": {
+            "substyles": ["Dramatic K-Pop", "Dark concept K-Pop", "Intense K-Pop drop"],
+            "instruments": ["dark brass hits, distorted 808 bass, trap drums", "cinematic strings, punchy synths, intense beat"],
+        },
+        "uplifting": {
+            "substyles": ["Uplifting K-Pop anthem", "Bright K-Pop dance", "Inspiring K-Pop"],
+            "instruments": ["bright synth brass, driving pop beat, soaring guitar", "punchy 808, uplifting piano chords, claps"],
+        },
+        "balanced": {
+            "substyles": ["K-Pop dance", "K-Pop electro groove", "Slick K-Pop R&B"],
+            "instruments": ["punchy 808 bass, crisp percussion, plucks", "trap-pop drums, brass synth hits, riffs"],
+        },
+    },
+    "Synth-Pop / 80s Retro": {
+        "melancholic": {
+            "substyles": ["Nostalgic synth ballad", "80s slow-burn ballad", "Wistful new wave"],
+            "instruments": ["Roland Juno pads, chorus guitar, soft LinnDrum", "gated reverb snare, mournful lead synth, analog bass", "ambient Oberheim chords, emotive bassline, snaps"],
+        },
+        "energetic": {
+            "substyles": ["Neon electro-pop", "Retro synthwave", "80s dance-pop"],
+            "instruments": ["arpeggiated bass, brass synths, LinnDrum beat", "Juno synth chords, chorus guitar, e-drums", "pulsing analog synth bass, gated snare, bright leads"],
+        },
+        "romantic": {
+            "substyles": ["80s romantic synth", "Vintage love wave", "Neon slow-jam"],
+            "instruments": ["shimmering analog pads, clean chorus guitar, LinnDrum", "warm Juno chords, smooth synth bass, soft rimshot"],
+        },
+        "chill": {
+            "substyles": ["Chillwave retro", "Downtempo synthwave", "Night drive retro"],
+            "instruments": ["mellow tape synths, dreamy chorus guitar, soft beat", "analog pads, relaxed synth bass, subtle snare"],
+        },
+        "dramatic": {
+            "substyles": ["Darkwave synth-pop", "Intense 80s thriller", "Cyberpunk retro"],
+            "instruments": ["rolling bassline, soaring lead synth, hi-hats", "distorted analog bass, dark Oberheim stabs, gated drums"],
+        },
+        "uplifting": {
+            "substyles": ["Uplifting synthwave", "Neon anthem pop", "Triumphant new wave"],
+            "instruments": ["soaring synth leads, driving LinnDrum, bright brass", "arpeggiated bass, triumphant Juno chords, claps"],
+        },
+        "balanced": {
+            "substyles": ["80s synth-pop", "Retro synthwave", "Neon electro-pop"],
+            "instruments": ["analog synth bass, Oberheim pads, gated snare", "Juno synth chords, chorus guitar, e-drums"],
+        },
+    },
+    "Indie Pop": {
+        "melancholic": {
+            "substyles": ["Melancholic indie pop", "Sad indie ballad", "Wistful chamber pop"],
+            "instruments": ["upright piano, warm acoustic guitar, brush snare", "muted Telecaster, delicate cello, room reverb", "fingerstyle acoustic, melancholic bass, soft drums"],
+        },
+        "energetic": {
+            "substyles": ["Upbeat indie groove", "Jangle indie pop", "Indie garage-pop"],
+            "instruments": ["jangly electric guitar, melodic bass, drums", "fuzzy bass, clean Telecaster riffs, tambourine", "bouncy rhythm guitar, driving bassline, handclaps"],
+        },
+        "romantic": {
+            "substyles": ["Dreamy indie pop", "Sweet indie romance", "Bedroom indie love"],
+            "instruments": ["sparkling guitars, Juno synth pads, tight drums", "fingerstyle acoustic, subtle glockenspiel, soft bass"],
+        },
+        "chill": {
+            "substyles": ["Breezy indie pop", "Lo-fi bedroom indie", "Mellow indie folk"],
+            "instruments": ["clean chorus guitar, lazy drum machine, warm bass", "muted upright piano, warm rhythm guitar, organic drums"],
+        },
+        "dramatic": {
+            "substyles": ["Dramatic indie rock", "Moody indie pop", "Cinematic indie"],
+            "instruments": ["distorted guitar swells, heavy room drums, driving bass", "haunting piano, gritty Telecaster riffs, building drums"],
+        },
+        "uplifting": {
+            "substyles": ["Uplifting indie anthem", "Sunny indie pop", "Bright jangle pop"],
+            "instruments": ["jangly 12-string guitar, melodic bass, driving drums", "bright acoustic strumming, tambourine, soaring hooks"],
+        },
+        "balanced": {
+            "substyles": ["Jangle indie pop", "Dreamy indie pop", "Chamber indie pop"],
+            "instruments": ["jangly electric guitar, melodic bass, drums", "fingerstyle acoustic, Juno pads, tight drums"],
+        },
+    },
+    "Acoustic / Folk": {
+        "melancholic": {
+            "substyles": ["Heartbroken folk ballad", "Poignant acoustic ballad", "Wistful indie folk"],
+            "instruments": ["fingerpicked guitar, weeping cello, soft shaker", "wooden acoustic, delicate violin, upright piano", "open-tuned acoustic, subtle double bass, brush snare"],
+        },
+        "energetic": {
+            "substyles": ["Upbeat bluegrass folk", "Stomp-and-clap folk", "Rootsy acoustic stomp"],
+            "instruments": ["strummed dreadnought, rustic banjo, double bass", "fast fingerpicking, lively fiddle, foot stomp rhythm", "two acoustic guitars, driving mandolin, kick drum"],
+        },
+        "romantic": {
+            "substyles": ["Tender acoustic folk", "Sweet porch folk", "Romantic acoustic ballad"],
+            "instruments": ["dual acoustic guitars, slide dobro, gentle bass", "warm fingerpicked guitar, soft cello, gentle shaker"],
+        },
+        "chill": {
+            "substyles": ["Mellow campfire folk", "Peaceful acoustic", "Breezy front-porch folk"],
+            "instruments": ["warm acoustic strum, subtle harmonica, gentle bass", "fingerpicked guitar, upright piano, quiet brushes"],
+        },
+        "dramatic": {
+            "substyles": ["Dark Appalachian folk", "Dramatic murder ballad", "Brooding roots"],
+            "instruments": ["mournful fiddle, minor acoustic picking, deep kick", "haunting banjo, bowed double bass, dramatic stomp"],
+        },
+        "uplifting": {
+            "substyles": ["Uplifting Americana folk", "Inspiring acoustic anthem", "Triumphant roots"],
+            "instruments": ["building acoustic strumming, soaring violin, double bass", "12-string guitar, rustic banjo, foot stomps, choir"],
+        },
+        "balanced": {
+            "substyles": ["Acoustic folk", "Contemporary folk", "Indie folk ballad"],
+            "instruments": ["fingerpicked guitar, subtle cello, soft shaker", "strummed dreadnought, rustic banjo, double bass"],
+        },
+    },
+    "R&B / Contemporary Soul": {
+        "melancholic": {
+            "substyles": ["Heartbreak R&B ballad", "Slow-burn soul ballad", "Poignant neo-soul"],
+            "instruments": ["mellow grand piano, fingerstyle bass, 808s", "Rhodes piano, silky sub-bass, weeping guitar fills", "vintage Wurlitzer, slow rimshot, deep bassline"],
+        },
+        "energetic": {
+            "substyles": ["Upbeat modern R&B", "Funky soulful groove", "R&B dance-pop"],
+            "instruments": ["syncopated bass, crisp snaps, brass synth stabs", "Stratocaster chords, bouncy 808s, talkbox accents", "Rhodes keys, punchy electronic drums, vocal chops"],
+        },
+        "romantic": {
+            "substyles": ["Smooth neo-soul", "Romantic slow-jam", "Velvet soul groove"],
+            "instruments": ["Rhodes piano, silky sub-bass, rimshot groove", "Stratocaster chords, Hammond organ, deep bass", "warm Wurlitzer, expressive guitar licks, snaps"],
+        },
+        "chill": {
+            "substyles": ["Chill neo-soul groove", "Late-night bedroom R&B", "Lo-fi soul"],
+            "instruments": ["warm Rhodes chords, lazy rimshot, sub-bass", "clean electric guitar, soft finger snaps, mellow keys"],
+        },
+        "dramatic": {
+            "substyles": ["Dramatic soul ballad", "Intense cinematic R&B", "Dark soul groove"],
+            "instruments": ["heavy sub-bass, emotive grand piano, building 808s", "swelling Hammond organ, soaring guitar lead, deep drums"],
+        },
+        "uplifting": {
+            "substyles": ["Uplifting soul anthem", "Gospel-infused R&B", "Inspiring modern soul"],
+            "instruments": ["Hammond B3 organ swells, uplifting piano, driving beat", "soaring guitar chords, punchy bass, gospel claps"],
+        },
+        "balanced": {
+            "substyles": ["Contemporary R&B", "Neo-soul groove", "Smooth soul ballad"],
+            "instruments": ["Rhodes piano, silky sub-bass, rimshot groove", "Wurlitzer chords, guitar licks, neo-soul snare"],
+        },
+    },
+    "Country / Americana": {
+        "melancholic": {
+            "substyles": ["Heartbreak country ballad", "Wistful acoustic country", "Sad highway ballad"],
+            "instruments": ["weeping pedal steel, acoustic guitar strum, brush snare", "fingerpicked acoustic, weeping fiddle, warm bass", "resonator guitar, honky-tonk piano, slow train beat"],
+        },
+        "energetic": {
+            "substyles": ["Country road-trip rock", "Upbeat modern country", "Two-step country"],
+            "instruments": ["12-string guitar, driving electric guitar, kick drum", "telecaster twang, driving bass, crisp snare drum", "acoustic strum, pedal steel, energetic drums"],
+        },
+        "romantic": {
+            "substyles": ["Sweet country love song", "Warm porch Americana", "Tender country duet"],
+            "instruments": ["fingerpicked acoustic, gentle pedal steel, soft bass", "acoustic guitar strum, warm fiddle, subtle brushes"],
+        },
+        "chill": {
+            "substyles": ["Mellow backroads country", "Relaxed Americana", "Campfire country"],
+            "instruments": ["acoustic guitar strum, subtle harmonica, lazy snare", "resonator guitar, upright bass, gentle shaker"],
+        },
+        "dramatic": {
+            "substyles": ["Dark outlaw country", "Dramatic Southern gothic", "High-stakes country"],
+            "instruments": ["gritty Telecaster riffs, ominous pedal steel, heavy kick", "haunting resonator guitar, deep bass, dramatic drums"],
+        },
+        "uplifting": {
+            "substyles": ["Uplifting country anthem", "Heartland rock anthem", "Inspiring Americana"],
+            "instruments": ["soaring electric guitar, acoustic strum, driving drums", "pedal steel swells, big chorus piano, energetic kick"],
+        },
+        "balanced": {
+            "substyles": ["Modern country", "Americana roots", "Country road-trip"],
+            "instruments": ["acoustic guitar strum, pedal steel, train-beat snare", "resonator guitar, honky-tonk piano, walking bass"],
+        },
+    },
+    "Funk / Disco Groove": {
+        "melancholic": {
+            "substyles": ["Slow-burn retro soul", "Melancholic funk ballad", "Bittersweet groove"],
+            "instruments": ["weeping wah guitar, Rhodes piano, slow bass groove", "mellow Clavinet, subtle horn swells, brush drums", "expressive bassline, gentle electric piano, soft rimshot"],
+        },
+        "energetic": {
+            "substyles": ["Disco funk", "Modern funk groove", "Nu-disco pulse"],
+            "instruments": ["slap bass, guitar chops, brass stabs, four-on-floor", "syncopated bass, Clavinet wah, tight horn stabs", "pulsing synth bass, Nile Rodgers rhythm, congas"],
+        },
+        "romantic": {
+            "substyles": ["Smooth funk slow-jam", "Sensual disco soul", "Velvet groove"],
+            "instruments": ["warm Rhodes chords, smooth bassline, clean guitar licks", "soft Clavinet, gentle brass swells, disco strings"],
+        },
+        "chill": {
+            "substyles": ["Laid-back low-end funk", "Chillout groove", "Coffeehouse funk"],
+            "instruments": ["groovy bassline, electric piano, live drums", "subtle guitar wah, warm electric piano, relaxed kick"],
+        },
+        "dramatic": {
+            "substyles": ["Dramatic cinematic funk", "Dark 70s groove", "Action funk chase"],
+            "instruments": ["aggressive slap bass, horn stabs, driving wah guitar", "tense Clavinet riff, distorted bass, heavy breakbeat"],
+        },
+        "uplifting": {
+            "substyles": ["Celebration disco", "Triumphant funk groove", "Joyful dance funk"],
+            "instruments": ["bright brass section, Nile Rodgers guitar, driving slap bass", "soaring disco strings, funky bassline, handclaps"],
+        },
+        "balanced": {
+            "substyles": ["Disco funk", "Modern funk groove", "70s style groove"],
+            "instruments": ["slap bass, guitar chops, brass stabs, four-on-floor", "syncopated bass, Clavinet wah, tight horn stabs"],
+        },
+    },
+    "Reggae / Tropical Pop": {
+        "melancholic": {
+            "substyles": ["Poignant roots reggae", "Melancholic island ballad", "Wistful dub reggae"],
+            "instruments": ["minor guitar skank, deep dub bass, weeping organ, one-drop", "slow acoustic island strum, mellow marimba, dub delay"],
+        },
+        "energetic": {
+            "substyles": ["Tropical pop dance", "Upbeat island groove", "Sunny festival reggae"],
+            "instruments": ["island guitar skank, dub bass, organ bubble, drums", "marimba accents, warm bass, steel pan, percussion", "offbeat guitar, roots bassline, brass horn stabs"],
+        },
+        "romantic": {
+            "substyles": ["Lovers rock reggae", "Sweet tropical romance", "Island slow-dance"],
+            "instruments": ["clean offbeat guitar, warm sub-bass, soft horns, one-drop", "acoustic strum, tropical steel pan, gentle percussion"],
+        },
+        "chill": {
+            "substyles": ["Breezy summer reggae", "Chill island acoustic", "Relaxed beach reggae"],
+            "instruments": ["acoustic strum, tropical percussion, warm sub-bass", "mellow organ bubble, light guitar skank, relaxed drums"],
+        },
+        "dramatic": {
+            "substyles": ["Heavy dub reggae", "Dramatic roots rebel", "Steppers reggae"],
+            "instruments": ["heavy dub bass, echoing rimshot, dark horn stabs", "minor skank guitar, deep bass drops, tape echo"],
+        },
+        "uplifting": {
+            "substyles": ["Uplifting island pop", "Joyful roots reggae", "Sunny tropical anthem"],
+            "instruments": ["bright steel pan, lively guitar skank, cheerful horns", "driving reggae beat, warm bass, bright marimba"],
+        },
+        "balanced": {
+            "substyles": ["Tropical pop", "Roots reggae pop", "Island groove"],
+            "instruments": ["island guitar skank, dub bass, organ bubble, drums", "marimba accents, warm bass, steel pan, percussion"],
+        },
+    },
+    "Jazz / Bossa Nova": {
+        "melancholic": {
+            "substyles": ["Late-night blue note jazz", "Melancholic bossa ballad", "Smoky jazz ballad"],
+            "instruments": ["muted trumpet, delicate piano voicings, brushed snare", "nylon guitar, gentle upright bass, soft brush clicks", "hollowbody guitar, emotive grand piano, walking bass"],
+        },
+        "energetic": {
+            "substyles": ["Swinging jazz groove", "Fast bossa nova", "Upbeat samba jazz"],
+            "instruments": ["walking upright bass, lively piano swing, snappy ride cymbal", "bright nylon guitar, cuica rhythm, energetic bossa beat"],
+        },
+        "romantic": {
+            "substyles": ["Bossa nova romance", "Sensual cafe jazz", "Sweet bossa groove"],
+            "instruments": ["nylon guitar, gentle upright bass, brushed snare", "delicate piano voicings, acoustic bass, rim clicks", "hollowbody guitar, soft grand piano, walking bass"],
+        },
+        "chill": {
+            "substyles": ["Acoustic bossa lounge", "Smoky jazz lounge", "Relaxed afternoon jazz"],
+            "instruments": ["acoustic guitar, gentle flute lead, fingerstyle bass", "mellow Rhodes chords, soft upright bass, quiet brush"],
+        },
+        "dramatic": {
+            "substyles": ["Noir jazz ballad", "Dramatic modal jazz", "Cinematic jazz noir"],
+            "instruments": ["brooding double bass, dissonant piano chords, dark trumpet", "tense ride cymbal, bowed double bass, moody guitar"],
+        },
+        "uplifting": {
+            "substyles": ["Joyful bossa nova", "Bright swing jazz", "Breezy coastal samba"],
+            "instruments": ["sun-drenched nylon guitar, smiling piano chords, cheerful drums", "lively flute lead, swinging bassline, crisp percussion"],
+        },
+        "balanced": {
+            "substyles": ["Bossa nova", "Smooth jazz vocal", "Acoustic bossa"],
+            "instruments": ["nylon guitar, gentle upright bass, brushed snare", "hollowbody guitar, soft grand piano, walking bass"],
+        },
+    },
+    "Cinematic / Ballad": {
+        "melancholic": {
+            "substyles": ["Heartbroken piano ballad", "Tearful cinematic ballad", "Poignant string ballad"],
+            "instruments": ["felt piano, weeping string quartet, delicate cello", "intimate grand piano, mournful strings, ambient reverb", "delicate acoustic piano, subtle French horns, soft harp"],
+        },
+        "energetic": {
+            "substyles": ["Epic cinematic pop", "Action orchestral pop", "Heroic cinematic theme"],
+            "instruments": ["huge tympani drums, soaring French horns, driving strings", "dynamic orchestral percussion, power piano, big brass"],
+        },
+        "romantic": {
+            "substyles": ["Romantic cinematic ballad", "Grand wedding ballad", "Tender movie theme"],
+            "instruments": ["grand piano, symphonic strings, dynamic crescendo", "warm cinematic cello, ambient piano, building percussion"],
+        },
+        "chill": {
+            "substyles": ["Intimate ambient ballad", "Quiet movie reflection", "Peaceful chamber ballad"],
+            "instruments": ["soft felt piano, gentle ambient pads, quiet cello", "delicate piano ripples, subtle strings, warm soundstage"],
+        },
+        "dramatic": {
+            "substyles": ["High-stakes cinematic drama", "Dark cinematic ballad", "Tense orchestral score"],
+            "instruments": ["delicate piano, French horns, cinematic sub-bass", "heavy brass stabs, pounding tympani, dramatic string swells"],
+        },
+        "uplifting": {
+            "substyles": ["Grand triumphant ballad", "Inspirational movie anthem", "Epic rising ballad"],
+            "instruments": ["building piano, soaring violin crescendo, huge tympani", "grand piano, full symphonic strings, triumphant climax"],
+        },
+        "balanced": {
+            "substyles": ["Cinematic ballad", "Grand orchestral ballad", "Emotive piano ballad"],
+            "instruments": ["grand piano, symphonic strings, dynamic crescendo", "cinematic cello, ambient piano, building percussion"],
+        },
+    },
+    "Lo-Fi / Chillhop": {
+        "melancholic": {
+            "substyles": ["Rainy day lofi", "Sad boy chillhop", "Heartbroken tape beats"],
+            "instruments": ["detuned tape piano, muted guitar loops, vinyl rain", "Rhodes chords, vinyl crackle, sad trumpet sample, beat", "melancholic tape keys, upright bass, dusty boom-bap"],
+        },
+        "energetic": {
+            "substyles": ["Upbeat boom-bap lofi", "Groovy study beats", "Head-nod chillhop"],
+            "instruments": ["punchy boom-bap drums, jazzy guitar chops, bouncy bass", "bright Rhodes chords, energetic vinyl beat, trumpet hits"],
+        },
+        "romantic": {
+            "substyles": ["Sweet coffeehouse lofi", "Cozy romance chillhop", "Warm bedroom beats"],
+            "instruments": ["music box chords, acoustic guitar loops, tape vibe", "warm Rhodes piano, gentle rimshot, vinyl crackle"],
+        },
+        "chill": {
+            "substyles": ["Chill study beats", "Lo-fi chillhop", "Tape chillhop"],
+            "instruments": ["Rhodes chords, vinyl crackle, upright bass, drums", "electric piano, muted trumpet, vinyl hiss, chill beat"],
+        },
+        "dramatic": {
+            "substyles": ["Dark lofi beats", "Midnight noir chillhop", "Moody boom-bap"],
+            "instruments": ["minor key tape piano, heavy sub-bass, vinyl hiss", "moody cello sample, dusty boom-bap drums, dark pads"],
+        },
+        "uplifting": {
+            "substyles": ["Sunny morning lofi", "Hopeful chillhop", "Bright tape beats"],
+            "instruments": ["bright acoustic guitar samples, uplifting Rhodes, snappy drums", "cheerful music box, warm bass, vinyl crackle"],
+        },
+        "balanced": {
+            "substyles": ["Lo-fi chillhop", "Dusty boom-bap lofi", "Chill study beats"],
+            "instruments": ["Rhodes chords, vinyl crackle, upright bass, drums", "detuned tape piano, muted guitar loops, sub-bass"],
+        },
+    },
+    "Melodic Chill Electronic": {
+        "melancholic": {
+            "substyles": ["Melancholic electronic", "Downtempo ambient sorrow", "Wistful chill electronica"],
+            "instruments": ["felt piano melodies, ambient pads, slow sub-bass", "acoustic guitar textures, rolling bass, ambient reverb", "delicate synth plucks, soft vocal chops, deep bass"],
+        },
+        "energetic": {
+            "substyles": ["Sunset melodic house", "Melodic electro-pop", "Upbeat chill dance"],
+            "instruments": ["driving 4/4 chill pulse, bright piano, modular arps", "vocal chops, analog chords, percussion, sunset pulse"],
+        },
+        "romantic": {
+            "substyles": ["Sensual downtempo", "Romantic chill electronic", "Warm ambient love"],
+            "instruments": ["warm ambient synth pads, delicate piano, sub-bass, beat", "soft Rhodes, lush pads, gentle electronic pulse"],
+        },
+        "chill": {
+            "substyles": ["Melodic chill electronic", "Downtempo chill", "Dream electronic"],
+            "instruments": ["ambient synth pads, delicate piano, sub-bass, beat", "felt piano melodies, modular arps, gentle 4/4 pulse"],
+        },
+        "dramatic": {
+            "substyles": ["Cinematic dark electronica", "Tense downtempo", "Moody ambient synth"],
+            "instruments": ["pulsing modular synth, dark sub-bass, tense percussion", "heavy analog chords, distorted pads, dramatic drums"],
+        },
+        "uplifting": {
+            "substyles": ["Uplifting melodic house", "Euphoric chill electronic", "Sunrise ambient pop"],
+            "instruments": ["euphoric synth leads, bright piano, driving warm beat", "building arpeggios, soaring vocal pads, punchy kick"],
+        },
+        "balanced": {
+            "substyles": ["Melodic chill electronic", "Ambient electro-pop", "Downtempo chill"],
+            "instruments": ["ambient synth pads, delicate piano, sub-bass, beat", "vocal chops, analog chords, percussion, sunset pulse"],
+        },
+    },
+}
+
+# Legacy alias for backward compatibility
+SUNO_GENRE_PALETTES = {
+    genre: {
+        "substyles": data["balanced"]["substyles"],
+        "tempos": TEMPO_POOLS_BY_TONE["balanced"],
+        "instruments": data["balanced"]["instruments"],
+        "mixes": MIX_POOLS_BY_TONE["balanced"],
+    }
+    for genre, data in SUNO_GENRE_TONE_PALETTES.items()
+}
+
+
+def assemble_suno_prompt(substyle: str, tempo: str, voc: str, instruments: str, mix: str, max_len: int = 120) -> str:
+    """Intelligently assembles and trims a Suno prompt to guarantee it stays strictly <= max_len."""
+    full = f"{substyle}, {tempo}, {voc}, {instruments}, {mix}"
+    if len(full) <= max_len:
+        return full
+
+    no_mix = f"{substyle}, {tempo}, {voc}, {instruments}"
+    if len(no_mix) <= max_len:
+        return no_mix
+
+    items = [x.strip() for x in no_mix.split(",") if x.strip()]
+    while len(", ".join(items)) > max_len and len(items) > 3:
+        items.pop()
+    trimmed = ", ".join(items)
+    if len(trimmed) <= max_len:
+        return trimmed
+
+    return trimmed[:max_len - 3].rstrip() + "..."
+
+
+def build_suno_style_prompt(
+    genre: str,
+    vocalist: str = "Male",
+    mood_analysis: Optional[Dict[str, Any]] = None,
+    creative_concept: str = "",
+    max_length: int = 120
+) -> str:
+    """
+    Builds an emotionally harmonized, keyword-rich Suno AI style prompt.
+    Detects the emotional tone (sad, energetic, romantic, dramatic, chill, uplifting)
+    from mood percentages and story concept, ensuring tempo (BPM), instruments,
+    substyle, and vocal character match the song's true heart, while strictly
+    guaranteeing length <= max_length (default 120 chars).
+    """
+    tone = detect_emotional_tone(mood_analysis, creative_concept)
+    genre_data = SUNO_GENRE_TONE_PALETTES.get(genre, {})
+
+    tone_pool = genre_data.get(tone) or genre_data.get("balanced") or list(genre_data.values())[0] if genre_data else None
+    if not tone_pool:
+        substyle = genre
+        tempo = random.choice(TEMPO_POOLS_BY_TONE.get(tone, TEMPO_POOLS_BY_TONE["balanced"]))
+        instruments = "melodic acoustic guitar, warm electric piano"
+    else:
+        substyle = random.choice(tone_pool["substyles"])
+        tempo = random.choice(TEMPO_POOLS_BY_TONE.get(tone, TEMPO_POOLS_BY_TONE["balanced"]))
+        instruments = random.choice(tone_pool["instruments"])
+
+    voc_key = vocalist.lower().strip()
+    if "female" in voc_key:
+        voc_group = VOCAL_STYLES_BY_TONE["female"]
+    elif "duet" in voc_key:
+        voc_group = VOCAL_STYLES_BY_TONE["duet"]
+    elif "instrumental" in voc_key:
+        voc_group = VOCAL_STYLES_BY_TONE["instrumental"]
+    else:
+        voc_group = VOCAL_STYLES_BY_TONE["male"]
+
+    voc_options = voc_group.get(tone, voc_group["balanced"])
+    voc_delivery = random.choice(voc_options)
+    mix = random.choice(MIX_POOLS_BY_TONE.get(tone, MIX_POOLS_BY_TONE["balanced"]))
+
+    return assemble_suno_prompt(substyle, tempo, voc_delivery, instruments, mix, max_len=max_length)
 
 
 def _norm(name: str) -> str:
@@ -288,7 +865,12 @@ def generate_master_prompt(
 
     story_text = creative_concept if creative_concept else p["default_story"]
 
-    suno_style = build_suno_style_prompt(genre, vocalist)
+    suno_style = build_suno_style_prompt(
+        genre=genre,
+        vocalist=vocalist,
+        mood_analysis=mood_analysis,
+        creative_concept=story_text,
+    )
 
     structure_formatted = parse_song_structure(song_structure)
 
