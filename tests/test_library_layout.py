@@ -185,6 +185,38 @@ class LibraryLayoutTests(unittest.TestCase):
         self.assertTrue(fab_found)
 
 
+    def test_arabic_story_flow_and_editing(self):
+        # 1. Initially no Arabic story
+        row = db.get_all_songs().query("id == @self.song_id").iloc[0]
+        self.assertEqual(row.story_arabic, "")
+
+        # 2. Open song in Library: placeholder button should be present
+        app = self.open_song()
+        self.assertTrue(any("إضافة / لصق القصة بالعربية" in btn.label for btn in app.button))
+
+        # 3. Save Arabic story translation
+        db.save_story_arabic(self.song_id, "قصة تجريبية بالعربية عن الأصدقاء.")
+        row = db.get_all_songs().query("id == @self.song_id").iloc[0]
+        self.assertEqual(row.story_arabic, "قصة تجريبية بالعربية عن الأصدقاء.")
+
+        # 4. Open song in Library: Arabic story rendered with RTL and copy button
+        app = self.open_song()
+        markdowns = [md.value for md in app.markdown]
+        self.assertTrue(any("قصة تجريبية بالعربية" in val for val in markdowns))
+        iframes = app.get("iframe")
+        self.assertTrue(any("قصة تجريبية بالعربية عن الأصدقاء." in getattr(iframe.proto, "srcdoc", "") for iframe in iframes))
+
+        # 5. In Edit tab, edit Arabic story
+        app.button_group(key=f"library_section_{self.song_id}").set_value("Edit").run()
+        self.assertFalse(app.exception)
+        app.text_area(key=f"edit_story_ar_{self.song_id}").set_value("تعديل الترجمة العربية").run()
+        next(button for button in app.button if "Save updates" in button.label).click().run()
+        self.assertFalse(app.exception)
+
+        row = db.get_all_songs().query("id == @self.song_id").iloc[0]
+        self.assertEqual(row.story_arabic, "تعديل الترجمة العربية")
+
+
 if __name__ == "__main__":
     unittest.main()
 

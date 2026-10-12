@@ -286,3 +286,28 @@ def add_suno_lyrics_dialog(song_id: int, song_title: str):
             st.rerun()
 
 
+@st.dialog("📖 إضافة / لصق ترجمة القصة بالعربية")
+def add_story_arabic_dialog(song_id: int, song_title: str):
+    """Modal dialog for pasting Arabic story translation for a song for the first time."""
+    st.markdown(f"#### إضافة القصة بالعربية لأغنية **{song_title}**")
+    st.caption("الصق أو اكتب الترجمة العربية لقصة الأغنية أدناه. بمجرد الحفظ ستظهر في Overview، وتعديلها لاحقاً يكون حصراً من تبويب Edit.")
+    story_input = st.text_area(
+        "قصة الأغنية (بالعربية):",
+        placeholder="الصق أو اكتب ملخص / ترجمة القصة بالعربية هنا...",
+        height=220,
+        key=f"dlg_story_ar_input_{song_id}",
+    )
+    dlg_c1, dlg_c2 = st.columns(2)
+    with dlg_c1:
+        if st.button("💾 حفظ الترجمة", type="primary", width="stretch", key=f"dlg_save_story_ar_{song_id}"):
+            if story_input.strip():
+                db.save_story_arabic(song_id, story_input.strip())
+                st.session_state["lib_toast_msg"] = f"تم حفظ القصة بالعربية لأغنية '{song_title}' بنجاح! ✨"
+                st.rerun()
+            else:
+                st.warning("يرجى لصق أو كتابة نص القصة قبل الحفظ.")
+    with dlg_c2:
+        if st.button(":material/cancel: إلغاء", width="stretch", key=f"dlg_cancel_story_ar_{song_id}"):
+            st.rerun()
+
+

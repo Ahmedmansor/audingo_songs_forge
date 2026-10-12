@@ -37,6 +37,7 @@ from data.repositories.song_repository import (
     migrate_past_songs_bonus_words,
     update_suno_status,
     save_suno_lyrics,
+    save_story_arabic,
 )
 
 from data.repositories.variant_repository import (

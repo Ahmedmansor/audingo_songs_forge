@@ -133,16 +133,29 @@ def _authenticity_stat(row):
 def _render_overview(row):
     song_id = int(row["id"])
     lyrics = row["lyrics"] or ""
-    with st.container(border=True):
-        st.markdown(":material/category: **Song category**")
-        st.write(row.get("source_domain") or "Not tagged")
     all_ngsl = set().union(*(_words(row.get(field)) for field in ("target_words", "bonus_words", "reused_words")))
     render_domain_breakdown_section(db.compute_domain_breakdown(sorted(all_ngsl)), title="Domain breakdown", compact=True)
     snapshot = parse_refinement_snapshot(row.get("refinement_report"))
     if snapshot and not report_matches_lyrics(snapshot, lyrics):
         st.caption("Authenticity refers to the archived lyrics. Open Critic to review the evaluated version.")
-    left, right = st.columns([1.5, 1])
-    with left:
+
+    with st.container(border=True):
+        c_cat, c_genre, c_struct = st.columns([1.2, 1, 1.4])
+        with c_cat:
+            st.markdown(":material/category: **Song category**")
+            dom = row.get("source_domain") or "Not tagged"
+            cfg = DOMAIN_CONFIG.get(dom, {})
+            emoji = cfg.get("emoji", "🏷️") if dom != "Not tagged" else "🏷️"
+            st.write(f"{emoji} {dom}")
+        with c_genre:
+            st.markdown(":material/tune: **Musical Genre**")
+            st.write(row.get("genre") or "Genre not recorded")
+        with c_struct:
+            st.markdown(":material/account_tree: **Structure**")
+            st.write(row.get("song_structure") or "Structure not recorded")
+
+    col_story_en, col_story_ar = st.columns(2)
+    with col_story_en:
         with st.container(border=True):
             story_text = (row.get("creative_concept") or "").strip()
             hdr_col, copy_col = st.columns([1.5, 1], vertical_alignment="center")
@@ -157,24 +170,54 @@ def _render_overview(row):
                         button_id=f"story_{song_id}",
                         align="flex-end",
                     )
-            st.write(story_text or "No story concept recorded yet.")
-    with right:
+            st.markdown(
+                f'<div class="story-scroll-box">'
+                f'{escape(story_text or "No story concept recorded yet.")}'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+    with col_story_ar:
         with st.container(border=True):
-            st.markdown(":material/tune: **Musical direction**")
-            st.write(row.get("genre") or "Genre not recorded")
-            st.caption(row.get("song_structure") or "Structure not recorded")
+            story_ar = (row.get("story_arabic") or "").strip()
+            if story_ar:
+                hdr_ar, copy_ar = st.columns([1.5, 1], vertical_alignment="center")
+                with hdr_ar:
+                    st.markdown(":material/translate: **قصة الأغنية (بالعربية)**")
+                with copy_ar:
+                    render_simple_copy_button(
+                        text=story_ar,
+                        label="نسخ القصة",
+                        copied_label="تم النسخ!",
+                        button_id=f"story_ar_{song_id}",
+                        align="flex-end",
+                    )
+                st.markdown(
+                    f'<div class="story-scroll-box" dir="rtl" style="text-align: right; font-size: 0.95rem;">'
+                    f'{escape(story_ar)}'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(":material/translate: **قصة الأغنية (بالعربية)**")
+                st.info("لم تتم إضافة ترجمة عربية للقصة بعد. يمكنك لصقها لأول مرة أدناه، ولا يمكن تعديلها لاحقاً إلا من تبويب Edit.")
+                if st.button("➕ إضافة / لصق القصة بالعربية", key=f"btn_add_story_ar_{song_id}", type="primary", width="stretch"):
+                    from presentation.components.dialogs import add_story_arabic_dialog
+                    add_story_arabic_dialog(song_id, row.get("title", ""))
+
     mood = row.get("mood_breakdown")
     if isinstance(mood, str):
         try:
             mood = json.loads(mood)
         except (ValueError, TypeError):
             mood = None
+    values = {}
     if isinstance(mood, dict):
         values = {key: val for key, val in mood.items() if isinstance(val, (float, int))}
-        if values:
-            with st.expander(":material/auto_awesome: Mood & musical analysis", expanded=False):
-                frame = pd.DataFrame(values.items(), columns=["Mood", "Percentage"]).sort_values("Percentage", ascending=False)
-                st.bar_chart(frame.set_index("Mood"), horizontal=True, height=220)
+
+    if values:
+        with st.expander(":material/auto_awesome: Mood & musical analysis", expanded=False):
+            frame = pd.DataFrame(values.items(), columns=["Mood", "Percentage"]).sort_values("Percentage", ascending=False)
+            st.bar_chart(frame.set_index("Mood"), horizontal=True, height=220)
     name = "".join(c for c in row["title"] if c.isalnum() or c in " _-").strip().replace(" ", "_")
     line_count = sum(bool(line.strip()) for line in lyrics.splitlines())
     suno_lyrics = (row.get("suno_lyrics") or "").strip()

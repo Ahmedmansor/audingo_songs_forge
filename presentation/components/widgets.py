@@ -260,7 +260,7 @@ def render_simple_copy_button(
 
     tokens = palette(st.session_state.get("ui_theme_mode", "dark"))
     theme_variables = ";".join(f"--studio-{k}:{v}" for k, v in tokens.items())
-    text_json = json.dumps(clean_text)
+    text_json = json.dumps(clean_text, ensure_ascii=False)
     prefix = f"btn_copy_{button_id}_" if button_id is not None else "btn_copy_"
     justify_val = "flex-start" if align == "flex-start" else "flex-end"
 

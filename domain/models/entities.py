@@ -34,6 +34,10 @@ class Song:
     reused_words: Optional[str] = None
     created_at: Optional[datetime] = None
     refinement_report: Optional[str] = None
+    source_domain: Optional[str] = None
+    suno_lyrics: Optional[str] = None
+    is_suno_completed: Optional[int] = 0
+    story_arabic: Optional[str] = None
 
     @property
     def target_words_list(self) -> List[str]:

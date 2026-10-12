@@ -160,3 +160,33 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     white-space: nowrap;
 }
 
+.story-scroll-box {
+    height: 155px;
+    overflow-y: auto;
+    padding: 8px 12px;
+    background: rgba(148, 163, 184, 0.05);
+    border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    line-height: 1.65;
+    font-size: 0.93rem;
+    color: var(--studio-ink);
+    white-space: pre-wrap;
+    box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+}
+.story-scroll-box::-webkit-scrollbar {
+    width: 5px;
+}
+.story-scroll-box::-webkit-scrollbar-track {
+    background: transparent;
+}
+.story-scroll-box::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.35);
+    border-radius: 4px;
+}
+.story-scroll-box::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.6);
+}
+
+

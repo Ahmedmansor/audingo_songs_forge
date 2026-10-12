@@ -81,10 +81,18 @@ def approve_and_save_song(
 def get_all_songs(db_path: Path = DB_PATH) -> pd.DataFrame:
     """Retrieve all saved songs from the database, sorted newest first."""
     with get_connection(db_path) as conn:
-        df = pd.read_sql_query(
-            "SELECT id, title, lyrics, target_words, bonus_words, reused_words, extra_words, mood_breakdown, genre, song_structure, creative_concept, created_at, refinement_report, source_domain, suno_lyrics, is_suno_completed FROM songs ORDER BY id DESC",
-            conn
-        )
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(songs)")
+        existing_cols = {row["name"] for row in cursor.fetchall()}
+        cols = [
+            "id", "title", "lyrics", "target_words", "bonus_words", "reused_words", "extra_words",
+            "mood_breakdown", "genre", "song_structure", "creative_concept", "created_at",
+            "refinement_report", "source_domain", "suno_lyrics", "is_suno_completed"
+        ]
+        if "story_arabic" in existing_cols:
+            cols.append("story_arabic")
+        query = f"SELECT {', '.join(cols)} FROM songs ORDER BY id DESC"
+        df = pd.read_sql_query(query, conn)
         if "suno_lyrics" not in df.columns:
             df["suno_lyrics"] = ""
         else:
@@ -93,6 +101,10 @@ def get_all_songs(db_path: Path = DB_PATH) -> pd.DataFrame:
             df["is_suno_completed"] = 0
         else:
             df["is_suno_completed"] = df["is_suno_completed"].fillna(0).astype(int)
+        if "story_arabic" not in df.columns:
+            df["story_arabic"] = ""
+        else:
+            df["story_arabic"] = df["story_arabic"].fillna("")
         return df
 
 
@@ -113,6 +125,7 @@ def update_song(
     source_domain: Optional[str] = None,
     suno_lyrics: Optional[str] = None,
     is_suno_completed: Optional[bool] = None,
+    story_arabic: Optional[str] = None,
 ) -> bool:
     """Update an existing song's details and metadata in SQLite."""
     with get_connection(db_path) as conn:
@@ -156,6 +169,8 @@ def update_song(
             updates.append(("suno_lyrics", suno_lyrics))
         if is_suno_completed is not None:
             updates.append(("is_suno_completed", 1 if is_suno_completed else 0))
+        if story_arabic is not None:
+            updates.append(("story_arabic", story_arabic))
             
         set_clause = ", ".join(f"{col} = ?" for col, _ in updates)
         params = [val for _, val in updates] + [song_id]
@@ -186,6 +201,14 @@ def save_suno_lyrics(song_id: int, suno_lyrics: str, db_path: Path = DB_PATH) ->
     """Save modified Suno lyrics for an existing song."""
     with get_connection(db_path) as conn:
         conn.cursor().execute("UPDATE songs SET suno_lyrics = ? WHERE id = ?", (suno_lyrics, song_id))
+        conn.commit()
+        return True
+
+
+def save_story_arabic(song_id: int, story_arabic: str, db_path: Path = DB_PATH) -> bool:
+    """Save Arabic story translation for an existing song."""
+    with get_connection(db_path) as conn:
+        conn.cursor().execute("UPDATE songs SET story_arabic = ? WHERE id = ?", (story_arabic, song_id))
         conn.commit()
         return True
 
