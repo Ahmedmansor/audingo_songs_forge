@@ -44,7 +44,7 @@ def _words(value):
 
 
 def _render_library_category_distribution(songs: pd.DataFrame):
-    """Render stacked percentage distribution and badges for all song categories in the library."""
+    """Render circular donut distribution and badges for all song categories in the library."""
     if songs.empty:
         return
     total_songs = len(songs)
@@ -58,14 +58,18 @@ def _render_library_category_distribution(songs: pd.DataFrame):
     if "Not tagged" in cat_counts and "Not tagged" not in ordered_cats:
         ordered_cats.append("Not tagged")
 
-    bar_segments = []
-    badges = []
+    active_cats = [c for c in ordered_cats if int(cat_counts.get(c, 0)) > 0]
+    if not active_cats:
+        return
 
-    for cat in ordered_cats:
+    conic_stops = []
+    badges = []
+    current_deg = 0.0
+
+    for idx, cat in enumerate(active_cats):
         cnt = int(cat_counts.get(cat, 0))
-        if cnt == 0:
-            continue
         pct = (cnt / total_songs) * 100.0
+        deg = (cnt / total_songs) * 360.0
         cfg = DOMAIN_CONFIG.get(cat, {
             "emoji": "🏷️",
             "color": "var(--studio-muted)",
@@ -78,38 +82,58 @@ def _render_library_category_distribution(songs: pd.DataFrame):
         border = cfg.get("border", "rgba(148, 163, 184, 0.3)")
         song_lbl = "song" if cnt == 1 else "songs"
 
+        next_deg = current_deg + deg
+        if idx == len(active_cats) - 1:
+            next_deg = 360.0
+
+        conic_stops.append(f"{color} {current_deg:.2f}deg {next_deg:.2f}deg")
+        current_deg = next_deg
+
         title_attr = escape(f"{emoji} {cat}: {pct:.1f}% ({cnt} {song_lbl})", quote=True)
-        bar_segments.append(
-            f'<div style="width: {pct:.2f}%; height: 100%; background: {color};" title="{title_attr}"></div>'
-        )
         badges.append(
-            f'<span style="background: {bg}; color: {color}; border: 1px solid {border}; '
-            f'padding: 3px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; '
-            f'display: inline-flex; align-items: center; gap: 4px;">'
-            f'{emoji} {escape(cat)}: <b>{pct:.1f}%</b> <small style="opacity: 0.8;">({cnt})</small>'
+            f'<div style="background: {bg}; border: 1px solid {border}; '
+            f'padding: 7px 12px; border-radius: 10px; font-size: 0.81rem; '
+            f'display: flex; align-items: center; justify-content: space-between; gap: 8px;" title="{title_attr}">'
+            f'<span style="display: inline-flex; align-items: center; gap: 6px; font-weight: 650; color: {color};">'
+            f'<span style="width: 8px; height: 8px; border-radius: 50%; background: {color}; display: inline-block; flex-shrink: 0;"></span>'
+            f'{emoji} {escape(cat)}'
             f'</span>'
+            f'<span style="font-weight: 800; color: {color}; white-space: nowrap;">'
+            f'{pct:.1f}% <small style="font-weight: 600; opacity: 0.85;">({cnt})</small>'
+            f'</span>'
+            f'</div>'
         )
 
-    bar_html = "".join(bar_segments)
-    badges_html = " ".join(badges)
+    conic_css = ", ".join(conic_stops)
+    badges_html = "".join(badges)
     total_lbl = "song" if total_songs == 1 else "songs"
 
     box_html = (
-        f'<div style="background: var(--studio-bg); border: 1px solid rgba(148, 163, 184, 0.18); '
-        f'border-radius: 12px; padding: 10px 14px; margin: 8px 0 14px 0;">'
-        f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; flex-wrap: wrap; gap: 6px;">'
-        f'<span style="font-size: 0.84rem; font-weight: 700; color: var(--studio-ink); display: inline-flex; align-items: center; gap: 6px;">'
+        f'<div style="background: var(--studio-surface); border: 1px solid rgba(148, 163, 184, 0.2); '
+        f'border-radius: 16px; padding: 14px 18px; margin: 8px 0 16px 0; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);">'
+        f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid rgba(148, 163, 184, 0.12); padding-bottom: 8px;">'
+        f'<span style="font-size: 0.86rem; font-weight: 700; color: var(--studio-ink); display: inline-flex; align-items: center; gap: 6px;">'
         f'📊 <b>Library Category Distribution</b>'
         f'</span>'
         f'<span style="font-size: 0.78rem; font-weight: 600; color: var(--studio-muted);">'
         f'{total_songs} {total_lbl} total'
         f'</span>'
         f'</div>'
-        f'<div style="width: 100%; height: 8px; border-radius: 6px; overflow: hidden; display: flex; background: var(--studio-track); margin-bottom: 8px;">'
-        f'{bar_html}'
+        f'<div style="display: flex; align-items: center; gap: 22px; flex-wrap: wrap;">'
+        f'<div style="display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 4px;">'
+        f'<div style="width: 124px; height: 124px; border-radius: 50%; background: conic-gradient({conic_css}); '
+        f'display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);">'
+        f'<div style="width: 82px; height: 82px; border-radius: 50%; background: var(--studio-surface); '
+        f'display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; '
+        f'box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.04);">'
+        f'<span style="font-size: 1.35rem; font-weight: 800; color: var(--studio-ink); line-height: 1;">{total_songs}</span>'
+        f'<span style="font-size: 0.65rem; font-weight: 700; color: var(--studio-muted); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px;">{total_lbl}</span>'
         f'</div>'
-        f'<div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">'
+        f'</div>'
+        f'</div>'
+        f'<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; flex: 1; min-width: 260px;">'
         f'{badges_html}'
+        f'</div>'
         f'</div>'
         f'</div>'
     )
