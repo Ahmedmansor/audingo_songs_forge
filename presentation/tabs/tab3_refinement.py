@@ -3,11 +3,18 @@ import time
 import re
 import html
 import db
-from scripts.lyrics_graph import run_refinement_graph, run_critic_only, compute_line_status
+from scripts.lyrics_graph import (
+    run_refinement_graph,
+    run_critic_only,
+    compute_line_status,
+    build_critic_prompt,
+    parse_critic_json_response,
+)
 from domain.services.prompt_service import build_manual_surgical_prompt
 from constants import get_category_profile
 from domain.services.refinement_archive import report_applies_to_draft, lyrics_signature, is_draft_heading
 from presentation.components.session import apply_pending_workflow_reset, sync_active_session
+from presentation.components.widgets import render_simple_copy_button, render_audio_notification
 
 
 def send_lyrics_to_commit(lyrics: str, draft: str):
@@ -27,6 +34,9 @@ def render_tab_refinement():
     st.subheader("Find the right words.")
     st.markdown("<p class='sub-text'>Give your lyrics a thoughtful second pass. Refine the story, rhythm, and vocabulary.</p>", unsafe_allow_html=True)
     apply_pending_workflow_reset()
+    if st.session_state.pop("play_critic_success_sound", False):
+        render_audio_notification()
+        st.toast("🔔 تم اكتمال فحص الناقد بنجاح!")
     if not st.session_state.get("target_batch"):
         st.info("اختار الكلمات من Studio الأول. الكلمات والاتجاه الموسيقي هيظهروا هنا تلقائياً.")
         return
@@ -120,12 +130,21 @@ def render_tab_refinement():
             key="refine_draft"
         )
 
-        st.session_state.setdefault("critic_only_mode", True)
-        critic_only_mode = st.toggle(
-            "🔍 Critic only",
-            key="critic_only_mode",
-            help="وضع الناقد فقط: تدقيق ونقد الأسطر وحساب النسب والألوان فوراً بدون تعديل أو لوب. لا يغير حالة Refinement المحفوظة."
-        )
+        col_opt1, col_opt2 = st.columns([1.2, 1])
+        with col_opt1:
+            st.session_state.setdefault("critic_only_mode", True)
+            critic_only_mode = st.toggle(
+                "🔍 Critic only",
+                key="critic_only_mode",
+                help="وضع الناقد فقط: تدقيق ونقد الأسطر وحساب النسب والألوان فوراً بدون تعديل أو لوب. لا يغير حالة Refinement المحفوظة."
+            )
+        with col_opt2:
+            st.session_state.setdefault("refinement_sound_enabled", True)
+            sound_enabled = st.toggle(
+                "🔔 تنبيه صوتي",
+                key="refinement_sound_enabled",
+                help="تشغيل صوت تنبيه مميز فور انتهاء الناقد من الفحص لتنبيهك حتى لو كنت في نافذة أخرى."
+            )
 
         # Persist edits (including clearing the box), not only successful API runs.
         # Keep reports as historical snapshots; visibility is checked separately.
@@ -154,8 +173,97 @@ def render_tab_refinement():
                 lines.append(l)
             return "\n".join(lines).strip()
         
+        def _render_critic_popover():
+            with st.popover(":material/content_copy: برومبت الناقد", width="stretch", help="عرض ونسخ برومبت الناقد الصارم لإرساله لنماذج خارجية (Claude / ChatGPT)"):
+                st.markdown(f"##### 🎭 برومبت الناقد الصارم (`{critic_name}`)")
+                st.caption(
+                    "برومبت الناقد الصارم المخصص لتقييم الكلمات سطراً بسطر بنسب وألوان. "
+                    "يمكنك نسخه وتشغيله في **Claude 3.5 Sonnet** أو **ChatGPT 4o** لتجاوز أي تعليق أو بطء في الـ API."
+                )
+
+                clean_draft_for_prompt = _clean_draft_text(draft) if draft.strip() else "[Insert your draft lyrics here]"
+                critic_prompt_text = build_critic_prompt(
+                    draft=clean_draft_for_prompt,
+                    target_words=target_words_list,
+                    theme=theme_val,
+                    genre=genre_val,
+                    concept=concept_val,
+                    dialect=st.session_state.get("selected_dialect", "American English")
+                )
+
+                if not draft.strip():
+                    st.warning("⚠️ أدخل كلمات الأغنية في خانة المسودة أولاً لتضمين كلماتك الفعلية في البرومبت.")
+
+                render_simple_copy_button(
+                    critic_prompt_text,
+                    label="📋 نسخ برومبت الناقد للحافظة",
+                    copied_label="✅ تم نسخ البرومبت بنجاح!",
+                    button_id="tab3_critic_popover_btn",
+                    align="flex-start"
+                )
+
+                st.code(critic_prompt_text, language="markdown")
+
+                with st.expander(":material/download: استيراد نتيجة الناقد من الخارج (Paste JSON)", expanded=False):
+                    st.caption("إذا قمت بتشغيل البرومبت في Claude أو ChatGPT، الصق نتيجة الـ JSON هنا لعرض التحليل والألوان والنسب فوراً:")
+                    pasted_json = st.text_area(
+                        "Pasted JSON Response",
+                        height=140,
+                        placeholder='{\n  "overall_score": 85,\n  "lines_review": [\n    {"number": 1, "line": "...", "score": 92, "issue": "none"}\n  ]\n}',
+                        key="pasted_critic_json_input"
+                    )
+                    if st.button("📥 تطبيق التقرير في Audingo", key="apply_pasted_critic_btn", type="secondary", width="stretch"):
+                        if pasted_json.strip():
+                            try:
+                                imported_report = parse_critic_json_response(
+                                    raw_response=pasted_json,
+                                    draft=_clean_draft_text(draft) if draft.strip() else "",
+                                    target_words=target_words_list,
+                                    theme=theme_val,
+                                    genre=genre_val,
+                                    concept=concept_val,
+                                    dialect=st.session_state.get("selected_dialect", "American English"),
+                                    model_used="External LLM (Imported)",
+                                    time_taken=0.0
+                                )
+                                st.session_state["critic_only_report"] = imported_report
+                                st.session_state["critic_only_time"] = 0.0
+                                st.session_state["critic_only_mode"] = True
+                                if st.session_state.get("refinement_sound_enabled", True):
+                                    st.session_state["play_critic_success_sound"] = True
+                                db.save_refinement_state(
+                                    draft_input=draft,
+                                    graph_report=st.session_state.get("graph_report"),
+                                    concept=concept_val,
+                                    domain=active_domain,
+                                    critic_only_report=imported_report,
+                                    critic_only_time=0.0,
+                                    critic_only_mode=True
+                                )
+                                st.toast("✅ تم استيراد نتيجة الناقد وعرض التقرير بنجاح!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"خطأ في قراءة الـ JSON: {e}")
+                        else:
+                            st.warning("يرجى لصق نص الـ JSON أولاً.")
+
+                st.divider()
+                col_t1, col_t2 = st.columns([1.5, 1])
+                with col_t1:
+                    st.caption("🔔 سيتم تشغيل صوت تنبيه لطيف تلقائياً عند اكتمال فحص الناقد.")
+                with col_t2:
+                    if st.button("🔊 تجربة الصوت", key="test_chime_popover_btn", width="stretch", help="سماع صوت التنبيه الآن"):
+                        st.session_state["play_critic_success_sound"] = True
+                        st.rerun()
+
         if not critic_only_mode:
-            if st.button("Start Refinement Pipeline", type="primary", width="stretch"):
+            col_pipe, col_cp = st.columns([1.3, 1])
+            with col_pipe:
+                run_pipe_clicked = st.button("Start Refinement Pipeline", type="primary", width="stretch")
+            with col_cp:
+                _render_critic_popover()
+
+            if run_pipe_clicked:
                 if draft.strip() and target_words_list:
                     draft_to_process = _clean_draft_text(draft)
 
@@ -180,6 +288,8 @@ def render_tab_refinement():
                         
                         st.session_state["graph_report"] = final_state["final_report"]
                         st.session_state["graph_time"] = round(end_time - start_time, 1)
+                        if st.session_state.get("refinement_sound_enabled", True):
+                            st.session_state["play_critic_success_sound"] = True
                         
                         # Persist state
                         db.save_refinement_state(
@@ -195,7 +305,13 @@ def render_tab_refinement():
                 else:
                     st.error("Please provide a draft and ensure target words are selected in the Studio.")
         else:
-            if st.button("⚡ Run critic", type="primary", width="stretch", help="فحص وتقييم كل سطر بنسبة مئوية ولون بواسطة الناقد الصارم"):
+            col_crit, col_cp = st.columns([1.2, 1])
+            with col_crit:
+                run_crit_clicked = st.button("⚡ Run critic", type="primary", width="stretch", help="فحص وتقييم كل سطر بنسبة مئوية ولون بواسطة الناقد الصارم")
+            with col_cp:
+                _render_critic_popover()
+
+            if run_crit_clicked:
                 if draft.strip():
                     draft_to_process = _clean_draft_text(draft)
 
@@ -213,6 +329,8 @@ def render_tab_refinement():
                         critic_time = round(time.time() - start_time, 1)
                         st.session_state["critic_only_report"] = critic_report
                         st.session_state["critic_only_time"] = critic_time
+                        if st.session_state.get("refinement_sound_enabled", True):
+                            st.session_state["play_critic_success_sound"] = True
                         db.save_refinement_state(
                             draft_input=draft,
                             graph_report=st.session_state.get("graph_report"),

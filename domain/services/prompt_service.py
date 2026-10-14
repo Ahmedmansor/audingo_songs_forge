@@ -3,6 +3,7 @@ prompt_service.py — Constructs Suno AI style prompts and Master Prompts for ex
 """
 
 from typing import List, Dict, Any, Optional
+import json
 import random
 import re
 from constants import get_category_profile
@@ -679,6 +680,97 @@ Every line must be:
 - Using target words in their everyday meaning. Never force a word in."""
 
 
+def critic_calibration(profile: Dict[str, Any]) -> str:
+    """Shared rubric for critic-only and refinement-loop evaluations."""
+    return """REGISTER AND FAIR SCORING:
+- Natural English includes educated and moderately formal speech when appropriate to the speaker and situation. Everyday meaning does not mean street slang.
+- Basic / Neutral vocabulary is valid in every category. Judge actual meaning and context, not category labels.
+- Ordinary pronouns and references are valid when clear in a real situation; the standalone test does not require every line to retell the story.
+- Normal chorus repetition is not an authenticity flaw. CHORUS STORY TIMING IMMUNITY: A chorus is a recurring musical hook/refrain, NOT a linear plot beat. NEVER penalize, flag, or deduct points from chorus lines for chronological story order, narrative timing, or mentioning tools/actions before or after verses (e.g. asking for tools in Chorus 1 before a breakdown or in Chorus 3 after a fix is standard musical songwriting, NEVER a chronological contradiction). Do NOT critique story order or chronological timing in the chorus.
+- Support every deduction with a concrete defect.
+- Do not give 90+ to a line you cannot defend. A real song rarely has every line above 90. If almost all your scores are 90+, re-check yourself.
+- Do not apply multiple deductions for the same underlying defect.
+- Score every sung lyric line, including repeated occurrences; omit section tags and blank lines.
+- Authenticity measures only the quality of the lyric lines. Missing, unused, or dropped target words and coverage percentages must NEVER lower line scores or overall_score.
+- overall_score is the rounded arithmetic mean of the line scores, with equal weight per lyric line. Coverage and dropped_words are separate information, never a penalty or bonus.
+- Recommend dropping a target only for an actual contextual or usage problem, never merely for its register.
+""" + profile.get("critic_guidance", "")
+
+
+def build_critic_prompt(
+    draft: str,
+    target_words: Optional[List[str]] = None,
+    theme: str = "Basic / Neutral",
+    genre: str = "Cinematic / Ballad",
+    concept: str = "",
+    dialect: str = "American English",
+    errors: Optional[List[str]] = None
+) -> str:
+    """
+    Constructs the complete, strict ESL Critic Prompt for line-by-line authenticity evaluation.
+    This prompt can be run via Gemini API or copied by the user to run externally in Claude 3.5 Sonnet / GPT-4o.
+    """
+    words_list = target_words or []
+    words_str = ", ".join(words_list) if words_list else "None specified"
+    p = get_category_profile(theme)
+    concept_str = concept.strip() if concept else p.get("default_story", "")
+
+    error_section = ""
+    if errors:
+        error_section = f"\nSYSTEM INSPECTOR FLAGS (Reference only):\n{json.dumps(errors, indent=2)}\n"
+
+    return f"""You are a strict ESL lyric critic. You do NOT rewrite anything. Score each line from 0 to 100 against THE GOAL below.
+Judge each line in the context of the whole song (so you can catch contradictions), but score only that line.
+
+{ESL_GOAL_BLOCK}
+
+CONTEXTUAL ANCHORS:
+- Theme: "{theme}"
+- Category guidance: Setting: {p.get('setting', '')}. Register: {p.get('register', '')}.
+- Musical Genre: "{genre}"
+- Core Story / Setting: "{concept_str}"
+- Dialect: {dialect}
+- Target words (the only words that count as target words): {words_str}
+
+{critic_calibration(p)}
+
+Start every line at 100 and subtract:
+- Not something a native speaker would say in this setting (poetic, literary, inverted word order): -25
+- Filler added for rhyme or rhythm, or vague when read alone ("I hope that you can see"): -20
+- Fails the standalone test (not useful or not understandable on its own): -20
+- Target word used in a forced, odd or non-everyday way (apply only to the target words above): -25
+- Contradicts the story or the narrator's stance, or jumps outside the story/setting (evaluate verses and bridge for chronological story order; NEVER penalize chorus lines for chronological timing/order as chorus is a recurring hook): -25
+- Stiff form where a contraction is natural in this setting ("I am sorry", "do not"): -10
+- Mixes dialects in the line, or uses forms outside {dialect}: -15
+- Longer than 9 syllables or hard to sing/memorize: -10
+- Crude language beyond ordinary expressions: -20
+
+Rules:
+- If any deduction applies, the score cannot exceed 89. A line with no deductions scores 90-100.
+- Apply the target-word deduction only to the official target words listed above.
+- For each line return: number, the line, score, and a short issue (or "none").
+- If a target word completely destroys the realism of the scene or sounds forced, list it in dropped_words.
+{error_section}
+SONG LYRICS TO EVALUATE:
+{draft}
+
+OUTPUT JSON SCHEMA:
+{{
+    "overall_score": 0-100,
+    "dropped_words": ["word1"],
+    "dropped_reasons": {{"word1": "reason"}},
+    "lines_review": [
+        {{
+            "number": 1,
+            "line": "exact line text",
+            "score": 0-100,
+            "issue": "short reason or 'none'"
+        }}
+    ]
+}}
+"""
+
+
 def build_manual_surgical_prompt(
     lyrics_text: str,
     line_breakdown: List[Dict[str, Any]],
@@ -1020,25 +1112,33 @@ STEP 3: DIALECT AND CLEANLINESS
 Any American/British mixing (vocabulary, spelling, grammar)?
 Any profanity or sensitive wording that is not an ordinary everyday expression?
 
-STEP 4: TARGET WORDS (ANTI-LAZINESS & JUSTIFICATION AUDIT)
+STEP 4: TARGET WORDS (ANTI-LAZINESS & RESCUE AUDIT)
 {target_words_note}For each target word, state: Used or Left out.
 
 - Used: verify it is in its natural, everyday conversational meaning.
-- Left out (PROTECT & JUSTIFY RULES):
+- Left out (PROTECT, RESCUE & JUSTIFY RULES):
   1. PROTECTION OF WORKING WORDS: Never drop a target word that was already working naturally in the previous draft just because you are editing adjacent lines. Preserving working words is mandatory.
-  2. REASON REQUIRED FOR EVERY DROP: If a target word cannot be used naturally, state the exact 1-sentence incompatibility reason (e.g. "'facility' is too formal/corporate for a small family kitchen"). Dropping words without an incompatibility reason is lazy and forbidden.
-  3. TARGET WORD RESCUE: If a line containing a target word fails Step 1 (stiff, jargon, or syllable mismatch), fix the sentence structure using the Critic Alignment rules while keeping the target word, before deciding to drop it.
+  2. TARGET WORD RESCUE (IN-DRAFT WORDS): If a line containing a target word fails Step 1 (stiff, jargon, or syllable mismatch), fix the sentence structure using the Critic Alignment rules while keeping the target word, before deciding to drop it.
+  3. ONE-SHOT RESCUE OPPORTUNITY FOR LEFT-OUT WORDS (ANTI-LAZINESS):
+     - For every word currently listed in '[Words left out]', actively scan the draft for a conversational rescue opportunity:
+       Can this word be seamlessly integrated into one of the lines being edited, or into a flat/generic line in the verses or bridge, using a common, high-frequency American spoken collocation (e.g. 'own' -> 'on your own' / 'your own place' / 'your own wall', 'seek' -> 'the peace you seek' / 'what you seek', 'allow' -> 'allow me to help' / 'if time allows', 'maker' -> 'coffee maker' / 'the maker built it')?
+     - If a 100% natural, everyday spoken opportunity exists without any awkwardness or stuffing, formulate the revision and integrate the word into [Words used]!
+     - REJECTION OF LAZY DISQUALIFICATIONS: Never accept dismissive excuses like "it would be filler" or "it is formal" for foundational everyday words if a genuine conversational collocation fits the scene naturally.
+  4. LEGITIMATE PERMANENT DROP (RED LINES ALWAYS BEAT WORD COVERAGE):
+     - If a word truly cannot fit without violating Red Line 1 (awkward syntax, distorted dialogue, or hyper-technical terms like 'equivalent' that native speakers would never say in this scene), state the exact 1-sentence incompatibility reason.
+     - Once a word is legitimately verified as incompatible with natural dialogue, it remains permanently dropped. NEVER force or distort lines just to chase a 20/20 count. Natural spoken lines always come first.
 
 STEP 5: VERDICT & CONVERGENCE (STOPPING CRITERION)
 
-- If ANY line has genuine issues (overcrowded 10+ syllables, unnatural syntax, story contradiction, or Critic traps):
-  * List every failing line with a one-line fix.
-  * Give verdict: FAIL (Issues identified, applying fixes).
-  * Output the revised song in the original format, fixing ONLY the failing lines and keeping all passing lines and working target words strictly intact.
+- If ANY line has genuine issues (overcrowded 10+ syllables, unnatural syntax, story contradiction, or Critic traps) OR an unused target word can be naturally integrated via Step 4.3:
+  * List every failing or upgraded line with its one-line fix.
+  * Give verdict: FAIL (Issues identified or vocabulary upgraded, applying fixes).
+  * Output the revised song in the original format, fixing ONLY the necessary lines and keeping all passing lines and working target words strictly intact.
 
-- CONVERGENCE RULE (BREAK THE INFINITE LOOP):
-  * If ALL lines in the song are already within natural rhythm (4-9 syllables), 100% natural spoken American English (zero Critic traps), and story-consistent:
-  * DO NOT invent cosmetic rewrites or subjective word substitutions.
+- CONVERGENCE & STOPPING CRITERION (PREVENTING INFINITE LOOPS):
+  * The goal is a natural, memorable song with strong vocabulary integration (15 to 18 words), NOT an unnatural 20/20 forced cram.
+  * If ALL lines in the song are already within natural rhythm (4-9 syllables), 100% natural spoken American English (zero Critic traps), story-consistent, and all remaining left-out words are legitimately incompatible without forcing:
+  * DO NOT invent cosmetic rewrites, do NOT loop endlessly, and do NOT attempt to force incompatible words.
   * You MUST declare: VERDICT: PASS (READY FOR SUNO PRODUCTION).
   * Output the final song cleanly without alterations.
 

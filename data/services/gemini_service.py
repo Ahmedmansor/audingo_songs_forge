@@ -625,6 +625,10 @@ PRIMARY THEMATIC FOCUS:
         practicality_guidance = """- Select words that are useful, frequent, and natural in real-life spoken American English.
    - REJECT words that are hyper-technical, archaic, or awkward to use in a song without forcing weird rhymes or distorted word order ("من غير ما نحشر كلمة بالعافية")."""
 
+    genres_str = "\n".join(f"- {g}" for g in GENRES)
+    structures_str = "\n".join(f"- {s}" for s in SONG_STRUCTURES)
+    moods_str = "\n".join(f"- {m}" for m in MOOD_CATEGORIES)
+
     prompt = f"""You are an elite ESL vocabulary curator, master curriculum director, and hit songwriter for Audingo.
 
 AUDINGO EDUCATIONAL MISSION:
@@ -641,6 +645,15 @@ CREATIVE INSPIRATION SPARKS FOR THIS BATCH (DOMAIN-TAILORED):
 - Character Setup: {char_label} — {char_instruction}
 - Narrative Arc & Resolution Tone: {arc_name} ({arc_flow}) — Ending flavor: {arc_flavor}
 - Authentic Sensory Props (Touchstones to ground the physical scene): {props_str}
+
+Available Genres (all 13 genres pre-curated for ESL vocal clarity):
+{genres_str}
+
+Available Song Structures:
+{structures_str}
+
+Available Mood Categories (Percentages MUST sum up to exactly 100):
+{moods_str}
 
 CANDIDATE NOUNS ({len(candidate_nouns)} available):
 {nouns_str}
@@ -671,10 +684,23 @@ INTELLIGENT SELECTION METHODOLOGY:
    - Every single selected word MUST be chosen verbatim from the candidate lists provided above.
    - Exactly 10 Nouns, Exactly 6 Verbs, Exactly 4 Adjectives. Total = 20 words.
 
+6. MUSICAL & EMOTIONAL DIRECTION (ALL-IN-ONE HARMONIZATION):
+   - Analyze the emotional core and energy of this curated scenario and the 20 target words.
+   - Assign an authentic emotional mood breakdown across Available Mood Categories (percentages summing up to exactly 100).
+   - Select the single best matching Genre from Available Genres.
+   - Select the single best matching Song Structure from Available Song Structures.
+
 Return a valid JSON object with the following exact schema:
 {{
     "theme_name": "A short, catchy, evocative 2-4 word theme name",
     "creative_concept": "A specific, vivid 3-4 sentence narrative scenario explicitly defining characters, concrete setting, core tension, and narrative progression, designed to anchor natural spoken dialogue.",
+    "genre": "Exact match from Available Genres",
+    "song_structure": "Exact match from Available Song Structures",
+    "mood_breakdown": {{
+        "Mood Name": 50,
+        "Another Mood": 30,
+        "Third Mood": 20
+    }},
     "selected_nouns": ["noun1", "noun2", "noun3", "noun4", "noun5", "noun6", "noun7", "noun8", "noun9", "noun10"],
     "selected_verbs": ["verb1", "verb2", "verb3", "verb4", "verb5", "verb6"],
     "selected_adjectives": ["adj1", "adj2", "adj3", "adj4"]
@@ -694,6 +720,23 @@ Return a valid JSON object with the following exact schema:
         data = json.loads(raw)
         model_name = CRITIC_FALLBACK_CHAIN[model_idx]
         concept = data.get("creative_concept") or data.get("theme_description", "")
+
+        genre = data.get("genre", GENRES[0])
+        if genre not in GENRES:
+            genre = GENRES[0]
+
+        structure = data.get("song_structure", SONG_STRUCTURES[0])
+        if structure not in SONG_STRUCTURES:
+            structure = SONG_STRUCTURES[0]
+
+        mood_breakdown = data.get("mood_breakdown", {})
+        if not mood_breakdown or not isinstance(mood_breakdown, dict):
+            mood_breakdown = {
+                "Reflective": 40,
+                "Chill / Relaxed": 30,
+                "Uplifting / Inspiring": 30
+            }
+
         return {
             "success": True,
             "model_used": model_name,
@@ -704,6 +747,9 @@ Return a valid JSON object with the following exact schema:
             "theme_description": concept,
             "creative_concept": concept,
             "creative_sparks": sparks,
+            "genre": genre,
+            "song_structure": structure,
+            "mood_breakdown": mood_breakdown,
         }
     except Exception as exc:
         logger.warning("Thematic curation failed: %s", exc)
@@ -717,6 +763,14 @@ Return a valid JSON object with the following exact schema:
             "theme_description": "Two people in an authentic everyday setting working through an honest conversation.",
             "creative_concept": "Two people in an authentic everyday setting working through an honest conversation.",
             "creative_sparks": sparks,
+            "genre": GENRES[0],
+            "song_structure": SONG_STRUCTURES[0],
+            "mood_breakdown": {
+                "Happy": 30,
+                "Energetic": 30,
+                "Uplifting / Inspiring": 20,
+                "Chill / Relaxed": 20,
+            },
         }
 
 

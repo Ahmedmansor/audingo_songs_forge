@@ -12,6 +12,7 @@ from presentation.components.widgets import (
     render_copy_words_toolbar,
     render_domain_breakdown_section,
     render_floating_audit_prompt_fab,
+    render_audio_notification,
 )
 from presentation.components.session import sync_active_session, set_target_batch
 from presentation.components.dialogs import confirm_studio_reset_dialog, execute_studio_action
@@ -44,6 +45,9 @@ def is_active_song_in_progress() -> bool:
 
 def render_tab_studio():
     """Renders the Target Word Selection, Batch Management, and AI Prompt Generator."""
+    if st.session_state.pop("play_studio_success_sound", False):
+        render_audio_notification(sound_id="smart_pull_complete")
+
     if st.session_state.get("studio_toast_msg"):
         st.toast(st.session_state.pop("studio_toast_msg"))
 
@@ -526,8 +530,14 @@ def render_tab_studio():
         col_gem1, col_gem2 = st.columns([1.5, 2])
         
         with col_gem1:
-            st.markdown("Analyze the 20 target words to get an emotional breakdown, genre, and structure.")
-            if st.button(":material/auto_awesome: Run Gemini Analysis", type="secondary", width="stretch"):
+            if st.session_state.mood_analysis:
+                st.markdown("Mood breakdown and musical direction are active. Click below if you tweaked words or story and wish to re-analyze:")
+                btn_label = ":material/refresh: Re-Analyze Musical Direction"
+            else:
+                st.markdown("Analyze the 20 target words to get an emotional breakdown, genre, and structure.")
+                btn_label = ":material/auto_awesome: Run Gemini Analysis"
+
+            if st.button(btn_label, type="secondary", width="stretch"):
                 with st.spinner("Analyzing vocabulary mood with Gemini Flash..."):
                     existing_concept_val = st.session_state.custom_concept.strip() if st.session_state.get("custom_concept") else None
                     saved_sparks = st.session_state.get("curated_creative_sparks") or (
@@ -547,6 +557,7 @@ def render_tab_studio():
                         st.session_state.selected_structure = res["song_structure"]
                     if not st.session_state.custom_concept.strip() and res.get("creative_concept"):
                         st.session_state.custom_concept = res["creative_concept"]
+                    st.session_state["play_studio_success_sound"] = True
                     sync_active_session()
                     st.rerun()
 

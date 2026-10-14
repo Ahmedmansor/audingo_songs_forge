@@ -158,26 +158,61 @@ def execute_studio_action(action: str):
 
             if len(curated_batch) == 20:
                 set_target_batch(curated_batch)
-                st.session_state.mood_analysis = None
+                from constants import GENRES, SONG_STRUCTURES
+
+                concept_text = curation_res.get("creative_concept") or curation_res.get("theme_description", "")
+                selected_genre = curation_res.get("genre", GENRES[0])
+                selected_structure = curation_res.get("song_structure", SONG_STRUCTURES[0])
+                mood_breakdown = curation_res.get("mood_breakdown", {})
+
+                st.session_state.mood_analysis = {
+                    "success": True,
+                    "model_used": curation_res.get("model_used", "Gemini"),
+                    "mood_breakdown": mood_breakdown,
+                    "genre": selected_genre,
+                    "song_structure": selected_structure,
+                    "creative_concept": concept_text,
+                    "creative_sparks": curation_res.get("creative_sparks"),
+                }
+                st.session_state.selected_genre = selected_genre
+                st.session_state.selected_structure = selected_structure
                 st.session_state.master_prompt = ""
                 st.session_state.studio_suno_prompt = ""
-                concept_text = curation_res.get("creative_concept") or curation_res.get("theme_description", "")
                 st.session_state.custom_concept = concept_text
                 st.session_state.curated_creative_sparks = curation_res.get("creative_sparks")
                 st.session_state.graph_report = None
                 st.session_state.word_fit_audit = None
                 sync_active_session()
                 theme_title = curation_res.get("theme_name", "Curated Storyline")
-                st.session_state["studio_toast_msg"] = f"✨ Curated 20 thematic words for '{theme_title}' (10 Nouns, 6 Verbs, 4 Adjectives)!"
+                st.session_state["studio_toast_msg"] = f"✨ Curated 20 thematic words for '{theme_title}' with complete story & mood analysis!"
+                st.session_state["play_studio_success_sound"] = True
                 st.rerun()
             elif len(curated_batch) > 0:
                 set_target_batch(curated_batch)
+                from constants import GENRES, SONG_STRUCTURES
+
                 concept_text = curation_res.get("creative_concept") or curation_res.get("theme_description", "")
+                selected_genre = curation_res.get("genre", GENRES[0])
+                selected_structure = curation_res.get("song_structure", SONG_STRUCTURES[0])
+                mood_breakdown = curation_res.get("mood_breakdown", {})
+
+                st.session_state.mood_analysis = {
+                    "success": True,
+                    "model_used": curation_res.get("model_used", "Gemini"),
+                    "mood_breakdown": mood_breakdown,
+                    "genre": selected_genre,
+                    "song_structure": selected_structure,
+                    "creative_concept": concept_text,
+                    "creative_sparks": curation_res.get("creative_sparks"),
+                }
+                st.session_state.selected_genre = selected_genre
+                st.session_state.selected_structure = selected_structure
                 st.session_state.custom_concept = concept_text
                 st.session_state.curated_creative_sparks = curation_res.get("creative_sparks")
                 st.session_state.graph_report = None
                 st.session_state.word_fit_audit = None
                 sync_active_session()
+                st.session_state["play_studio_success_sound"] = True
                 st.warning(f"Curated {len(curated_batch)} words.")
                 st.rerun()
             else:

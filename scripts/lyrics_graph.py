@@ -11,12 +11,16 @@ from data.services.fallback_engine import (
     MASTER_FALLBACK_CHAIN,
     CRITIC_FALLBACK_CHAIN,
 )
-from domain.services.prompt_service import ESL_GOAL_BLOCK
+from domain.services.prompt_service import (
+    ESL_GOAL_BLOCK,
+    critic_calibration,
+    build_critic_prompt,
+)
 from constants import get_category_profile
 
 logger = logging.getLogger(__name__)
 
-def compute_line_status(score: int) -> tuple[str, str]:
+def compute_line_status(score: Any) -> tuple[str, str]:
     """
     Strict code-based thresholding:
     🟢 >= 90 (✅)
@@ -24,7 +28,7 @@ def compute_line_status(score: int) -> tuple[str, str]:
     🔴 < 75 (❌)
     """
     try:
-        val = int(round(score))
+        val = int(round(float(score)))
     except Exception:
         val = 0
     if val >= 90:
@@ -34,21 +38,85 @@ def compute_line_status(score: int) -> tuple[str, str]:
     else:
         return "❌", "🔴"
 
-def critic_calibration(profile: Dict[str, Any]) -> str:
-    """Shared rubric for critic-only and refinement-loop evaluations."""
-    return """REGISTER AND FAIR SCORING:
-- Natural English includes educated and moderately formal speech when appropriate to the speaker and situation. Everyday meaning does not mean street slang.
-- Basic / Neutral vocabulary is valid in every category. Judge actual meaning and context, not category labels.
-- Ordinary pronouns and references are valid when clear in a real situation; the standalone test does not require every line to retell the story.
-- Normal chorus repetition is not an authenticity flaw. CHORUS STORY TIMING IMMUNITY: A chorus is a recurring musical hook/refrain, NOT a linear plot beat. NEVER penalize, flag, or deduct points from chorus lines for chronological story order, narrative timing, or mentioning tools/actions before or after verses (e.g. asking for tools in Chorus 1 before a breakdown or in Chorus 3 after a fix is standard musical songwriting, NEVER a chronological contradiction). Do NOT critique story order or chronological timing in the chorus.
-- Support every deduction with a concrete defect.
-- Do not give 90+ to a line you cannot defend. A real song rarely has every line above 90. If almost all your scores are 90+, re-check yourself.
-- Do not apply multiple deductions for the same underlying defect.
-- Score every sung lyric line, including repeated occurrences; omit section tags and blank lines.
-- Authenticity measures only the quality of the lyric lines. Missing, unused, or dropped target words and coverage percentages must NEVER lower line scores or overall_score.
-- overall_score is the rounded arithmetic mean of the line scores, with equal weight per lyric line. Coverage and dropped_words are separate information, never a penalty or bonus.
-- Recommend dropping a target only for an actual contextual or usage problem, never merely for its register.
-""" + profile.get("critic_guidance", "")
+
+def parse_critic_json_response(
+    raw_response: Any,
+    draft: str,
+    target_words: List[str],
+    theme: str,
+    genre: str,
+    concept: str,
+    dialect: str = "American English",
+    model_used: str = "External LLM",
+    time_taken: float = 0.0
+) -> Dict[str, Any]:
+    """
+    Parses a JSON response from Gemini or external LLMs (Claude, GPT-4o),
+    computes strict code-based scores, colors and status, and produces the standard critic report.
+    """
+    if isinstance(raw_response, dict):
+        critic_report = raw_response
+    elif isinstance(raw_response, str):
+        text = raw_response.strip()
+        if "```" in text:
+            match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
+            if match:
+                text = match.group(1).strip()
+        if not text.startswith("{"):
+            match = re.search(r"(\{[\s\S]*\})", text)
+            if match:
+                text = match.group(1).strip()
+        critic_report = json.loads(text)
+    else:
+        raise ValueError("Invalid critic response format.")
+
+    p = get_category_profile(theme)
+    lines_review = critic_report.get("lines_review", [])
+
+    parsed_lines = []
+    for idx, item in enumerate(lines_review, 1):
+        raw_score = item.get("score", 70)
+        status_icon, color_circle = compute_line_status(raw_score)
+        issue_text = item.get("issue") or item.get("comment") or "none"
+        line_text = item.get("line", "")
+
+        parsed_entry = {
+            "number": item.get("number", idx),
+            "line": line_text,
+            "score": raw_score,
+            "status": status_icon,
+            "color": color_circle,
+            "comment": issue_text,
+            "issue": issue_text
+        }
+        parsed_lines.append(parsed_entry)
+
+    overall_score = average_line_score(parsed_lines)
+    passed_count = sum(1 for l in parsed_lines if (l.get("score") or 0) >= 90)
+    warn_count = sum(1 for l in parsed_lines if 75 <= (l.get("score") or 0) < 90)
+    flagged_count = sum(1 for l in parsed_lines if (l.get("score") or 0) < 75)
+
+    return {
+        "overall_score": overall_score,
+        "evaluated_at": datetime.now(timezone.utc).isoformat(),
+        "context": {
+            "concept": concept,
+            "genre": genre,
+            "dialect": dialect,
+            "target_words": list(target_words),
+            "domain": theme
+        },
+        "critic_name": p.get("critic_name", "Critic"),
+        "domain": theme,
+        "line_breakdown": parsed_lines,
+        "passed_count": passed_count,
+        "warn_count": warn_count,
+        "flagged_count": flagged_count,
+        "dropped_words": critic_report.get("dropped_words", []),
+        "raw_lyrics": draft,
+        "model_used": model_used,
+        "time_taken": time_taken
+    }
 
 
 def average_line_score(lines: List[Dict[str, Any]]) -> int:
@@ -127,62 +195,15 @@ def authenticity_critic_node(state: GraphState) -> tuple[GraphState, Dict[str, A
     draft = state["draft_lyrics"]
     errors = state.get("validation_errors", [])
     target_words = state.get("target_words", [])
-    words_str = ", ".join(target_words) if target_words else "None specified"
-    p = get_category_profile(theme)
-    
-    prompt = f"""You are a strict ESL lyric critic. You do NOT rewrite anything. Score each line from 0 to 100 against THE GOAL below.
-Judge each line in the context of the whole song (so you can catch contradictions), but score only that line.
-
-{ESL_GOAL_BLOCK}
-
-CONTEXTUAL ANCHORS:
-- Theme: "{theme}"
-- Category guidance: Setting: {p['setting']}. Register: {p['register']}.
-- Musical Genre: "{genre}"
-- Core Story / Setting: "{concept}"
-- Dialect: {dialect}
-- Target words (the only words that count as target words): {words_str}
-
-{critic_calibration(p)}
-
-Start every line at 100 and subtract:
-- Not something a native speaker would say in this setting (poetic, literary, inverted word order): -25
-- Filler added for rhyme or rhythm, or vague when read alone ("I hope that you can see"): -20
-- Fails the standalone test (not useful or not understandable on its own): -20
-- Target word used in a forced, odd or non-everyday way (apply only to the target words above): -25
-- Contradicts the story or the narrator's stance, or jumps outside the story/setting (evaluate verses and bridge for chronological story order; NEVER penalize chorus lines for chronological timing/order as chorus is a recurring hook): -25
-- Stiff form where a contraction is natural in this setting ("I am sorry", "do not"): -10
-- Mixes dialects in the line, or uses forms outside {dialect}: -15
-- Longer than 9 syllables or hard to sing/memorize: -10
-- Crude language beyond ordinary expressions: -20
-
-Rules:
-- If any deduction applies, the score cannot exceed 89. A line with no deductions scores 90-100.
-- Apply the target-word deduction only to the official target words listed above.
-- For each line return: number, the line, score, and a short issue (or "none").
-- If a target word completely destroys the realism of the scene or sounds forced, list it in dropped_words.
-
-SYSTEM INSPECTOR FLAGS (Reference only):
-{json.dumps(errors, indent=2)}
-
-SONG LYRICS TO EVALUATE:
-{draft}
-
-OUTPUT JSON SCHEMA:
-{{
-    "overall_score": 0-100,
-    "dropped_words": ["word1"],
-    "dropped_reasons": {{"word1": "reason"}},
-    "lines_review": [
-        {{
-            "number": 1,
-            "line": "exact line text",
-            "score": 0-100,
-            "issue": "short reason or 'none'"
-        }}
-    ]
-}}
-"""
+    prompt = build_critic_prompt(
+        draft=draft,
+        target_words=target_words,
+        theme=theme,
+        genre=genre,
+        concept=concept,
+        dialect=dialect,
+        errors=errors
+    )
     
     try:
         raw_response, new_model_idx = generate_with_fallback(
@@ -411,59 +432,15 @@ def run_critic_only(
     - Returns full breakdown with line, score, color, status, comment/issue, and overall score
     """
     start_time = time.time()
-    words_str = ", ".join(target_words) if target_words else "None specified"
-    p = get_category_profile(theme)
-    
-    prompt = f"""You are a strict ESL lyric critic. You do NOT rewrite anything. Score each line from 0 to 100 against THE GOAL below.
-Judge each line in the context of the whole song (so you can catch contradictions), but score only that line.
-
-{ESL_GOAL_BLOCK}
-
-CONTEXTUAL ANCHORS:
-- Theme: "{theme}"
-- Category guidance: Setting: {p['setting']}. Register: {p['register']}.
-- Musical Genre: "{genre}"
-- Core Story / Setting: "{concept}"
-- Dialect: {dialect}
-- Target words (the only words that count as target words): {words_str}
-
-{critic_calibration(p)}
-
-Start every line at 100 and subtract:
-- Not something a native speaker would say in this setting (poetic, literary, inverted word order): -25
-- Filler added for rhyme or rhythm, or vague when read alone ("I hope that you can see"): -20
-- Fails the standalone test (not useful or not understandable on its own): -20
-- Target word used in a forced, odd or non-everyday way (apply only to the target words above): -25
-- Contradicts the story or the narrator's stance, or jumps outside the story/setting (evaluate verses and bridge for chronological story order; NEVER penalize chorus lines for chronological timing/order as chorus is a recurring hook): -25
-- Stiff form where a contraction is natural in this setting ("I am sorry", "do not"): -10
-- Mixes dialects in the line, or uses forms outside {dialect}: -15
-- Longer than 9 syllables or hard to sing/memorize: -10
-- Crude language beyond ordinary expressions: -20
-
-Rules:
-- If any deduction applies, the score cannot exceed 89. A line with no deductions scores 90-100.
-- Apply the target-word deduction only to the official target words listed above.
-- For each line return: number, the line, score, and a short issue (or "none").
-- If a target word completely destroys the realism of the scene or sounds forced, list it in dropped_words.
-
-SONG LYRICS TO EVALUATE:
-{draft}
-
-OUTPUT JSON SCHEMA:
-{{
-    "overall_score": 0-100,
-    "dropped_words": ["word1"],
-    "dropped_reasons": {{"word1": "reason"}},
-    "lines_review": [
-        {{
-            "number": 1,
-            "line": "exact line text",
-            "score": 0-100,
-            "issue": "short reason or 'none'"
-        }}
-    ]
-}}
-"""
+    prompt = build_critic_prompt(
+        draft=draft,
+        target_words=target_words,
+        theme=theme,
+        genre=genre,
+        concept=concept,
+        dialect=dialect,
+        errors=None
+    )
 
     raw_response, model_idx = generate_with_fallback(
         prompt, 
@@ -472,47 +449,16 @@ OUTPUT JSON SCHEMA:
         model_chain=CRITIC_FALLBACK_CHAIN
     )
     end_time = time.time()
-    
-    critic_report = json.loads(raw_response)
-    lines_review = critic_report.get("lines_review", [])
-    
-    # Strictly compute color and status in Python code: 🟢 >= 90, 🟡 75-89, 🔴 < 75
-    parsed_lines = []
-    for idx, item in enumerate(lines_review, 1):
-        raw_score = item.get("score", 70)
-        status_icon, color_circle = compute_line_status(raw_score)
-        issue_text = item.get("issue") or item.get("comment") or "none"
-        line_text = item.get("line", "")
-        
-        parsed_entry = {
-            "number": item.get("number", idx),
-            "line": line_text,
-            "score": raw_score,
-            "status": status_icon,
-            "color": color_circle,
-            "comment": issue_text,
-            "issue": issue_text
-        }
-        parsed_lines.append(parsed_entry)
-            
-    overall_score = average_line_score(parsed_lines)
-    passed_count = sum(1 for l in parsed_lines if l["score"] >= 90)
-    warn_count = sum(1 for l in parsed_lines if 75 <= l["score"] < 90)
-    flagged_count = sum(1 for l in parsed_lines if l["score"] < 75)
-    
-    return {
-        "overall_score": overall_score,
-        "evaluated_at": datetime.now(timezone.utc).isoformat(),
-        "context": {"concept": concept, "genre": genre, "dialect": dialect, "target_words": list(target_words), "domain": theme},
-        "critic_name": p["critic_name"],
-        "domain": theme,
-        "line_breakdown": parsed_lines,
-        "passed_count": passed_count,
-        "warn_count": warn_count,
-        "flagged_count": flagged_count,
-        "dropped_words": critic_report.get("dropped_words", []),
-        "raw_lyrics": draft,
-        "model_used": CRITIC_FALLBACK_CHAIN[model_idx],
-        "time_taken": round(end_time - start_time, 1)
-    }
+
+    return parse_critic_json_response(
+        raw_response=raw_response,
+        draft=draft,
+        target_words=target_words,
+        theme=theme,
+        genre=genre,
+        concept=concept,
+        dialect=dialect,
+        model_used=CRITIC_FALLBACK_CHAIN[model_idx],
+        time_taken=round(end_time - start_time, 1)
+    )
 

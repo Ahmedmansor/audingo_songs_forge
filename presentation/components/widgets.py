@@ -4,6 +4,12 @@ widgets.py — Reusable UI widgets and presentation components.
 
 import json
 import datetime
+import functools
+import wave
+import math
+import struct
+import io
+import base64
 from html import escape
 from typing import Dict, Any, List, Optional
 import streamlit as st
@@ -23,6 +29,150 @@ def format_cairo_display_time(raw_ts: str) -> str:
         return dt.strftime("%d %b %Y, %I:%M %p")
     except Exception:
         return str(raw_ts)
+
+
+@functools.lru_cache(maxsize=1)
+def get_notification_chime_b64() -> str:
+    """
+    Synthesizes a pleasant, harmonic, two-tone completion chime in 44.1kHz 16-bit PCM WAV.
+    E5 (659.25 Hz) -> A5 (880 Hz) with exponential decay and warm overtones.
+    Cached in memory to guarantee zero disk I/O and zero latency.
+    """
+    sample_rate = 44100
+    duration = 0.60
+    num_samples = int(sample_rate * duration)
+    buffer = io.BytesIO()
+
+    with wave.open(buffer, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+
+        frames = bytearray()
+        for i in range(num_samples):
+            t = i / sample_rate
+            val = 0.0
+
+            # Tone 1: E5 (659.25 Hz)
+            if t < 0.25:
+                att1 = min(1.0, t / 0.008)
+                decay1 = math.exp(-t * 14.0)
+                env1 = att1 * decay1
+                val += 0.35 * env1 * math.sin(2 * math.pi * 659.25 * t)
+                val += 0.10 * env1 * math.sin(2 * math.pi * 659.25 * 2 * t)
+
+            # Tone 2: A5 (880.0 Hz) - satisfying harmonic resolution
+            if t >= 0.11:
+                t2 = t - 0.11
+                att2 = min(1.0, t2 / 0.008)
+                decay2 = math.exp(-t2 * 6.5)
+                env2 = att2 * decay2
+                val += 0.45 * env2 * math.sin(2 * math.pi * 880.0 * t2)
+                val += 0.12 * env2 * math.sin(2 * math.pi * 880.0 * 2 * t2)
+                val += 0.05 * env2 * math.sin(2 * math.pi * 1760.0 * t2)
+
+            val = max(-1.0, min(1.0, val))
+            sample = int(val * 32767.0)
+            frames.extend(struct.pack("<h", sample))
+
+        wf.writeframes(frames)
+
+    return base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def render_audio_notification(sound_id: str = "critic_complete"):
+    """
+    Renders an invisible audio player that triggers a pleasant completion chime.
+    Plays through multiple fallback layers (HTML5 Audio, parent window Audio, Web Audio API)
+    for 100% reliable playback even if the browser tab is backgrounded.
+    """
+    b64_chime = get_notification_chime_b64()
+    html_code = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body style="margin:0; padding:0; overflow:hidden; background:transparent;">
+    <audio id="audingo-chime-{sound_id}" src="data:audio/wav;base64,{b64_chime}" preload="auto"></audio>
+    <script>
+    (function() {{
+      const b64 = "{b64_chime}";
+      let played = false;
+
+      function tryPlay() {{
+        try {{
+          const el = document.getElementById("audingo-chime-{sound_id}");
+          if (el) {{
+            el.volume = 0.85;
+            const p = el.play();
+            if (p && p.then) {{
+              p.then(() => {{ played = true; }}).catch(() => tryParentAudio());
+              return;
+            }}
+          }}
+        }} catch(e) {{}}
+        tryParentAudio();
+      }}
+
+      function tryParentAudio() {{
+        if (played) return;
+        try {{
+          const win = window.parent || window;
+          if (win.Audio) {{
+            const snd = new win.Audio("data:audio/wav;base64," + b64);
+            snd.volume = 0.85;
+            const p = snd.play();
+            if (p && p.then) {{
+              p.then(() => {{ played = true; }}).catch(() => tryWebAudio());
+              return;
+            }}
+          }}
+        }} catch(e) {{}}
+        tryWebAudio();
+      }}
+
+      function tryWebAudio() {{
+        if (played) return;
+        try {{
+          const win = window.parent || window;
+          const AudioCtx = win.AudioContext || win.webkitAudioContext || window.AudioContext || window.webkitAudioContext;
+          if (!AudioCtx) return;
+          const ctx = new AudioCtx();
+          if (ctx.state === 'suspended') ctx.resume();
+          const t0 = ctx.currentTime;
+          
+          const o1 = ctx.createOscillator();
+          const g1 = ctx.createGain();
+          o1.type = 'sine';
+          o1.frequency.setValueAtTime(659.25, t0);
+          g1.gain.setValueAtTime(0.001, t0);
+          g1.gain.linearRampToValueAtTime(0.25, t0 + 0.015);
+          g1.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.35);
+          o1.connect(g1); g1.connect(ctx.destination);
+          o1.start(t0); o1.stop(t0 + 0.35);
+
+          const t1 = t0 + 0.11;
+          const o2 = ctx.createOscillator();
+          const g2 = ctx.createGain();
+          o2.type = 'sine';
+          o2.frequency.setValueAtTime(880.00, t1);
+          g2.gain.setValueAtTime(0.001, t1);
+          g2.gain.linearRampToValueAtTime(0.35, t1 + 0.015);
+          g2.gain.exponentialRampToValueAtTime(0.0001, t1 + 0.65);
+          o2.connect(g2); g2.connect(ctx.destination);
+          o2.start(t1); o2.stop(t1 + 0.65);
+          played = true;
+        }} catch(err) {{
+          console.warn("Audio notification failed:", err);
+        }}
+      }}
+
+      tryPlay();
+    }})();
+    </script>
+    </body>
+    </html>
+    """
+    components.html(html_code, height=0)
 
 
 def render_copy_words_toolbar(words: List[str]):
