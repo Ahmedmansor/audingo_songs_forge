@@ -529,9 +529,15 @@ def render_tab_studio():
             st.markdown("Analyze the 20 target words to get an emotional breakdown, genre, and structure.")
             if st.button(":material/auto_awesome: Run Gemini Analysis", type="secondary", width="stretch"):
                 with st.spinner("Analyzing vocabulary mood with Gemini Flash..."):
+                    existing_concept_val = st.session_state.custom_concept.strip() if st.session_state.get("custom_concept") else None
+                    saved_sparks = st.session_state.get("curated_creative_sparks") or (
+                        st.session_state.mood_analysis.get("creative_sparks") if st.session_state.get("mood_analysis") else None
+                    )
                     res = gemini_client.analyze_vocabulary_mood(
                         current_words,
-                        domain=st.session_state.selected_domain
+                        domain=st.session_state.selected_domain,
+                        sparks=saved_sparks,
+                        existing_concept=existing_concept_val
                     )
                     st.session_state.mood_analysis = res
                     st.session_state.word_fit_audit = None
@@ -539,7 +545,7 @@ def render_tab_studio():
                         st.session_state.selected_genre = res["genre"]
                     if res.get("song_structure"):
                         st.session_state.selected_structure = res["song_structure"]
-                    if res.get("creative_concept"):
+                    if not st.session_state.custom_concept.strip() and res.get("creative_concept"):
                         st.session_state.custom_concept = res["creative_concept"]
                     sync_active_session()
                     st.rerun()
@@ -582,8 +588,12 @@ def render_tab_studio():
                 st.session_state.selected_structure = new_struct
                 sync_active_session()
 
-        if st.session_state.mood_analysis and st.session_state.mood_analysis.get("creative_sparks"):
-            sparks = st.session_state.mood_analysis["creative_sparks"]
+        active_sparks = (
+            st.session_state.get("curated_creative_sparks")
+            or (st.session_state.mood_analysis.get("creative_sparks") if st.session_state.get("mood_analysis") else None)
+        )
+        if active_sparks:
+            sparks = active_sparks
             time_str = sparks.get("time", "")
             char_str = sparks.get("character_setup", {}).get("label", "")
             arc_str = sparks.get("arc", {}).get("name", "")

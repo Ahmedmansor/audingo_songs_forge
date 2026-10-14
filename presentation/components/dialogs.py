@@ -102,6 +102,7 @@ def execute_studio_action(action: str):
             st.session_state.master_prompt = ""
             st.session_state.studio_suno_prompt = ""
             st.session_state.custom_concept = ""
+            st.session_state.curated_creative_sparks = None
             st.session_state.graph_report = None
             st.session_state.word_fit_audit = None
             sync_active_session()
@@ -117,6 +118,7 @@ def execute_studio_action(action: str):
         elif len(new_batch) > 0:
             set_target_batch(new_batch)
             st.session_state.custom_concept = ""
+            st.session_state.curated_creative_sparks = None
             st.session_state.studio_suno_prompt = ""
             st.session_state.graph_report = None
             st.session_state.word_fit_audit = None
@@ -159,7 +161,9 @@ def execute_studio_action(action: str):
                 st.session_state.mood_analysis = None
                 st.session_state.master_prompt = ""
                 st.session_state.studio_suno_prompt = ""
-                st.session_state.custom_concept = curation_res.get("theme_description", "")
+                concept_text = curation_res.get("creative_concept") or curation_res.get("theme_description", "")
+                st.session_state.custom_concept = concept_text
+                st.session_state.curated_creative_sparks = curation_res.get("creative_sparks")
                 st.session_state.graph_report = None
                 st.session_state.word_fit_audit = None
                 sync_active_session()
@@ -168,7 +172,9 @@ def execute_studio_action(action: str):
                 st.rerun()
             elif len(curated_batch) > 0:
                 set_target_batch(curated_batch)
-                st.session_state.custom_concept = curation_res.get("theme_description", "")
+                concept_text = curation_res.get("creative_concept") or curation_res.get("theme_description", "")
+                st.session_state.custom_concept = concept_text
+                st.session_state.curated_creative_sparks = curation_res.get("creative_sparks")
                 st.session_state.graph_report = None
                 st.session_state.word_fit_audit = None
                 sync_active_session()
@@ -184,6 +190,7 @@ def execute_studio_action(action: str):
         st.session_state.master_prompt = ""
         st.session_state.studio_suno_prompt = ""
         st.session_state.custom_concept = ""
+        st.session_state.curated_creative_sparks = None
         st.session_state.graph_report = None
         st.session_state.word_fit_audit = None
         sync_active_session()
@@ -196,6 +203,7 @@ def execute_studio_action(action: str):
         st.session_state.master_prompt = ""
         st.session_state.studio_suno_prompt = ""
         st.session_state.custom_concept = ""
+        st.session_state.curated_creative_sparks = None
         st.session_state.graph_report = None
         st.session_state.word_fit_audit = None
         db.clear_active_batch_state()

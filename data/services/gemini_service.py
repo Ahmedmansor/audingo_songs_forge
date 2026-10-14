@@ -59,6 +59,7 @@ def build_analysis_prompt(
     words: List[str],
     domain: str = "Basic / Neutral",
     sparks: Optional[Dict[str, Any]] = None,
+    existing_concept: Optional[str] = None,
 ) -> str:
     """Build the JSON schema instruction prompt for Gemini, anchored in the selected vocabulary domain."""
     words_str = ", ".join(words)
@@ -93,6 +94,38 @@ def build_analysis_prompt(
 
     time_str = sparks.get("time", "An authentic time of day matching the scene")
     props_str = ", ".join(sparks.get("props", [])) if sparks.get("props") else "Tangible everyday objects matching the scene"
+
+    if existing_concept and existing_concept.strip():
+        concept_block = f"""EXISTING APPROVED STORY SCENARIO:
+"{existing_concept.strip()}"
+
+CRITICAL MANDATE:
+- The user/pipeline has ALREADY established this specific story scenario for the 20 target words.
+- DO NOT replace or invent a contradictory or completely different scenario!
+- Analyze the 20 target words IN THE DIRECT CONTEXT OF THIS STORY SCENARIO to determine:
+  1. The authentic emotional mood breakdown (percentages summing to exactly 100) that best fits this story and vocabulary.
+  2. The ideal musical genre and song structure that will deliver upfront, crystal-clear ESL vocals for this specific scenario.
+- In "creative_concept", preserve and reflect this exact scenario (you may subtly refine phrasing or keep it verbatim, but preserve the exact characters, setting, and plot)."""
+    else:
+        concept_block = f"""CRITICAL STORY CONCEPT INSTRUCTIONS (SPECIFIC, HIGH-FIDELITY STORYLINE ROADMAP):
+In "creative_concept", construct a rich, highly specific 3-4 sentence narrative scenario that explicitly defines:
+1. Specific Characters & Relationship:
+   - Specific roles matching '{domain}' and the character setup above.
+2. Tangible Physical Setting & Sensory Atmosphere:
+   - Anchor the scene in a concrete time, place, and sensory environment belonging to this domain, drawing from the suggested time and props.
+3. Core Human Stakes & Dramatic Tension:
+   - Identify the immediate emotional or practical dilemma that naturally requires the 20 target words to be spoken.
+4. Clear Narrative Progression:
+   - Follow the narrative arc ({arc_name}) towards its specified resolution flavor ({arc_flavor}).
+5. Real Spoken Dialogue Anchors:
+   - The scene must naturally inspire everyday spoken American English lines that an ESL learner could memorize and use in real life.
+
+- STRICT PROHIBITIONS:
+  * NO VOCABULARY CRAMMING (ABSOLUTE ZERO WORD-SALAD): Do NOT attempt to cram, shoehorn, or force the 20 target words into this 3-4 sentence concept text! Doing so creates an absurd, robotic, unreadable "incantation" or vocabulary exam paragraph. The concept summary is merely the theatrical logline / stage setting (characters, situation, emotional stakes). The 20 words will be distributed naturally throughout the full song lyrics later by the lyricist, NOT jammed here. Write the concept in pure, effortless, organic human English.
+  * NO verbatim copying: Do NOT copy-paste the suggested props, times, or example sentences word-for-word. They are sparks of inspiration to show the vibe — invent a fresh, original scenario whose physical details emerge naturally from your 20 target words.
+  * NO vague one-liners like "Someone faces challenges in life and finds hope".
+  * NO corporate textbook clichés or abstract surreal fantasies.
+  * Make the scenario so vivid and specific that any songwriter instantly sees the entire scene unfold like a movie scene."""
 
     return f"""You are an elite music producer, ESL pedagogy specialist, and master lyricist analyzing a specific vocabulary batch for educational songwriting.
 
@@ -170,25 +203,7 @@ SAMPLE CONFLICT ARCHETYPES:
 DOMAIN-SPECIFIC VOCABULARY & DIALOGUE DIRECTIVE:
 {directive}
 
-CRITICAL STORY CONCEPT INSTRUCTIONS (SPECIFIC, HIGH-FIDELITY STORYLINE ROADMAP):
-In "creative_concept", construct a rich, highly specific 3-4 sentence narrative scenario that explicitly defines:
-1. Specific Characters & Relationship:
-   - Specific roles matching '{domain}' and the character setup above.
-2. Tangible Physical Setting & Sensory Atmosphere:
-   - Anchor the scene in a concrete time, place, and sensory environment belonging to this domain, drawing from the suggested time and props.
-3. Core Human Stakes & Dramatic Tension:
-   - Identify the immediate emotional or practical dilemma that naturally requires the 20 target words to be spoken.
-4. Clear Narrative Progression:
-   - Follow the narrative arc ({arc_name}) towards its specified resolution flavor ({arc_flavor}).
-5. Real Spoken Dialogue Anchors:
-   - The scene must naturally inspire everyday spoken American English lines that an ESL learner could memorize and use in real life.
-
-- STRICT PROHIBITIONS:
-  * NO VOCABULARY CRAMMING (ABSOLUTE ZERO WORD-SALAD): Do NOT attempt to cram, shoehorn, or force the 20 target words into this 3-4 sentence concept text! Doing so creates an absurd, robotic, unreadable "incantation" or vocabulary exam paragraph. The concept summary is merely the theatrical logline / stage setting (characters, situation, emotional stakes). The 20 words will be distributed naturally throughout the full song lyrics later by the lyricist, NOT jammed here. Write the concept in pure, effortless, organic human English.
-  * NO verbatim copying: Do NOT copy-paste the suggested props, times, or example sentences word-for-word. They are sparks of inspiration to show the vibe — invent a fresh, original scenario whose physical details emerge naturally from your 20 target words.
-  * NO vague one-liners like "Someone faces challenges in life and finds hope".
-  * NO corporate textbook clichés or abstract surreal fantasies.
-  * Make the scenario so vivid and specific that any songwriter instantly sees the entire scene unfold like a movie scene.
+{concept_block}
 
 Return a valid JSON object with the following exact schema:
 {{
@@ -206,17 +221,19 @@ def analyze_vocabulary_mood(
     words: List[str],
     domain: str = "Basic / Neutral",
     sparks: Optional[Dict[str, Any]] = None,
+    existing_concept: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Send the 20 words to Gemini to get mood breakdown, genre, structure, and domain-anchored story concept.
     Uses CRITIC_FALLBACK_CHAIN to prioritize top-tier models (3.8-flash, 3.7-flash, 3.6-flash) for deep, high-IQ narrative concepts.
+    If existing_concept is provided, Gemini analyzes musical direction anchored directly in that established story.
     """
     from data.services.fallback_engine import generate_with_fallback, CRITIC_FALLBACK_CHAIN
 
     if sparks is None:
         sparks = sample_domain_creative_sparks(domain)
 
-    prompt = build_analysis_prompt(words, domain=domain, sparks=sparks)
+    prompt = build_analysis_prompt(words, domain=domain, sparks=sparks, existing_concept=existing_concept)
 
     try:
         raw, model_idx = generate_with_fallback(
@@ -246,7 +263,7 @@ def analyze_vocabulary_mood(
             "mood_breakdown": mood_breakdown,
             "genre": genre,
             "song_structure": structure,
-            "creative_concept": data.get("creative_concept", ""),
+            "creative_concept": data.get("creative_concept", "") or (existing_concept or ""),
             "creative_sparks": sparks,
         }
     except Exception as exc:
@@ -264,6 +281,7 @@ def analyze_vocabulary_mood(
             "genre": GENRES[0],
             "song_structure": SONG_STRUCTURES[0],
             "creative_concept": (
+                existing_concept.strip() if (existing_concept and existing_concept.strip()) else
                 f"Two people in a grounded {domain} setting working through an honest conversation."
             ),
             "creative_sparks": sparks,
@@ -507,7 +525,8 @@ def curate_thematic_vocabulary_batch(
     candidate_nouns: List[str],
     candidate_verbs: List[str],
     candidate_adjs: List[str],
-    domain_focus: Optional[str] = None
+    domain_focus: Optional[str] = None,
+    sparks: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     from google.genai import types
 
@@ -521,6 +540,22 @@ def curate_thematic_vocabulary_batch(
         and "الكل" not in domain_focus
         and "All" not in domain_focus
     )
+
+    effective_domain = domain_focus if is_specialized else "Basic / Neutral"
+    if sparks is None:
+        sparks = sample_domain_creative_sparks(effective_domain)
+
+    char_setup = sparks.get("character_setup", {})
+    char_label = char_setup.get("label", "Two people in direct conversation")
+    char_instruction = char_setup.get("instruction", "Two clearly identified characters talk face to face.")
+
+    arc_setup = sparks.get("arc", {})
+    arc_name = arc_setup.get("name", "Classic Resolution")
+    arc_flow = arc_setup.get("arc", "Problem -> turning point -> quiet determination")
+    arc_flavor = arc_setup.get("ending_flavor", "Characters find a way forward together.")
+
+    time_str = sparks.get("time", "An authentic time of day matching the scene")
+    props_str = ", ".join(sparks.get("props", [])) if sparks.get("props") else "Tangible everyday objects matching the scene"
 
     domain_instruction = ""
     scenario_instruction = ""
@@ -548,7 +583,7 @@ def curate_thematic_vocabulary_batch(
    - First, scan the candidate words to discover a concrete, relatable everyday human scenario that connects the highest quality candidates together.
    - FULL EMOTIONAL PALETTE (EMBRACE SADNESS & POIGNANCY): Embrace sad, poignant, melancholic, or heartbreaking everyday moments (e.g. parting ways, hospital clinics, coping with grief, quiet loneliness) just as naturally as daily routines. Sadness is an authentic pillar of everyday human experience.
    - CREATIVE EXPANSION: Explore diverse settings across morning, afternoon, evening, and night — busy morning markets, school pickup lines, sunlit garages, dinner tables, clinics, and highway drives.
-   - Use the representative settings and conflict archetypes as creative inspiration, but NEVER copy them mechanically! Invent a fresh, believable situation tailored specifically to the words in front of you.
+   - Use the representative settings, conflict archetypes, and creative sparks below as creative inspiration, but NEVER copy them mechanically! Invent a fresh, believable situation tailored specifically to the words in front of you.
    - Anchor the scene with specific human characters facing a real situation together in natural spoken English."""
             practicality_guidance = f"""- Select words that are foundational, high-utility, and natural in real-life spoken American English.
    - Because these words represent everyday communication, look for natural conversational synergy between them across spoken dialogue, questions, and reactions in both upbeat and poignant emotional contexts.
@@ -601,6 +636,12 @@ TASK: From the candidate pools of unused English words below, curate an extraord
 - Exactly 6 Verbs (chosen ONLY from Candidate Verbs below)
 - Exactly 4 Adjectives (chosen ONLY from Candidate Adjectives below)
 {domain_instruction}
+CREATIVE INSPIRATION SPARKS FOR THIS BATCH (DOMAIN-TAILORED):
+- Suggested Time of Day: {time_str}
+- Character Setup: {char_label} — {char_instruction}
+- Narrative Arc & Resolution Tone: {arc_name} ({arc_flow}) — Ending flavor: {arc_flavor}
+- Authentic Sensory Props (Touchstones to ground the physical scene): {props_str}
+
 CANDIDATE NOUNS ({len(candidate_nouns)} available):
 {nouns_str}
 
@@ -633,25 +674,26 @@ INTELLIGENT SELECTION METHODOLOGY:
 Return a valid JSON object with the following exact schema:
 {{
     "theme_name": "A short, catchy, evocative 2-4 word theme name",
-    "theme_description": "2-3 vivid, specific sentences describing the concrete real-life scenario and how the characters interact.",
+    "creative_concept": "A specific, vivid 3-4 sentence narrative scenario explicitly defining characters, concrete setting, core tension, and narrative progression, designed to anchor natural spoken dialogue.",
     "selected_nouns": ["noun1", "noun2", "noun3", "noun4", "noun5", "noun6", "noun7", "noun8", "noun9", "noun10"],
     "selected_verbs": ["verb1", "verb2", "verb3", "verb4", "verb5", "verb6"],
     "selected_adjectives": ["adj1", "adj2", "adj3", "adj4"]
 }}
 """
 
-    from data.services.fallback_engine import generate_with_fallback, ROUTINE_STUDIO_CHAIN
+    from data.services.fallback_engine import generate_with_fallback, CRITIC_FALLBACK_CHAIN
 
     try:
         raw, model_idx = generate_with_fallback(
             prompt=prompt,
-            model_chain=ROUTINE_STUDIO_CHAIN,
+            model_chain=CRITIC_FALLBACK_CHAIN,
             start_index=0,
             require_json=True,
-            temperature=0.45,
+            temperature=0.55,
         )
         data = json.loads(raw)
-        model_name = ROUTINE_STUDIO_CHAIN[model_idx]
+        model_name = CRITIC_FALLBACK_CHAIN[model_idx]
+        concept = data.get("creative_concept") or data.get("theme_description", "")
         return {
             "success": True,
             "model_used": model_name,
@@ -659,7 +701,9 @@ Return a valid JSON object with the following exact schema:
             "selected_verbs": data.get("selected_verbs", candidate_verbs[:6]),
             "selected_adjectives": data.get("selected_adjectives", candidate_adjs[:4]),
             "theme_name": data.get("theme_name", "Everyday Life & Human Stories"),
-            "theme_description": data.get("theme_description", "")
+            "theme_description": concept,
+            "creative_concept": concept,
+            "creative_sparks": sparks,
         }
     except Exception as exc:
         logger.warning("Thematic curation failed: %s", exc)
@@ -670,7 +714,9 @@ Return a valid JSON object with the following exact schema:
             "selected_verbs": candidate_verbs[:6],
             "selected_adjectives": candidate_adjs[:4],
             "theme_name": "Everyday Life & Human Stories",
-            "theme_description": "A diverse snapshot of everyday real-life experiences."
+            "theme_description": "Two people in an authentic everyday setting working through an honest conversation.",
+            "creative_concept": "Two people in an authentic everyday setting working through an honest conversation.",
+            "creative_sparks": sparks,
         }
 
 

@@ -32,6 +32,7 @@ def set_target_batch(batch, keep_direction=False, clear_lyrics=True):
         st.session_state[key] = ""
     if not keep_direction:
         st.session_state["custom_concept"] = ""
+        st.session_state["curated_creative_sparks"] = None
     invalidate_workflow(clear_lyrics=clear_lyrics)
 
 
@@ -59,12 +60,15 @@ def init_session_state():
             "analysis_results", "raw_lyrics_input", "song_title_input", "refine_draft", "refine_concept",
             "refine_domain", "refine_theme", "refine_genre", "commit_lyrics", "commit_song_title_input_field",
             "_refinement_reports_loaded", "_commit_analysis_signature", "pending_draft_update",
-            "_direction_signature", "commit_success_message", "studio_domain_selector",
+            "_direction_signature", "commit_success_message", "studio_domain_selector", "curated_creative_sparks",
         ):
             st.session_state.pop(key, None)
     st.session_state["_workspace_reset_token"] = reset_token
     apply_pending_workflow_reset()
     persisted_session = db.load_active_batch_state()
+
+    if "curated_creative_sparks" not in st.session_state:
+        st.session_state.curated_creative_sparks = None
 
     if "target_batch" not in st.session_state:
         st.session_state.target_batch = persisted_session.get("target_batch", [])

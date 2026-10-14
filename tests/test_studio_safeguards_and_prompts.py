@@ -20,6 +20,14 @@ class StudioSafeguardsAndPromptsTests(unittest.TestCase):
         self.assertIn("Real Spoken Dialogue Anchors", prompt)
         self.assertIn("NO vague one-liners", prompt)
 
+    def test_analysis_story_prompt_anchors_in_existing_concept(self):
+        words = ["door", "listen", "quiet", "key", "wait", "friend"]
+        concept = "Elena and Marcus working in an art framing shop before the morning rush."
+        prompt = build_analysis_prompt(words, existing_concept=concept)
+        self.assertIn("EXISTING APPROVED STORY SCENARIO:", prompt)
+        self.assertIn(concept, prompt)
+        self.assertIn("DO NOT replace or invent a contradictory or completely different scenario!", prompt)
+
     def test_audit_prompt_is_fair_and_contextually_plausible(self):
         words = ["coffee", "table", "listen", "tired"]
         story = "Maya and Leo talking late at night in a diner about a difficult work decision."
