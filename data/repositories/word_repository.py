@@ -388,10 +388,18 @@ def pull_candidate_pool_for_thematic_curation(
     use_domain = domain if (domain and domain != "All Domains" and "الكل" not in domain and "All" not in domain) else None
     is_pure_neutral = (use_domain == "Basic / Neutral")
 
+    min_required_targets = {
+        "Noun": 10,
+        "Verb": 6,
+        "Adjective": 4
+    }
+
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
         
         for pos, count in candidate_targets:
+            min_needed = min_required_targets[pos]
+
             if use_domain is None:
                 # All domains: randomized pool
                 cursor.execute(
@@ -445,36 +453,36 @@ def pull_candidate_pool_for_thematic_curation(
                 target_rows = [dict(r) for r in cursor.fetchall()]
                 pool[pos].extend(target_rows)
                 
-                domain_shortage = target_share - len(target_rows)
-                if domain_shortage > 0:
-                    logger.info(
-                        f"[Auto-Fill Notice] Candidate pool for '{use_domain}' short by {domain_shortage} for POS '{pos}'. "
-                        f"Adding to Joker candidates."
+                # Only compensate from Joker if target domain candidates fall below needed share
+                if blend_joker:
+                    domain_shortage = max(0, target_share - len(target_rows))
+                    needed_joker = joker_share + domain_shortage
+                else:
+                    # For 100% pure domain, only fallback to Joker if domain has fewer than min_needed
+                    needed_joker = max(0, min_needed - len(target_rows))
+                
+                if needed_joker > 0:
+                    existing_ids = [w["id"] for w in pool[pos]]
+                    id_clause = f"AND id NOT IN ({','.join('?' * len(existing_ids))})" if existing_ids else ""
+                    params = [pos] + existing_ids + [needed_joker] if existing_ids else [pos, needed_joker]
+                    
+                    cursor.execute(
+                        f"""
+                        SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
+                        FROM ngsl_words
+                        WHERE usage_count = 0 AND pos_type = ? AND (domain_coca = 'Basic / Neutral' OR domain_coca IS NULL) {id_clause}
+                        ORDER BY RANDOM()
+                        LIMIT ?
+                        """,
+                        params
                     )
-                
-                # Part 2: Diverse, randomized Joker candidates (with fallback for shortage)
-                needed_joker = joker_share + domain_shortage
-                existing_ids = [w["id"] for w in pool[pos]]
-                id_clause = f"AND id NOT IN ({','.join('?' * len(existing_ids))})" if existing_ids else ""
-                params = [pos] + existing_ids + [needed_joker] if existing_ids else [pos, needed_joker]
-                
-                cursor.execute(
-                    f"""
-                    SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
-                    FROM ngsl_words
-                    WHERE usage_count = 0 AND pos_type = ? AND (domain_coca = 'Basic / Neutral' OR domain_coca IS NULL) {id_clause}
-                    ORDER BY RANDOM()
-                    LIMIT ?
-                    """,
-                    params
-                )
-                joker_rows = [dict(r) for r in cursor.fetchall()]
-                pool[pos].extend(joker_rows)
+                    joker_rows = [dict(r) for r in cursor.fetchall()]
+                    pool[pos].extend(joker_rows)
 
-            # Universal top-up if still below count
-            if len(pool[pos]) < count:
+            # Emergency universal top-up ONLY if total candidates for this POS fall below min_needed (10 N, 6 V, 4 A)
+            if len(pool[pos]) < min_needed:
                 existing_ids = [w["id"] for w in pool[pos]]
-                needed = count - len(pool[pos])
+                needed = min_needed - len(pool[pos])
                 id_clause = f"AND id NOT IN ({','.join('?' * len(existing_ids))})" if existing_ids else ""
                 params = [pos] + existing_ids + [needed] if existing_ids else [pos, needed]
                 cursor.execute(

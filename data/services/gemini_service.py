@@ -625,6 +625,14 @@ PRIMARY THEMATIC FOCUS:
         practicality_guidance = """- Select words that are useful, frequent, and natural in real-life spoken American English.
    - REJECT words that are hyper-technical, archaic, or awkward to use in a song without forcing weird rhymes or distorted word order ("من غير ما نحشر كلمة بالعافية")."""
 
+    if domain_focus == "Basic / Neutral":
+        balance_guidance = """4. PURE BASIC / NEUTRAL HARMONY:
+   - The candidate pool consists of foundational, universal everyday words.
+   - Select words that weave effortlessly into real, relatable, spoken English conversations without stiff formality."""
+    else:
+        balance_guidance = """4. DOMAIN & GENERAL BALANCE:
+   - Weave together specialized domain terms with natural universal/neutral words (actions, objects, connectors) so the characters sound like real living human beings interacting in their environment, not an encyclopedia."""
+
     genres_str = "\n".join(f"- {g}" for g in GENRES)
     structures_str = "\n".join(f"- {s}" for s in SONG_STRUCTURES)
     moods_str = "\n".join(f"- {m}" for m in MOOD_CATEGORIES)
@@ -677,8 +685,7 @@ INTELLIGENT SELECTION METHODOLOGY:
 3. ESL CONVERSATIONAL PRACTICALITY:
    {practicality_guidance}
 
-4. DOMAIN & GENERAL BALANCE:
-   - Weave together specialized domain terms with natural universal/neutral words (actions, objects, connectors) so the characters sound like real living human beings interacting in their environment, not an encyclopedia.
+{balance_guidance}
 
 5. STRICT MEMBERSHIP & EXACT COUNTS:
    - Every single selected word MUST be chosen verbatim from the candidate lists provided above.
