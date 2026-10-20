@@ -13,21 +13,16 @@ logger = logging.getLogger(__name__)
 # Ordered from STRONGEST to WEAKEST
 # The system will always try the strongest first. If it fails (quota/limits), 
 # it gracefully degrades to the next available model.
-# Dedicated Critic Fallback Chain: Prioritizes Gemini 3.6 Flash (fastest high-IQ model at ~2s) 
-# and gracefully falls back to 3.7 Flash and 3.8 Flash without stalling on 503 server overloads.
+# Dedicated Critic Fallback Chain: High-IQ reasoning critic models.
+# Excludes 3.6 Flash and weaker models to prevent overly lenient evaluations.
+# Prioritizes Gemini 3.7 Flash and falls back to Gemini 3.8 Flash.
 CRITIC_FALLBACK_CHAIN = [
-    "gemini-3.6-flash",
     "gemini-3.7-flash",
     "gemini-3.8-flash",
-    "gemini-3.5-flash",
-    "gemini-3.5-flash-lite",
-    "gemini-3.1-flash-lite",
-    "gemini-flash-latest",
 ]
 
-# Dedicated Routine Studio Chain: Prioritizes fast, lightweight models (3.5-flash, 3.5-flash-lite, 3.1-flash-lite)
-# to conserve top model quotas/tokens and provide instant responses for Smart Thematic Pull and Mood Analysis.
-# Strong models (3.6, 3.7, 3.8) are placed strictly at the end as an emergency safety net.
+# Dedicated Routine Studio Chain: Used for auxiliary utilities (like poster prompts and style tags).
+# Core curation (Smart Thematic Pull), Mood Analysis, Word-Fit Audit, and Lyrics Critic all use CRITIC_FALLBACK_CHAIN.
 ROUTINE_STUDIO_CHAIN = [
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",

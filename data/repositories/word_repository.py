@@ -145,6 +145,53 @@ def get_domain_detailed_stats(db_path: Path = DB_PATH) -> Dict[str, Dict[str, An
         return result
 
 
+def get_domain_pos_remaining_stats(db_path: Path = DB_PATH) -> List[Dict[str, Any]]:
+    """Return remaining (unused) word breakdown per domain by POS: Nouns, Verbs, Adjectives, Adverbs, Exempt, Total."""
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT COALESCE(domain_coca, 'Basic / Neutral') as dom, pos_type, word
+            FROM ngsl_words
+            WHERE usage_count = 0
+        """)
+        rows = cursor.fetchall()
+
+        domain_dict = {
+            d: {
+                "domain": d,
+                "nouns": 0,
+                "verbs": 0,
+                "adjectives": 0,
+                "adverbs": 0,
+                "exempt": 0,
+                "total": 0,
+            }
+            for d in DOMAINS
+        }
+
+        for r in rows:
+            dom = r["dom"]
+            if dom not in domain_dict:
+                dom = "Basic / Neutral"
+            pos = r["pos_type"]
+            w = r["word"].lower().strip()
+
+            if pos == "Noun":
+                domain_dict[dom]["nouns"] += 1
+            elif pos == "Verb":
+                domain_dict[dom]["verbs"] += 1
+            elif pos == "Adjective":
+                domain_dict[dom]["adjectives"] += 1
+            elif pos == "Other":
+                if w in CORE_EXEMPT_WORDS:
+                    domain_dict[dom]["exempt"] += 1
+                else:
+                    domain_dict[dom]["adverbs"] += 1
+            domain_dict[dom]["total"] += 1
+
+        return list(domain_dict.values())
+
+
 def get_words_domains(words: List[str], db_path: Path = DB_PATH) -> Dict[str, str]:
     """Bulk lookup COCA domain for a list of words."""
     if not words:

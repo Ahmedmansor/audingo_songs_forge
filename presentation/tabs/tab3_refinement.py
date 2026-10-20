@@ -494,7 +494,7 @@ def render_tab_refinement():
                     exec_log = current_report.get("execution_log")
                     if not exec_log:
                         iterations = current_report.get("iterations_used", 5)
-                        models = current_report.get("models_used", ["gemini-3.6-flash"])
+                        models = current_report.get("models_used", ["gemini-3.7-flash"])
                         total_reqs = current_report.get("total_requests", 9)
                         
                         exec_log = []

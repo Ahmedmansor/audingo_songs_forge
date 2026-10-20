@@ -16,6 +16,7 @@ from data.repositories.word_repository import (
     get_progress_stats,
     get_domain_counts,
     get_domain_detailed_stats,
+    get_domain_pos_remaining_stats,
     get_words_domains,
     compute_domain_breakdown,
     pull_20_words,

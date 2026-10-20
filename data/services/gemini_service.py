@@ -225,7 +225,7 @@ def analyze_vocabulary_mood(
 ) -> Dict[str, Any]:
     """
     Send the 20 words to Gemini to get mood breakdown, genre, structure, and domain-anchored story concept.
-    Uses CRITIC_FALLBACK_CHAIN to prioritize top-tier models (3.8-flash, 3.7-flash, 3.6-flash) for deep, high-IQ narrative concepts.
+    Uses CRITIC_FALLBACK_CHAIN to prioritize top-tier models (3.7-flash, 3.8-flash) for deep, high-IQ narrative concepts.
     If existing_concept is provided, Gemini analyzes musical direction anchored directly in that established story.
     """
     from data.services.fallback_engine import generate_with_fallback, CRITIC_FALLBACK_CHAIN
@@ -862,20 +862,20 @@ def audit_words_against_story(words: List[str], story_concept: str, domain: str 
     while exempting basic/neutral words and respecting domain-appropriate vocabulary.
     Uses ROUTINE_STUDIO_CHAIN to preserve top models for the final lyric critic.
     """
-    from data.services.fallback_engine import generate_with_fallback, ROUTINE_STUDIO_CHAIN
+    from data.services.fallback_engine import generate_with_fallback, CRITIC_FALLBACK_CHAIN
 
     prompt = build_vocab_story_audit_prompt(words, story_concept, domain=domain)
 
     try:
         raw, model_idx = generate_with_fallback(
             prompt=prompt,
-            model_chain=ROUTINE_STUDIO_CHAIN,
+            model_chain=CRITIC_FALLBACK_CHAIN,
             start_index=0,
             require_json=True,
             temperature=0.3,
         )
         data = json.loads(raw)
-        model_name = ROUTINE_STUDIO_CHAIN[model_idx]
+        model_name = CRITIC_FALLBACK_CHAIN[model_idx]
         flagged = data.get("flagged_words", [])
         all_fit = data.get("all_fit", len(flagged) == 0)
 
