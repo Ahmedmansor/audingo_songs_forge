@@ -4,10 +4,24 @@ song_repository.py — Repository for songs approval, listing, updating, deletio
 
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional, Set
 import pandas as pd
 from data.database.connection import get_connection, get_cairo_now_str, DB_PATH
+
+
+def get_recent_story_concepts(domain: str, limit: int = 12, db_path: Path = DB_PATH) -> List[str]:
+    """Read recent saved concepts in the selected domain without inferring old song tags."""
+    clause = "" if domain == "All Domains" else "AND source_domain = ?"
+    params = [] if domain == "All Domains" else [domain]
+    with closing(sqlite3.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True)) as conn:
+        conn.execute("PRAGMA query_only = ON")
+        rows = conn.execute(
+            f"SELECT creative_concept FROM songs WHERE TRIM(COALESCE(creative_concept, '')) != '' "
+            f"{clause} ORDER BY id DESC LIMIT ?", params + [max(0, min(limit, 20))]
+        ).fetchall()
+    return [row[0][:1000] for row in rows]
 
 
 def approve_and_save_song(

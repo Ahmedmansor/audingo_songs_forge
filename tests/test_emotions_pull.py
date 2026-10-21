@@ -7,6 +7,7 @@ from pathlib import Path
 import tempfile
 import sqlite3
 import shutil
+from contextlib import closing
 
 from data.repositories.word_repository import (
     calculate_domain_pos_quotas,
@@ -15,41 +16,39 @@ from data.repositories.word_repository import (
     pull_20_words,
     CORE_EXEMPT_WORDS
 )
-from data.database.connection import DB_PATH
+
 
 
 class TestEmotionsPull(unittest.TestCase):
     def setUp(self):
-        # Create an isolated temporary test database with a copy of production ngsl_words
+        # Use a fully synthetic, isolated inventory; never connect to the production database.
         self.temp_dir = tempfile.mkdtemp()
         self.test_db = Path(self.temp_dir) / "test_vocab.db"
 
-        # Copy schema and ngsl_words from production DB into isolated test DB
-        src_conn = sqlite3.connect(DB_PATH)
-        dst_conn = sqlite3.connect(self.test_db)
-        
-        with dst_conn:
-            src_conn.backup(dst_conn)
-            # Ensure hermetic baseline for test words regardless of live song commits
-            dst_conn.execute("UPDATE ngsl_words SET usage_count = 0 WHERE word IN ('creature', 'darkness', 'servant', 'sheep')")
-            
-        src_conn.close()
-        dst_conn.close()
+        with closing(sqlite3.connect(self.test_db)) as conn, conn:
+            conn.execute("CREATE TABLE ngsl_words (id INTEGER PRIMARY KEY, word TEXT, lemma_family TEXT, pos_type TEXT, usage_count INTEGER, domain_coca TEXT)")
+            rows = []
+            for dom, verbs, modifiers in [("Emotions & Relationships", 120, 13), ("Basic / Neutral", 129, 51), ("Business & Career", 40, 20)]:
+                for pos, count in [("Verb", verbs), ("Other", modifiers)]:
+                    for i in range(count):
+                        word = f"{dom}_{pos}_{i}"
+                        rows.append((len(rows)+1, word, word, pos, 0, dom))
+            conn.executemany("INSERT INTO ngsl_words VALUES (?,?,?,?,?,?)", rows)
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_emotions_quotas_calculation(self):
-        """Emotions & Relationships with Joker should dynamically allocate 4 Nouns, 12 Verbs, 4 Modifiers = 20 total."""
+        """Emotions & Relationships with Joker should dynamically allocate 0 Nouns, 16 Verbs, 4 Modifiers = 20 total."""
         quotas = calculate_domain_pos_quotas(
             domain="Emotions & Relationships",
             blend_joker=True,
             db_path=self.test_db,
             total_words=20
         )
-        self.assertEqual(quotas["Noun"], 4, "Should allocate exactly 4 Nouns (the 4 remaining in Emotions)")
-        self.assertEqual(quotas["Modifier"], 6, "Should allocate 6 Modifiers to steadily absorb available Adverbs")
-        self.assertEqual(quotas["Verb"], 10, "Verbs should take 10 words to reach exactly 20 total")
+        self.assertEqual(quotas["Noun"], 0)
+        self.assertEqual(quotas["Modifier"], 4)
+        self.assertEqual(quotas["Verb"], 16)
         self.assertEqual(quotas["Noun"] + quotas["Verb"] + quotas["Modifier"], 20, "Total quotas must sum to 20")
 
     def test_emotions_candidate_pool_purity(self):
@@ -65,8 +64,8 @@ class TestEmotionsPull(unittest.TestCase):
 
         allowed_domains = {"Emotions & Relationships", "Basic / Neutral"}
         
-        # Nouns: exactly the 4 remaining in Emotions
-        self.assertEqual(len(pool["Noun"]), 4)
+        # This inventory has no unused nouns.
+        self.assertEqual(len(pool["Noun"]), 0)
         for w in pool["Noun"]:
             self.assertEqual(w["domain"], "Emotions & Relationships")
             self.assertIn(w["word"], ["creature", "darkness", "servant", "sheep"])
@@ -93,9 +92,9 @@ class TestEmotionsPull(unittest.TestCase):
             db_path=self.test_db
         )
 
-        selected_nouns = [w["word"] for w in pool["Noun"]]  # 4 nouns
-        selected_verbs = [w["word"] for w in pool["Verb"][:12]]  # 12 verbs
-        selected_mods = [w["word"] for w in pool["Modifier"][:4]]  # 4 modifiers
+        selected_nouns = [w["word"] for w in pool["Noun"]]
+        selected_verbs = [w["word"] for w in pool["Verb"][:16]]
+        selected_mods = [w["word"] for w in pool["Modifier"][:4]]
 
         batch = build_curated_batch_from_words(
             selected_nouns=selected_nouns,
@@ -114,9 +113,13 @@ class TestEmotionsPull(unittest.TestCase):
         verbs = [w for w in batch if w["pos_type"] == "Verb"]
         mods = [w for w in batch if w["pos_type"] in ("Adjective", "Other")]
 
-        self.assertEqual(len(nouns), 4)
-        self.assertEqual(len(verbs), 10)
-        self.assertEqual(len(mods), 6)
+        self.assertEqual(len(nouns), 0)
+        self.assertEqual(len(verbs), 16)
+        self.assertEqual(len(mods), 4)
+        for dom, verbs_expected, mods_expected in [("Emotions & Relationships", 9, 1), ("Basic / Neutral", 7, 3)]:
+            self.assertEqual(sum(w["domain"] == dom for w in verbs), verbs_expected)
+            self.assertEqual(sum(w["domain"] == dom for w in mods), mods_expected)
+
 
     def test_random_pull_emotions_with_joker(self):
         """pull_20_words for Emotions & Relationships with blend_joker=True must yield 20 words from authorized domains only."""
@@ -135,9 +138,13 @@ class TestEmotionsPull(unittest.TestCase):
         verbs = [w for w in batch if w["pos_type"] == "Verb"]
         mods = [w for w in batch if w["pos_type"] in ("Adjective", "Other")]
 
-        self.assertEqual(len(nouns), 4)
-        self.assertEqual(len(verbs), 10)
-        self.assertEqual(len(mods), 6)
+        self.assertEqual(len(nouns), 0)
+        self.assertEqual(len(verbs), 16)
+        self.assertEqual(len(mods), 4)
+        for dom, verbs_expected, mods_expected in [("Emotions & Relationships", 9, 1), ("Basic / Neutral", 7, 3)]:
+            self.assertEqual(sum(w["domain"] == dom for w in verbs), verbs_expected)
+            self.assertEqual(sum(w["domain"] == dom for w in mods), mods_expected)
+
 
     def test_random_pull_pure_emotions(self):
         """pull_20_words for Emotions & Relationships with blend_joker=False must yield 20 words 100% from Emotions."""
@@ -150,6 +157,26 @@ class TestEmotionsPull(unittest.TestCase):
         self.assertEqual(len(batch), 20, "Must pull exactly 20 words")
         for w in batch:
             self.assertEqual(w["domain"], "Emotions & Relationships", f"Non-emotions word: {w['word']} from {w['domain']}")
+
+    def test_depleted_joker_stays_in_domain_and_rebalances(self):
+        with closing(sqlite3.connect(self.test_db)) as conn, conn:
+            conn.execute("UPDATE ngsl_words SET usage_count=1 WHERE domain_coca='Basic / Neutral'")
+        batch = pull_20_words('Emotions & Relationships', db_path=self.test_db)
+        self.assertEqual(len(batch), 20)
+        self.assertEqual(sum(w['pos_type'] == 'Other' for w in batch), 2)
+        self.assertEqual({w['domain'] for w in batch}, {'Emotions & Relationships'})
+
+    def test_small_candidate_limits_still_supply_required_sources(self):
+        pool = pull_candidate_pool_for_thematic_curation(0, 2, 1,
+            domain='Emotions & Relationships', db_path=self.test_db)
+        batch = build_curated_batch_from_words([], [], [], pool)
+        self.assertEqual(len(batch), 20)
+        self.assertEqual(len({w['id'] for w in batch}), 20)
+        for key, source_counts in pool['domain_quotas'].items():
+            for source, count in source_counts.items():
+                self.assertEqual(sum(w['domain'] == source and
+                    ('Modifier' if w['pos_type'] in ('Adjective', 'Other') else w['pos_type']) == key
+                    for w in batch), count)
 
 
 if __name__ == "__main__":

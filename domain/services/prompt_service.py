@@ -956,6 +956,13 @@ def generate_master_prompt(
     p = get_category_profile(selected_domain)
 
     story_text = creative_concept if creative_concept else p["default_story"]
+    story_fidelity_rule = (
+        "- Preserve the supplied story's emotional stakes and ending, including refusal, unresolved conflict, "
+        "loss or uncomplicated joy. Do not add reconciliation, healing, a moral or optimism automatically.\n"
+        "- Begin with the meaningful human event. Do not add a time/weather introduction, drink, cup, "
+        "rain or symbolic prop unless it actually serves this story.\n"
+    )
+
 
     suno_style = build_suno_style_prompt(
         genre=genre,
@@ -1044,7 +1051,7 @@ If a target word can only be used by crossing a red line, drop it. Red lines alw
 - Use one consistent variety of English in the whole song. Never mix American and British forms.
 
 ## STORY RULES
-- Strictly adhere to the established Story Concept: "{story_text}".
+{story_fidelity_rule}- Strictly adhere to the established Story Concept: "{story_text}".
 - STRICT NO-CLOCK OPENINGS: Never begin Verse 1 with a digital clock announcement (e.g. 'It's 5:45 AM', '8:30 on the clock'). Begin with dialogue, physical action, or evocative sensory tension in media res.
 - Words First Principle: Target words must appear in their authentic, natural spoken meaning. The story scenario gives characters real, believable reasons to speak them; never distort a word's meaning or force awkward syntax.
 - Every character who speaks or is mentioned must be named or clearly identified. No unexplained "he" or "they."

@@ -82,3 +82,7 @@ class TestDomainAwareSwap(unittest.TestCase):
         res = swap_single_word("Noun", current_word_ids=[], domain="All Domains", db_path=self.db_path)
         self.assertIsNotNone(res)
         self.assertIn(res["word"], ["quantum", "particle", "market", "water"])
+
+    def test_exhausted_domain_and_joker_never_leak_to_business(self):
+        res = swap_single_word('Verb', [3, 7], domain='Science, Tech & Academia', db_path=self.db_path)
+        self.assertIsNone(res)

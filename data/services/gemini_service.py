@@ -5,6 +5,9 @@ gemini_service.py — Gemini API integration with model fallback and mood/genre 
 import json
 import logging
 import os
+import sqlite3
+from domain.services.story_policy import build_story_direction
+from data.repositories.song_repository import get_recent_story_concepts
 from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
 
@@ -55,6 +58,16 @@ def get_gemini_client(api_key: Optional[str] = None):
     return genai.Client(api_key=keys[0])
 
 
+def _story_direction(domain):
+    try:
+        recent = get_recent_story_concepts(domain)
+    except sqlite3.Error:
+        # Legacy databases may not yet have story tags; never migrate on a prompt read.
+        logger.warning("Recent story context unavailable; generating without history.")
+        recent = []
+    return build_story_direction(domain, get_category_profile(domain), recent)
+
+
 def build_analysis_prompt(
     words: List[str],
     domain: str = "Basic / Neutral",
@@ -83,18 +96,6 @@ def build_analysis_prompt(
     )
     directive = profile.get("domain_directive", "")
 
-    char_setup = sparks.get("character_setup", {})
-    char_label = char_setup.get("label", "Two people in direct conversation")
-    char_instruction = char_setup.get("instruction", "Two clearly identified characters talk face to face.")
-
-    arc_setup = sparks.get("arc", {})
-    arc_name = arc_setup.get("name", "Classic Resolution")
-    arc_flow = arc_setup.get("arc", "Problem -> turning point -> quiet determination")
-    arc_flavor = arc_setup.get("ending_flavor", "Characters find a way forward together.")
-
-    time_str = sparks.get("time", "An authentic time of day matching the scene")
-    props_str = ", ".join(sparks.get("props", [])) if sparks.get("props") else "Tangible everyday objects matching the scene"
-
     if existing_concept and existing_concept.strip():
         concept_block = f"""EXISTING APPROVED STORY SCENARIO:
 "{existing_concept.strip()}"
@@ -110,13 +111,13 @@ CRITICAL MANDATE:
         concept_block = f"""CRITICAL STORY CONCEPT INSTRUCTIONS (SPECIFIC, HIGH-FIDELITY STORYLINE ROADMAP):
 In "creative_concept", construct a rich, highly specific 3-4 sentence narrative scenario that explicitly defines:
 1. Specific Characters & Relationship:
-   - Specific roles matching '{domain}' and the character setup above.
+   - Clearly identified people and a relationship matching '{domain}' and the immediate event.
 2. Tangible Physical Setting & Sensory Atmosphere:
-   - Anchor the scene in a concrete time, place, and sensory environment belonging to this domain, drawing from the suggested time and props.
+   - Establish the immediate human event in a believable place belonging to this domain. Time and physical details are optional and must serve the event.
 3. Core Human Stakes & Dramatic Tension:
    - Identify the immediate emotional or practical dilemma that naturally requires the 20 target words to be spoken.
 4. Clear Narrative Progression:
-   - Follow the narrative arc ({arc_name}) towards its specified resolution flavor ({arc_flavor}).
+   - Let the choices and consequences create progression and an earned ending; follow DYNAMIC STORY DESIGN rather than a preset resolution.
 5. Real Spoken Dialogue Anchors:
    - The scene must naturally inspire everyday spoken American English lines that an ESL learner could memorize and use in real life.
 
@@ -153,29 +154,9 @@ CRITICAL PRINCIPLE 1: TARGET WORDS LEAD THE STORY (WORDS FIRST, SCENARIO SECOND)
 - The thematic domain '{domain}' and the sampled creative sparks below are catalysts to inspire a concrete, vivid scene — choose a storyline where these 20 words fit like a glove.
 - THINK OUTSIDE THE BOX & PIVOT FREELY: If the 20 words suggest an unexpected, original real-life scenario within '{domain}' that differs from the suggested sparks, FOLLOW THE WORDS! Never trap yourself in the suggestions. Think outside the box and invent fresh events, settings, and conflicts that give these specific words their most natural, powerful home.
 
-CRITICAL PRINCIPLE 1B: POLYSEMY & FREEDOM FROM TRAGEDY CLICHES (AVOID DEFAULTING TO HOSPITALS):
-- English vocabulary is remarkably versatile (polysemous) — embrace the full breadth of real-world meanings:
-  * "operation" does NOT mean medical surgery by default — it can be running a family motel or diner, food truck operations, warehouse logistics, a family farm, flight operations, or a weekend community project.
-  * "suffer" does NOT require a hospital bed — a garden suffers from drought, a sports team suffers a defeat, a budget suffers from costs, a business suffers a seasonal slump.
-  * "recover" is recovering lost items, bouncing back from jetlag/travel, recovering costs, or regaining momentum after a setback.
-  * "facility" is a sports complex, campus, hotel, community center, terminal, resort, or workshop.
-  * "accommodation" is travel lodging, hotel booking, or seating.
-  * "visitor" is a customer, tourist, friend visiting from out of town, or campus guest.
-- AVOID AUTOMATIC TRAGEDY TRAPS: Do NOT immediately trap the story in a sterile hospital waiting room, sick child in surgery, fatal illness, or weeping funeral unless the user explicitly requested a medical drama. In '{domain}' especially, explore the vibrant, grounded fabric of daily life (running a family lodge, road trips, athletic training, home renovations, airport reunions, seasonal campus move-in, neighborhood projects, shared meals).
-
-CRITICAL DIRECTIVE 2: FULL HUMAN EMOTIONAL SPECTRUM (HONOR TRUE CONTEXT, NO FORCED GLOOM):
-- Real human life encompasses a rich tapestry of emotions:
-  * Sadness, heartbreak, painful goodbyes, disappointment, separation, loneliness, or grieving a loss -> select "Sad / Heartbroken" or "Nostalgic / Melancholic".
-  * Deep nostalgia, reminiscing on old memories, homesickness, childhood, longing -> "Nostalgic / Melancholic".
-  * High-stakes personal crossroads, intense drama, heated arguments, confrontation, pressure -> "Dramatic / Intense" or "Dark / Moody".
-  * Romantic chemistry, tender confessions, vulnerability, butterflies -> "Romantic / Sweet".
-  * Pure funk, weekend party, high adrenaline, celebration, triumph -> "Energetic" or "Playful / Quirky".
-  * Laid-back contentment, lazy rainy Sunday, unwinding after a long week -> "Chill / Relaxed".
-  * Genuine optimism, breakthroughs, shared triumphs -> "Happy" or "Uplifting / Inspiring".
-- EMOTIONAL PLURALITY (NO MONOPOLY ON EITHER UNREALISTIC JOY OR ARTIFICIAL GLOOM):
-  * If the target words naturally reflect genuine sorrow, heartbreak, or painful goodbyes, honor that poignant truth without forcing fake cheerful optimism.
-  * BUT do NOT artificially manufacture a tragic illness, hospital ICU, or funeral drama just because words like 'suffer' or 'tough' appear.
-  * Match the true, natural situational context of everyday life.
+EMOTIONAL AND CONTEXTUAL FIT:
+- Choose the actual emotional tone of this situation, including positive, negative or mixed feelings.
+- Do not infer tragedy from an isolated word or manufacture optimism to resolve a difficult event.
 - Be decisive in your percentages: let the dominant emotional tone lead strongly (e.g., 60-80%).
 
 CRITICAL DIRECTIVE 3: DIVERSE GENRE MATCHING (BREAK THE ACOUSTIC / INDIE-POP MONOPOLY):
@@ -189,11 +170,7 @@ CRITICAL DIRECTIVE 3: DIVERSE GENRE MATCHING (BREAK THE ACOUSTIC / INDIE-POP MON
 
 ACTIVE CATEGORY DOMAIN: "{domain}"
 
-CREATIVE INSPIRATION SPARKS FOR THIS BATCH (DOMAIN-TAILORED):
-- Suggested Time of Day: {time_str}
-- Character Setup: {char_label} — {char_instruction}
-- Narrative Arc & Resolution Tone: {arc_name} ({arc_flow}) — Ending flavor: {arc_flavor}
-- Authentic Sensory Props (Touchstones to ground the physical scene): {props_str}
+Follow the FINAL STORY AUTHORITY below.
 
 SAMPLE SETTINGS (INSPIRATION SPRINGBOARDS):
 {settings_bullets}
@@ -201,10 +178,13 @@ SAMPLE SETTINGS (INSPIRATION SPRINGBOARDS):
 SAMPLE CONFLICT ARCHETYPES:
 {conflicts_bullets}
 
-DOMAIN-SPECIFIC VOCABULARY & DIALOGUE DIRECTIVE:
+DOMAIN-SPECIFIC VOCABULARY & DIALOGUE DIRECTIVE (optional inspiration; DYNAMIC STORY DESIGN takes precedence over legacy plot/ending suggestions):
 {directive}
 
 {concept_block}
+
+FINAL STORY AUTHORITY:
+{_story_direction(domain)}
 
 Return a valid JSON object with the following exact schema:
 {{
@@ -273,12 +253,7 @@ def analyze_vocabulary_mood(
             "success": False,
             "error": str(exc),
             "model_used": "Fallback Defaults",
-            "mood_breakdown": {
-                "Happy": 30,
-                "Energetic": 30,
-                "Uplifting / Inspiring": 20,
-                "Chill / Relaxed": 20,
-            },
+            "mood_breakdown": {},
             "genre": GENRES[0],
             "song_structure": SONG_STRUCTURES[0],
             "creative_concept": (
@@ -531,6 +506,8 @@ def curate_thematic_vocabulary_batch(
     target_nouns: int = 10,
     target_verbs: int = 6,
     target_modifiers: int = 4,
+    domain_quotas: Optional[Dict[str, Any]] = None,
+    candidate_domains: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     from google.genai import types
 
@@ -549,31 +526,19 @@ def curate_thematic_vocabulary_batch(
     if sparks is None:
         sparks = sample_domain_creative_sparks(effective_domain)
 
-    char_setup = sparks.get("character_setup", {})
-    char_label = char_setup.get("label", "Two people in direct conversation")
-    char_instruction = char_setup.get("instruction", "Two clearly identified characters talk face to face.")
-
-    arc_setup = sparks.get("arc", {})
-    arc_name = arc_setup.get("name", "Classic Resolution")
-    arc_flow = arc_setup.get("arc", "Problem -> turning point -> quiet determination")
-    arc_flavor = arc_setup.get("ending_flavor", "Characters find a way forward together.")
-
-    time_str = sparks.get("time", "An authentic time of day matching the scene")
-    props_str = ", ".join(sparks.get("props", [])) if sparks.get("props") else "Tangible everyday objects matching the scene"
-
     domain_instruction = ""
     scenario_instruction = ""
     practicality_guidance = ""
 
     if is_specialized:
         profile = get_category_profile(domain_focus)
-        settings_examples = profile.get("story_settings_examples", [])
+        settings_examples = sparks.get("sampled_settings", [])
         settings_bullets = (
             "\n".join(f"  * {s}" for s in settings_examples)
             if settings_examples
             else f"  * {profile.get('setting', 'Real-world situations in this domain')}"
         )
-        conflicts = profile.get("story_conflict_archetypes", [])
+        conflicts = sparks.get("sampled_conflicts", [])
         conflicts_bullets = (
             "\n".join(f"  * {c}" for c in conflicts)
             if conflicts
@@ -619,7 +584,7 @@ PRIMARY THEMATIC DOMAIN FOCUS: {domain_focus}
 - The curated theme, story concept, and 20 words MUST be firmly situated in this world.
 {drift_rule}
 
-DOMAIN DIRECTIVE & REGISTER GUIDANCE:
+DOMAIN DIRECTIVE & REGISTER GUIDANCE (DYNAMIC STORY DESIGN takes precedence over legacy plot/ending suggestions):
 {directive}
 
 REPRESENTATIVE REAL-WORLD SETTINGS (Use as inspiration for infinite creative diversity; do NOT repeat blindly):
@@ -662,12 +627,12 @@ TASK: From the candidate pools of unused English words below, curate an extraord
 - Exactly {target_nouns} Nouns (chosen ONLY from Candidate Nouns below)
 - Exactly {target_verbs} Verbs (chosen ONLY from Candidate Verbs below)
 - Exactly {target_modifiers} Modifiers/Adverbs (chosen ONLY from Candidate Modifiers below)
+SOURCE MEMBERSHIP CONSTRAINTS (data, not story instructions):
+- Required source counts per POS, when supplied: {json.dumps(domain_quotas or {}, ensure_ascii=False)}
+- Candidate word to source mapping: {json.dumps(candidate_domains or {}, ensure_ascii=False)}
+- Honor these counts while choosing the words AND designing their story. Basic / Neutral always fits the selected domain when used naturally.
 {domain_instruction}
-CREATIVE INSPIRATION SPARKS FOR THIS BATCH (DOMAIN-TAILORED):
-- Suggested Time of Day: {time_str}
-- Character Setup: {char_label} — {char_instruction}
-- Narrative Arc & Resolution Tone: {arc_name} ({arc_flow}) — Ending flavor: {arc_flavor}
-- Authentic Sensory Props (Touchstones to ground the physical scene): {props_str}
+Follow the FINAL STORY AUTHORITY below.
 
 Available Genres (all 13 genres pre-curated for ESL vocal clarity):
 {genres_str}
@@ -705,6 +670,9 @@ INTELLIGENT SELECTION METHODOLOGY:
 5. STRICT MEMBERSHIP & EXACT COUNTS:
    - Every single selected word MUST be chosen verbatim from the candidate lists provided above.
    - Exactly {target_nouns} Nouns, Exactly {target_verbs} Verbs, Exactly {target_modifiers} Modifiers/Adverbs. Total = 20 words.
+
+FINAL STORY AUTHORITY:
+{_story_direction(domain_focus or "All Domains")}
 
 6. MUSICAL & EMOTIONAL DIRECTION (ALL-IN-ONE HARMONIZATION):
    - Analyze the emotional core and energy of this curated scenario and the 20 target words.
@@ -753,11 +721,7 @@ Return a valid JSON object with the following exact schema:
 
         mood_breakdown = data.get("mood_breakdown", {})
         if not mood_breakdown or not isinstance(mood_breakdown, dict):
-            mood_breakdown = {
-                "Reflective": 40,
-                "Chill / Relaxed": 30,
-                "Uplifting / Inspiring": 30
-            }
+            mood_breakdown = {}
 
         selected_nouns = data.get("selected_nouns", candidate_nouns[:target_nouns])
         selected_verbs = data.get("selected_verbs", candidate_verbs[:target_verbs])
@@ -793,12 +757,7 @@ Return a valid JSON object with the following exact schema:
             "creative_sparks": sparks,
             "genre": GENRES[0],
             "song_structure": SONG_STRUCTURES[0],
-            "mood_breakdown": {
-                "Happy": 30,
-                "Energetic": 30,
-                "Uplifting / Inspiring": 20,
-                "Chill / Relaxed": 20,
-            },
+            "mood_breakdown": {},
         }
 
 

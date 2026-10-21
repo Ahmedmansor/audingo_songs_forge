@@ -1,96 +1,61 @@
-# Remaining Vocabulary Master Roadmap — Audingo Songs Forge
-### Comprehensive Strategy for the Final 715 Words
+# Remaining Vocabulary Roadmap — Audingo Songs Forge
 
-> **Documentation Date:** October 20, 2026  
-> **Current Progress:** **2,094 NGSL words completed** (**74.5%** dictionary coverage).  
-> **Target Remaining Balance:** **715 words only** to achieve 100% full coverage.
+Updated October 21, 2026. This replaces the earlier 715-word / fixed 6–7 modifier plan.
 
----
+## Inventory snapshot
 
-## 1. Live Inventory Baseline
+At the read-only review: 2,135 of 2,809 NGSL headwords covered (76%), 674 remaining.
+Counts change after song approval; always use live inventory for the next pull.
 
-| Domain | Nouns | Verbs | Adjectives | Pending Adverbs | Exempt (Functional/Pronouns) | Total Remaining |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Basic / Neutral (Joker)** | — | 134 | — | 53 | 7 | **194 words** |
-| **Science, Tech & Academia** | 35 | 97 | — | 58 | 4 | **194 words** |
-| **Emotions & Relationships** | 4 | 138 | — | 20 | 3 | **165 words** |
-| **Law, Politics & Society** | 43 | 40 | — | — | — | **83 words** |
-| **Street & Daily Life** | 10 | 26 | — | 13 | 3 | **52 words** |
-| **Business & Career** | 12 | 15 | — | — | — | **27 words** |
-| **Overall Total** | **104** | **450** | **— (0)** | **144** | **17** | **715 words** |
+| Domain | Nouns | Verb bucket | Other, non-exempt | Other, exempt | Total |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Basic / Neutral | 0 | 129 | 51 | 7 | 187 |
+| Emotions & Relationships | 0 | 120 | 13 | 3 | 136 |
+| Science, Tech & Academia | 35 | 97 | 58 | 4 | 194 |
+| Law, Politics & Society | 43 | 40 | 0 | 0 | 83 |
+| Street & Daily Life | 10 | 21 | 13 | 3 | 47 |
+| Business & Career | 12 | 15 | 0 | 0 | 27 |
+| Total | 100 | 422 | 135 | 17 | 674 |
 
----
+No unused adjective-bucket entries remain in this snapshot. POS buckets are imperfect selection metadata:
+words in the verb bucket can have ordinary noun/adjective uses; Other includes prepositions and connectors.
+Never force a rare meaning or grammatical use to match a bucket.
 
-## 2. Linguistic & Musical Vision for This Phase
+## Current phase: Emotions + Basic
 
-1. **Adjectives Fully Exhausted (Adjectives = 0):**
-   - All 339 NGSL adjectives were 100% utilized across the previous 92 songs.
-   - The engine never enforces or fails on missing adjectives; deficits are automatically absorbed by available adverbs and verbs.
-2. **Aggressive Adverb Absorption & Verbs Synergy:**
-   - Verbs (450) and Adverbs (144) represent over 83% of the remaining inventory.
-   - **Accelerated Adverb Pulling:** Instead of capping at 4, the quota engine dynamically pulls **6 to 7 Modifiers/Adverbs per batch** when nouns are low or zero.
-   - This ensures all 144+ adverbs are steadily cleared across ~25-27 songs, completely preventing any end-of-roadmap adverb backlog.
+Keep Emotions & Relationships selected and Blend Joker enabled. Draw targets only from these two sources.
+The 313 non-exempt candidates contain 249 verb-bucket words and 64 modifiers/connectors.
+For a 20-word batch, round `20 * 64 / 313` to 4 modifiers, with 16 verb-bucket words.
 
----
+| Source | Verb bucket | Modifiers/connectors | Total |
+| --- | ---: | ---: | ---: |
+| Emotions | 9 | 1 | 10 |
+| Basic / Neutral | 7 | 3 | 10 |
 
-## 3. The 4-Phase Execution Roadmap
+This is an inventory-derived starting point, not a permanent quota. Recompute after approvals.
+If nouns return to the eligible inventory, allocate available nouns first, then balance remaining slots.
+If one source runs short, compensate only from the other authorized source.
+Smart curation receives source/POS constraints; the final batch enforces them and contains unique words.
+Basic alone stays Basic; disabling blending stays in the selected domain; All Domains permits all sources.
+Single/multiple replacements do not fall through to unrelated domains when a category is selected.
 
-### 🎯 Phase 1: Emotions & Relationships + Joker (50% Blend)
-*Primary Goal: Clear the entire Basic / Neutral joker pool while aggressively absorbing Emotions verbs and adverbs.*
+Review actual newly covered words after every three approved songs. Repeatedly dropped words need a better
+situation, not forced lyrics. The 313 candidates require at least 16 fully successful 20-word batches without
+bonus coverage; actual songs depend on dropped targets, bonus words and the source split. No fixed promise
+of clearing Basic in 10–14 songs. Exempt words are separate and should not be assumed automatically credited.
 
-- **Studio Configuration:**
-  - `Filter by Vocabulary Domain` = **Emotions & Relationships**
-  - `🃏 Blend Joker (50% Joker)` = **ON (Enabled)**
-- **Batch Quota (20 Words):**
-  - **10 words** from `Emotions & Relationships` + **10 words** from `Basic / Neutral`
-  - **Dynamic POS Split:** 
-    - 4 Nouns (clears all remaining Emotions nouns immediately)
-    - **10 Verbs**
-    - **6 Adverbs/Modifiers** (accelerated pull: `deeply, truly, completely, constantly, already, gently...`)
-    - *Once nouns reach 0:* **13 Verbs + 7 Adverbs/Modifiers**
-- **Musical Direction & Recommended Genres:**
-  - `Acoustic / Folk`, `Indie Pop`, `R&B / Contemporary Soul`, `Cinematic / Ballad`, `Lo-Fi / Chillhop`
-- **Expected Yield:** In **10 to 14 songs**, `Basic / Neutral` is 100% exhausted and the majority of Emotions verbs and adverbs are cleared.
+## Subsequent phases
 
----
+Continue with smaller domains (Business, Street), then Law and Science as desired. Recompute source and POS
+availability at each step; Basic remains valid support in every category. Its use in lyrics is always allowed,
+even after no unused Basic targets remain. Do not assume exactly 20 candidates exist near the end.
 
-### 🏙️ Phase 2: Quick Wins on Smaller Domains
-*Primary Goal: Completely close out small domains in minimal songs to narrow down open categories.*
+## Dynamic stories for every domain and pull path
 
-1. **Business & Career (27 words remaining):**
-   - Inventory: 12 Nouns, 15 Verbs.
-   - Completion: **Only 2 songs** (job interviews, strategic decisions, negotiations).
-2. **Street & Daily Life (52 words remaining):**
-   - Inventory: 10 Nouns, 26 Verbs, 13 Adverbs.
-   - Completion: **Only 3 songs** (neighborhood errands, transit, daily routines).
-
----
-
-### ⚖️ Phase 3: Law, Politics & Society
-*Primary Goal: Clear civic, social, and legal vocabulary.*
-
-- **Remaining Inventory:** **83 words** (43 Nouns, 40 Verbs).
-- **Advantage:** Perfect 50/50 balance between Nouns and Verbs.
-- **Pull Setting:** 10 Nouns + 10 Verbs per song.
-- **Completion:** **4 songs** focused on civic dialogue, public reasoning, and community decisions.
-
----
-
-### 🔬 Phase 4: Science, Tech & Academia Grand Finale
-*Primary Goal: Complete the NGSL dictionary to reach full 100% coverage.*
-
-- **Remaining Inventory:** **194 words** (35 Nouns, 97 Verbs, 58 Adverbs).
-- Entering this phase fresh after a break from scientific themes.
-- Completion: Advanced songs set in labs, tech startups, and research expeditions.
-
----
-
-## 4. Strict Operating Rules
-
-1. **Domain Boundary Lockdown:**
-   When a domain is selected with Joker, the code strictly prohibits drawing words outside the specified domain and Basic / Neutral (zero leakage).
-2. **Dynamic Quota & Adverb Acceleration:**
-   Whenever nouns or adjectives are depleted, slots are dynamically redistributed to pull up to 6–7 adverbs and 10–13 verbs, guaranteeing exactly 20 words every pull without trailing leftovers.
-3. **Exempt Functional Words (17 words):**
-   - Automatically credited as **Bonus NGSL** in Commit Lab whenever naturally spoken in lyrics.
-   - Available in the candidate pool for purposeful inclusion.
+Random batch -> mood/story analysis and Smart Thematic Pull share `domain/services/story_policy.py`.
+Keep each story in its domain, choose a human event from the words, and make time, objects and scenery optional.
+No stock opening, beverage, emotional trajectory, compulsory tragedy or compulsory happy ending.
+Recent saved concepts (last 12 in the same source domain; all domains for All Domains) guide novelty in
+relationship, trigger, conflict and ending. Unsaved rerolls are not included. Existing user concepts are preserved.
+Lyric drafting preserves the chosen emotional stakes and ending. Prompt instructions guide an LLM; they do not
+prove story quality or guarantee unique output. Natural reusable English, coherence and clean language take priority.

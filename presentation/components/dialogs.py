@@ -154,6 +154,12 @@ def execute_studio_action(action: str):
                 target_nouns=quotas.get("Noun", 10),
                 target_verbs=quotas.get("Verb", 6),
                 target_modifiers=quotas.get("Modifier", 4),
+                domain_quotas=candidate_pool.get("domain_quotas", {}),
+                candidate_domains={
+                    w["word"]: w["domain"]
+                    for key in ("Noun", "Verb", "Modifier")
+                    for w in candidate_pool.get(key, [])
+                },
             )
 
             curated_batch = db.build_curated_batch_from_words(
