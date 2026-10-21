@@ -94,6 +94,8 @@ def process_song_text(
     matched_ngsl_headwords: Set[str] = set()
     candidate_extra_words: Set[str] = set()
 
+    used_set = {w.lower().strip() for w in used_ngsl_words} if used_ngsl_words else set()
+
     for token in doc:
         raw_word = token.text.strip(string.punctuation + "“”‘’…—–").lower()
         lemma_word = token.lemma_.strip(string.punctuation + "“”‘’…—–").lower()
@@ -114,14 +116,16 @@ def process_song_text(
         if is_proper_noun and raw_word not in target_set and lemma_word not in target_set:
             continue
 
-        if token.is_stop and raw_word not in target_set and lemma_word not in target_set:
-            continue
-
         matched_headword = None
         if lemma_word in lemma_to_headword:
             matched_headword = lemma_to_headword[lemma_word]
         elif raw_word in lemma_to_headword:
             matched_headword = lemma_to_headword[raw_word]
+
+        # Stopwords: allow through if word is a target word OR an unused NGSL word (bonus word candidate)
+        is_unused_ngsl = (matched_headword is not None and matched_headword not in used_set)
+        if token.is_stop and raw_word not in target_set and lemma_word not in target_set and not is_unused_ngsl:
+            continue
 
         if matched_headword:
             matched_ngsl_headwords.add(matched_headword)
@@ -129,8 +133,6 @@ def process_song_text(
                 matched_target_words.add(matched_headword)
         else:
             candidate_extra_words.add(lemma_word)
-
-    used_set = {w.lower().strip() for w in used_ngsl_words} if used_ngsl_words else set()
 
     green_words = sorted(list(matched_target_words.union(target_set.intersection(matched_ngsl_headwords))))
     red_words = sorted(list(target_set.difference(green_words)))

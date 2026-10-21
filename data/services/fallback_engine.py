@@ -17,8 +17,13 @@ logger = logging.getLogger(__name__)
 # Excludes 3.6 Flash and weaker models to prevent overly lenient evaluations.
 # Prioritizes Gemini 3.7 Flash and falls back to Gemini 3.8 Flash.
 CRITIC_FALLBACK_CHAIN = [
+    "gemini-3.5-flash",
+    "gemini-3.6-flash",
+    "gemini-flash-latest",
     "gemini-3.7-flash",
     "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
 ]
 
 # Dedicated Routine Studio Chain: Used for auxiliary utilities (like poster prompts and style tags).

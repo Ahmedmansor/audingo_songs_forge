@@ -22,6 +22,7 @@ from data.repositories.word_repository import (
     pull_20_words,
     pull_candidate_pool_for_thematic_curation,
     build_curated_batch_from_words,
+    calculate_domain_pos_quotas,
     swap_single_word,
     swap_multiple_words,
     get_all_lemma_mappings,

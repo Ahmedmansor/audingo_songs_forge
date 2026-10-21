@@ -113,7 +113,10 @@ def execute_studio_action(action: str):
                 dom_tag = " from Basic / Neutral (Joker)"
             else:
                 dom_tag = ""
-            st.session_state["studio_toast_msg"] = f"Pulled 20 random unused words (10 Nouns, 6 Verbs, 4 Adjectives){dom_tag}!"
+            nouns_c = len([w for w in new_batch if w.get('pos_type') == 'Noun'])
+            verbs_c = len([w for w in new_batch if w.get('pos_type') == 'Verb'])
+            mods_c = len([w for w in new_batch if w.get('pos_type') in ('Adjective', 'Other')])
+            st.session_state["studio_toast_msg"] = f"Pulled 20 random unused words ({nouns_c} Nouns, {verbs_c} Verbs, {mods_c} Modifiers){dom_tag}!"
             st.rerun()
         elif len(new_batch) > 0:
             set_target_batch(new_batch)
@@ -138,22 +141,27 @@ def execute_studio_action(action: str):
                 domain=active_domain,
                 blend_joker=active_blend
             )
-            candidate_nouns = [w["word"] for w in candidate_pool["Noun"]]
-            candidate_verbs = [w["word"] for w in candidate_pool["Verb"]]
-            candidate_adjs = [w["word"] for w in candidate_pool["Adjective"]]
+            candidate_nouns = [w["word"] for w in candidate_pool.get("Noun", [])]
+            candidate_verbs = [w["word"] for w in candidate_pool.get("Verb", [])]
+            candidate_adjs = [w["word"] for w in candidate_pool.get("Modifier", candidate_pool.get("Adjective", []))]
+            quotas = candidate_pool.get("quotas", {"Noun": 10, "Verb": 6, "Modifier": 4})
 
             curation_res = gemini_client.curate_thematic_vocabulary_batch(
                 candidate_nouns=candidate_nouns,
                 candidate_verbs=candidate_verbs,
                 candidate_adjs=candidate_adjs,
-                domain_focus=active_domain
+                domain_focus=active_domain,
+                target_nouns=quotas.get("Noun", 10),
+                target_verbs=quotas.get("Verb", 6),
+                target_modifiers=quotas.get("Modifier", 4),
             )
 
             curated_batch = db.build_curated_batch_from_words(
                 selected_nouns=curation_res.get("selected_nouns", []),
                 selected_verbs=curation_res.get("selected_verbs", []),
                 selected_adjs=curation_res.get("selected_adjectives", []),
-                candidate_pool=candidate_pool
+                candidate_pool=candidate_pool,
+                target_counts=quotas
             )
 
             if len(curated_batch) == 20:

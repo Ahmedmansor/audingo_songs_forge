@@ -121,6 +121,7 @@ In "creative_concept", construct a rich, highly specific 3-4 sentence narrative 
    - The scene must naturally inspire everyday spoken American English lines that an ESL learner could memorize and use in real life.
 
 - STRICT PROHIBITIONS:
+  * NO CLOCK-WATCHING OPENINGS: Never begin the story concept or song lyrics with digital clock readings or alarm announcements (e.g. "It's 5:45 AM", "At 8:30 in the morning"). Start directly in media res with concrete human action, direct spoken words, or sensory atmosphere.
   * NO VOCABULARY CRAMMING (ABSOLUTE ZERO WORD-SALAD): Do NOT attempt to cram, shoehorn, or force the 20 target words into this 3-4 sentence concept text! Doing so creates an absurd, robotic, unreadable "incantation" or vocabulary exam paragraph. The concept summary is merely the theatrical logline / stage setting (characters, situation, emotional stakes). The 20 words will be distributed naturally throughout the full song lyrics later by the lyricist, NOT jammed here. Write the concept in pure, effortless, organic human English.
   * NO verbatim copying: Do NOT copy-paste the suggested props, times, or example sentences word-for-word. They are sparks of inspiration to show the vibe — invent a fresh, original scenario whose physical details emerge naturally from your 20 target words.
   * NO vague one-liners like "Someone faces challenges in life and finds hope".
@@ -282,7 +283,7 @@ def analyze_vocabulary_mood(
             "song_structure": SONG_STRUCTURES[0],
             "creative_concept": (
                 existing_concept.strip() if (existing_concept and existing_concept.strip()) else
-                f"Two people in a grounded {domain} setting working through an honest conversation."
+                get_category_profile(domain).get("default_story", f"A deeply human story exploring honest vulnerability and authentic connection in {domain}.")
             ),
             "creative_sparks": sparks,
         }
@@ -527,12 +528,15 @@ def curate_thematic_vocabulary_batch(
     candidate_adjs: List[str],
     domain_focus: Optional[str] = None,
     sparks: Optional[Dict[str, Any]] = None,
+    target_nouns: int = 10,
+    target_verbs: int = 6,
+    target_modifiers: int = 4,
 ) -> Dict[str, Any]:
     from google.genai import types
 
-    nouns_str = ", ".join(candidate_nouns)
-    verbs_str = ", ".join(candidate_verbs)
-    adjs_str = ", ".join(candidate_adjs)
+    nouns_str = ", ".join(candidate_nouns) if candidate_nouns else "None available (0 Nouns target for this song)"
+    verbs_str = ", ".join(candidate_verbs) if candidate_verbs else "None"
+    adjs_str = ", ".join(candidate_adjs) if candidate_adjs else "None"
 
     is_specialized = bool(
         domain_focus
@@ -587,6 +591,17 @@ def curate_thematic_vocabulary_batch(
    - Anchor the scene with specific human characters facing a real situation together in natural spoken English."""
             practicality_guidance = f"""- Select words that are foundational, high-utility, and natural in real-life spoken American English.
    - Because these words represent everyday communication, look for natural conversational synergy between them across spoken dialogue, questions, and reactions in both upbeat and poignant emotional contexts.
+   - REJECT only words that are archaic, dictionary-definition-only, or impossible to use naturally in conversation without forcing unnatural phrasing or broken rhymes ("من غير ما نحشر كلمة بالعافية")."""
+        elif domain_focus == "Emotions & Relationships":
+            drift_rule = "- Focus strictly on deeply felt, authentic human connections, emotional crossroads, relationships, family bonds, or poignant solo reflections. Avoid generic office jargon, academic lectures, or trivial domestic chores."
+            scenario_instruction = f"""1. SCENARIO FIRST (Anchor the Scene in Real Human Connection — INVENT, DO NOT COPY):
+   - First, scan the candidate words to discover a concrete, relatable human scenario within '{domain_focus}' that connects the highest quality candidates together.
+   - FULL EMOTIONAL PALETTE (EMBRACE SADNESS, BITTERSWEET TRUTH & SURPRISE): Do not force a neat, happy, tidy resolution on every song! Authentic human relationships experience real grief, painful goodbyes, unfixable distance, and unexpected emotional revelations. Let sadness, longing, and bittersweet truth breathe with dignity and emotional power.
+   - STRICT NO-CLOCK OPENING RULE: The scenario and song lyrics must NEVER begin with clock-watching or digital alarm announcements (e.g. 'It is 5:45 AM', '8:30 on the clock'). Begin directly in media res with direct spoken words, physical interaction, sensory atmosphere, or immediate emotional crossroads.
+   - DIVERSE RELATIONSHIP DYNAMICS: Explore relationships beyond romantic tropes (estranged siblings, parent and adult child, childhood friends reuniting after years, a solo narrator coping with absence).
+   - Anchor the scene with specific human characters facing a real situation together in natural spoken English."""
+            practicality_guidance = f"""- Select words that are emotionally authentic, high-utility, and natural in real-life spoken American English.
+   - Emotional weight comes from honest, understated spoken lines that real human beings say when vulnerable — not melodramatic greeting-card poetry.
    - REJECT only words that are archaic, dictionary-definition-only, or impossible to use naturally in conversation without forcing unnatural phrasing or broken rhymes ("من غير ما نحشر كلمة بالعافية")."""
         else:
             drift_rule = "- DO NOT drift into generic street arguments, domestic chores, or unrelated casual tropes."
@@ -644,9 +659,9 @@ Songs in Audingo are engineered so English language learners can memorize ANY ly
 The 20 target words must not be a random grab-bag; they must share **exceptional semantic chemistry**, high conversational collocability, and deep natural synergy around a single, relatable slice-of-life scenario.
 
 TASK: From the candidate pools of unused English words below, curate an extraordinarily cohesive batch of EXACTLY 20 target words:
-- Exactly 10 Nouns (chosen ONLY from Candidate Nouns below)
-- Exactly 6 Verbs (chosen ONLY from Candidate Verbs below)
-- Exactly 4 Adjectives (chosen ONLY from Candidate Adjectives below)
+- Exactly {target_nouns} Nouns (chosen ONLY from Candidate Nouns below)
+- Exactly {target_verbs} Verbs (chosen ONLY from Candidate Verbs below)
+- Exactly {target_modifiers} Modifiers/Adverbs (chosen ONLY from Candidate Modifiers below)
 {domain_instruction}
 CREATIVE INSPIRATION SPARKS FOR THIS BATCH (DOMAIN-TAILORED):
 - Suggested Time of Day: {time_str}
@@ -669,7 +684,7 @@ CANDIDATE NOUNS ({len(candidate_nouns)} available):
 CANDIDATE VERBS ({len(candidate_verbs)} available):
 {verbs_str}
 
-CANDIDATE ADJECTIVES ({len(candidate_adjs)} available):
+CANDIDATE MODIFIERS (Adverbs / Adjectives) ({len(candidate_adjs)} available):
 {adjs_str}
 
 INTELLIGENT SELECTION METHODOLOGY:
@@ -678,9 +693,9 @@ INTELLIGENT SELECTION METHODOLOGY:
 2. HIGH MUTUAL COLLOCABILITY & NATURAL CHEMISTRY:
    - The chosen 20 words must feel like they naturally belong in the same conversation, room, and storyline.
    - When speakers in this setting discuss this scenario, these words naturally roll off the tongue together:
-     * Verbs (6): Active, conversational actions the characters actually take or experience in this world. Avoid stiff, robotic, or awkward verbs.
-     * Nouns (10): The physical objects, people, locations, data, or emotional stakes in this scene.
-     * Adjectives (4): Relatable emotional states, sensory conditions, or situational qualities.
+     * Verbs ({target_verbs}): Active, conversational actions the characters actually take or experience in this world. Avoid stiff, robotic, or awkward verbs.
+     * Nouns ({target_nouns}): The physical objects, people, locations, data, or emotional stakes in this scene.
+     * Modifiers/Adverbs ({target_modifiers}): Relatable emotional states, sensory conditions, nuances, or situational qualities.
 
 3. ESL CONVERSATIONAL PRACTICALITY:
    {practicality_guidance}
@@ -689,7 +704,7 @@ INTELLIGENT SELECTION METHODOLOGY:
 
 5. STRICT MEMBERSHIP & EXACT COUNTS:
    - Every single selected word MUST be chosen verbatim from the candidate lists provided above.
-   - Exactly 10 Nouns, Exactly 6 Verbs, Exactly 4 Adjectives. Total = 20 words.
+   - Exactly {target_nouns} Nouns, Exactly {target_verbs} Verbs, Exactly {target_modifiers} Modifiers/Adverbs. Total = 20 words.
 
 6. MUSICAL & EMOTIONAL DIRECTION (ALL-IN-ONE HARMONIZATION):
    - Analyze the emotional core and energy of this curated scenario and the 20 target words.
@@ -708,9 +723,9 @@ Return a valid JSON object with the following exact schema:
         "Another Mood": 30,
         "Third Mood": 20
     }},
-    "selected_nouns": ["noun1", "noun2", "noun3", "noun4", "noun5", "noun6", "noun7", "noun8", "noun9", "noun10"],
-    "selected_verbs": ["verb1", "verb2", "verb3", "verb4", "verb5", "verb6"],
-    "selected_adjectives": ["adj1", "adj2", "adj3", "adj4"]
+    "selected_nouns": ["noun1", ...],
+    "selected_verbs": ["verb1", ...],
+    "selected_adjectives": ["mod1", ...]
 }}
 """
 
@@ -744,12 +759,16 @@ Return a valid JSON object with the following exact schema:
                 "Uplifting / Inspiring": 30
             }
 
+        selected_nouns = data.get("selected_nouns", candidate_nouns[:target_nouns])
+        selected_verbs = data.get("selected_verbs", candidate_verbs[:target_verbs])
+        selected_mods = data.get("selected_adjectives") or data.get("selected_modifiers", candidate_adjs[:target_modifiers])
+
         return {
             "success": True,
             "model_used": model_name,
-            "selected_nouns": data.get("selected_nouns", candidate_nouns[:10]),
-            "selected_verbs": data.get("selected_verbs", candidate_verbs[:6]),
-            "selected_adjectives": data.get("selected_adjectives", candidate_adjs[:4]),
+            "selected_nouns": selected_nouns,
+            "selected_verbs": selected_verbs,
+            "selected_adjectives": selected_mods,
             "theme_name": data.get("theme_name", "Everyday Life & Human Stories"),
             "theme_description": concept,
             "creative_concept": concept,
@@ -760,15 +779,17 @@ Return a valid JSON object with the following exact schema:
         }
     except Exception as exc:
         logger.warning("Thematic curation failed: %s", exc)
+        profile_def = get_category_profile(domain_focus)
+        fallback_story = profile_def.get("default_story", "A deeply human story exploring honest vulnerability and authentic connection.")
         return {
             "success": False,
             "error": str(exc),
-            "selected_nouns": candidate_nouns[:10],
-            "selected_verbs": candidate_verbs[:6],
-            "selected_adjectives": candidate_adjs[:4],
-            "theme_name": "Everyday Life & Human Stories",
-            "theme_description": "Two people in an authentic everyday setting working through an honest conversation.",
-            "creative_concept": "Two people in an authentic everyday setting working through an honest conversation.",
+            "selected_nouns": candidate_nouns[:target_nouns],
+            "selected_verbs": candidate_verbs[:target_verbs],
+            "selected_adjectives": candidate_adjs[:target_modifiers],
+            "theme_name": f"{domain_focus} & Everyday Stories",
+            "theme_description": fallback_story,
+            "creative_concept": fallback_story,
             "creative_sparks": sparks,
             "genre": GENRES[0],
             "song_structure": SONG_STRUCTURES[0],

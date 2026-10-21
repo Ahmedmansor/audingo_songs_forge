@@ -988,6 +988,14 @@ def generate_master_prompt(
             "- BASIC EVERYDAY WORDS ARE NATURALLY CONVERSATIONAL: Common, foundational words are the bread and butter of fluent spoken English and do NOT violate Red Line 1. Drop a word ONLY as an absolute last resort if every possible conversational placement sounds distorted or breaks the story. Never drop basic words out of laziness, rush, or convenience.\n"
             "- STRICT PROHIBITION AGAINST LAZY SYNONYM REPLACEMENT: Never substitute a target word with an alternate word just to avoid fitting it. Use the exact target words directly in dialogue.\n"
         )
+    elif selected_domain == "Emotions & Relationships":
+        target_words_philosophy = (
+            "- HIGH VOCABULARY INTEGRATION BENCHMARK (14 to 17 words): In this Emotions & Relationships category, your benchmark is to naturally integrate at least 14 to 17 of the 20 target words into the characters' spoken dialogue, confessions, questions, and reactions.\n"
+            "- STRICT PROHIBITION AGAINST CLOCK-WATCHING OPENINGS: Never begin Verse 1 by stating an alarm or digital time ('It's 5:45 AM', 'At 8:30 in the morning'). Dive directly in media res into the human action, spoken dialogue, sensory tension, or immediate physical dilemma.\n"
+            "- FULL EMOTIONAL FREEDOM (HONOR REAL HUMAN FEELINGS): Real life holds genuine heartbreak, quiet distance, unspoken regret, and bittersweet acceptance. If the story concept calls for sorrow, loss, or a difficult parting, do NOT sugarcoat it with a forced, cheerful Disney ending. Let the characters speak with honest vulnerability, dignified sorrow, or quiet strength.\n"
+            "- CONVERSATIONAL VULNERABILITY OVER POETIC CLICHES: Keep lyrics tender, raw, and conversational. Emotional impact comes from honest, understated spoken lines that real human beings whisper or confess — not melodramatic greeting-card poetry.\n"
+            "- STRICT PROHIBITION AGAINST LAZY SYNONYM REPLACEMENT: Never substitute a target word with an alternate word just to avoid fitting it. Use the exact target words directly in dialogue.\n"
+        )
     else:
         target_words_philosophy = (
             "- The words are drawn randomly from a larger database. The goal is NOT to use all of them. The goal is a perfect song: natural lines and a connected story always come before word coverage.\n"
@@ -1037,6 +1045,7 @@ If a target word can only be used by crossing a red line, drop it. Red lines alw
 
 ## STORY RULES
 - Strictly adhere to the established Story Concept: "{story_text}".
+- STRICT NO-CLOCK OPENINGS: Never begin Verse 1 with a digital clock announcement (e.g. 'It's 5:45 AM', '8:30 on the clock'). Begin with dialogue, physical action, or evocative sensory tension in media res.
 - Words First Principle: Target words must appear in their authentic, natural spoken meaning. The story scenario gives characters real, believable reasons to speak them; never distort a word's meaning or force awkward syntax.
 - Every character who speaks or is mentioned must be named or clearly identified. No unexplained "he" or "they."
 - One place, one continuous situation. Memories are allowed only if they directly support the conflict.

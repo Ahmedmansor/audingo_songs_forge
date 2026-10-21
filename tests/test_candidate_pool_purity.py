@@ -100,8 +100,8 @@ class TestCandidatePoolPurity(unittest.TestCase):
                 self.assertEqual(item["domain"], "Science, Tech & Academia")
 
     def test_fallback_when_words_below_minimum_song_requirements(self):
-        """If a domain has fewer than minimum song requirements (e.g. only 2 Adjectives, while 4 needed),
-        it should gracefully fall back to ensure at least 4 adjectives are available."""
+        """If a domain has fewer than minimum standard requirements (e.g. only 2 Adjectives, while 4 needed),
+        it dynamically adjusts the quotas and NEVER steals words from unauthorized domains (e.g. Science)."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         # Delete neutral adjectives until only 2 remain
@@ -117,8 +117,15 @@ class TestCandidatePoolPurity(unittest.TestCase):
             blend_joker=True,
             db_path=self.db_path
         )
-        # Should have at least 4 adjectives now via fallback
-        self.assertGreaterEqual(len(pool["Adjective"]), 4)
+        # Should have exactly 2 adjectives (never polluted by Science)
+        self.assertEqual(len(pool["Adjective"]), 2)
+        for item in pool["Adjective"]:
+            self.assertEqual(item["domain"], "Basic / Neutral")
+            self.assertFalse(item["word"].startswith("sci_"))
+
+        # Quotas should have adapted: Modifier is 2, Verbs increased
+        self.assertEqual(pool["quotas"]["Modifier"], 2)
+        self.assertGreaterEqual(pool["quotas"]["Verb"], 8)
 
 
 if __name__ == "__main__":

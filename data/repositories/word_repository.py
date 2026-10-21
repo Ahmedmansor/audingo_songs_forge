@@ -267,143 +267,283 @@ def compute_domain_breakdown(words: List[str], db_path: Path = DB_PATH) -> Dict[
     }
 
 
+def calculate_domain_pos_quotas(
+    domain: Optional[str] = None,
+    blend_joker: bool = True,
+    db_path: Path = DB_PATH,
+    total_words: int = 20
+) -> Dict[str, int]:
+    """
+    Dynamically calculate POS target counts (Nouns, Verbs, Modifiers) for a 20-word batch.
+    - Adapts when a domain or corpus runs low on Nouns or Adjectives.
+    - Modifiers pool includes Adjectives and non-exempt Adverbs.
+    - If Nouns < 10, redistributes deficit to Verbs and Modifiers.
+    - Guarantees the sum of quotas equals total_words (20) without leaking to unauthorized domains.
+    """
+    use_domain = domain if (domain and domain != "All Domains" and "الكل" not in domain and "All" not in domain) else None
+    is_pure_neutral = (use_domain == "Basic / Neutral")
+
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        if use_domain is None:
+            dom_sql = ""
+            params = []
+        elif is_pure_neutral:
+            dom_sql = "AND (domain_coca = 'Basic / Neutral' OR domain_coca IS NULL)"
+            params = []
+        elif blend_joker:
+            dom_sql = "AND (domain_coca = ? OR domain_coca = 'Basic / Neutral' OR domain_coca IS NULL)"
+            params = [use_domain]
+        else:
+            dom_sql = "AND domain_coca = ?"
+            params = [use_domain]
+
+        cursor.execute(f"""
+            SELECT pos_type, word
+            FROM ngsl_words
+            WHERE usage_count = 0 {dom_sql}
+        """, params)
+        rows = cursor.fetchall()
+
+    avail_nouns = 0
+    avail_verbs = 0
+    avail_adjs = 0
+    avail_advs = 0
+
+    for r in rows:
+        pos = r["pos_type"]
+        w = r["word"].lower().strip()
+        if pos == "Noun":
+            avail_nouns += 1
+        elif pos == "Verb":
+            avail_verbs += 1
+        elif pos == "Adjective":
+            avail_adjs += 1
+        elif pos == "Other" and w not in CORE_EXEMPT_WORDS:
+            avail_advs += 1
+
+    total_avail = avail_nouns + avail_verbs + avail_adjs + avail_advs
+    if total_avail == 0:
+        return {"Noun": 0, "Verb": 0, "Modifier": 0, "Adjective": 0}
+
+    # Dynamic POS balance & Adverb Absorption:
+    # Baseline standard target: 10 Nouns, 5 Verbs, 5 Modifiers (when all available)
+    # When nouns are low or 0 (e.g. Emotions or Basic), we dynamically distribute the noun deficit
+    # between Verbs and Modifiers (Adverbs) so that Adverbs are steadily cleared (up to 6-7 per song)
+    # and don't end up stranded at the end of the roadmap.
+    avail_modifiers = avail_adjs + avail_advs
+    base_nouns = 10
+
+    target_nouns = min(base_nouns, avail_nouns)
+    noun_deficit = base_nouns - target_nouns
+
+    # Proportional modifier target:
+    # If 0-2 nouns: target 7 modifiers (e.g. 0 Nouns + 13 Verbs + 7 Modifiers = 20)
+    # If 3-6 nouns: target 6 modifiers (e.g. 4 Nouns + 10 Verbs + 6 Modifiers = 20)
+    # If 7-10 nouns: target 5 modifiers (e.g. 10 Nouns + 5 Verbs + 5 Modifiers = 20)
+    if noun_deficit >= 8:
+        desired_modifiers = 7
+    elif noun_deficit >= 4:
+        desired_modifiers = 6
+    else:
+        desired_modifiers = 5
+
+    target_modifiers = min(desired_modifiers, avail_modifiers)
+
+    # Remaining slots allocated to Verbs
+    target_verbs = total_words - target_nouns - target_modifiers
+    if target_verbs > avail_verbs:
+        target_verbs = avail_verbs
+
+    # Balance any remaining difference to sum to total_words
+    current_sum = target_nouns + target_verbs + target_modifiers
+    diff = total_words - current_sum
+
+    if diff > 0:
+        extra_verbs = min(diff, max(0, avail_verbs - target_verbs))
+        target_verbs += extra_verbs
+        diff -= extra_verbs
+
+        if diff > 0:
+            extra_mod = min(diff, max(0, avail_modifiers - target_modifiers))
+            target_modifiers += extra_mod
+            diff -= extra_mod
+
+        if diff > 0:
+            extra_nouns = min(diff, max(0, avail_nouns - target_nouns))
+            target_nouns += extra_nouns
+            diff -= extra_nouns
+
+    return {
+        "Noun": target_nouns,
+        "Verb": target_verbs,
+        "Modifier": target_modifiers,
+        "Adjective": target_modifiers  # alias for backwards compatibility
+    }
+
+
 def pull_20_words(
     domain: Optional[str] = None,
     blend_joker: bool = True,
     db_path: Path = DB_PATH
 ) -> List[Dict[str, Any]]:
     """
-    Randomly select 20 words where usage_count = 0 according to ratio:
-    - 50% Nouns (10 words)
-    - 30% Verbs (6 words)
-    - 20% Adjectives (4 words)
-
-    Joker Blending Logic:
-    - If blend_joker=True (default): pulls 50% from Target Domain + 50% from Basic / Neutral (Joker).
-    - If blend_joker=False: pulls 100% from Target Domain (10 N, 6 V, 4 A).
-      If the domain runs short for any POS, auto-fills the difference from Joker with a logged notice.
-    - If Basic / Neutral is chosen, pulls 100% from Basic / Neutral.
-    - If All Domains or None, pulls randomly across the entire corpus.
-    """
-    # Format: (pos_name, total_required, target_quota, joker_quota)
-    if blend_joker:
-        pos_targets = [
-            ("Noun", 10, 5, 5),
-            ("Verb", 6, 3, 3),
-            ("Adjective", 4, 2, 2)
-        ]
-    else:
-        pos_targets = [
-            ("Noun", 10, 10, 0),
-            ("Verb", 6, 6, 0),
-            ("Adjective", 4, 4, 0)
-        ]
+    Select 20 unused words (usage_count = 0) with dynamic POS adaptation.
+    Baseline ratio: 10 Nouns, 6 Verbs, 4 Modifiers (Adjectives / Adverbs).
     
-    selected_words: List[Dict[str, Any]] = []
+    Dynamic POS Balancing:
+    - If Nouns or Adjectives in the authorized pool are low/zero, quota is dynamically redistributed
+      to Verbs and Adverbs within the authorized domain(s).
+    - Prevents domain leakage completely: never draws words outside target domain / Joker.
+    
+    Joker Blending Logic:
+    - If blend_joker=True: draws 50% from Target Domain + 50% from Basic / Neutral (Joker).
+    - If blend_joker=False: draws 100% from Target Domain.
+    - If Basic / Neutral is chosen, draws 100% from Basic / Neutral.
+    - If All Domains or None, draws randomly across the entire corpus.
+    """
+    quotas = calculate_domain_pos_quotas(domain, blend_joker=blend_joker, db_path=db_path, total_words=20)
+    target_nouns = quotas["Noun"]
+    target_verbs = quotas["Verb"]
+    target_modifiers = quotas["Modifier"]
+
     use_domain = domain if (domain and domain != "All Domains" and "الكل" not in domain and "All" not in domain) else None
     is_pure_neutral = (use_domain == "Basic / Neutral")
     
+    selected_words: List[Dict[str, Any]] = []
+    used_ids: Set[int] = set()
+
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
-        
-        for pos, total_needed, target_quota, joker_quota in pos_targets:
-            pos_words: List[Dict[str, Any]] = []
-            
+
+        def _draw_pos(pos: str, count: int, is_modifier: bool = False):
+            if count <= 0:
+                return
+
+            exempt_placeholders = ",".join("?" * len(CORE_EXEMPT_WORDS))
+
+            def _query_words(dom_condition: str, dom_params: list, needed: int) -> List[Dict[str, Any]]:
+                if needed <= 0:
+                    return []
+                id_clause = f"AND id NOT IN ({','.join('?' * len(used_ids))})" if used_ids else ""
+                id_params = list(used_ids) if used_ids else []
+
+                if not is_modifier:
+                    q = f"""
+                        SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
+                        FROM ngsl_words
+                        WHERE usage_count = 0 AND pos_type = ? {dom_condition} {id_clause}
+                        ORDER BY RANDOM()
+                        LIMIT ?
+                    """
+                    cursor.execute(q, [pos] + dom_params + id_params + [needed])
+                    return [dict(r) for r in cursor.fetchall()]
+                else:
+                    # Modifier: first try Adjectives
+                    q_adj = f"""
+                        SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
+                        FROM ngsl_words
+                        WHERE usage_count = 0 AND pos_type = 'Adjective' {dom_condition} {id_clause}
+                        ORDER BY RANDOM()
+                        LIMIT ?
+                    """
+                    cursor.execute(q_adj, dom_params + id_params + [needed])
+                    drawn = [dict(r) for r in cursor.fetchall()]
+                    if len(drawn) < needed:
+                        still_needed = needed - len(drawn)
+                        temp_used = used_ids.union({w["id"] for w in drawn})
+                        id_clause_adv = f"AND id NOT IN ({','.join('?' * len(temp_used))})" if temp_used else ""
+                        id_params_adv = list(temp_used) if temp_used else []
+                        q_adv = f"""
+                            SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
+                            FROM ngsl_words
+                            WHERE usage_count = 0 AND pos_type = 'Other' AND LOWER(word) NOT IN ({exempt_placeholders}) {dom_condition} {id_clause_adv}
+                            ORDER BY RANDOM()
+                            LIMIT ?
+                        """
+                        cursor.execute(q_adv, list(CORE_EXEMPT_WORDS) + dom_params + id_params_adv + [still_needed])
+                        drawn.extend([dict(r) for r in cursor.fetchall()])
+                    return drawn
+
             if use_domain is None:
-                # 1. All Domains: pure random draw
-                cursor.execute("""
-                    SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
-                    FROM ngsl_words
-                    WHERE usage_count = 0 AND pos_type = ?
-                    ORDER BY RANDOM()
-                    LIMIT ?
-                """, (pos, total_needed))
-                for r in cursor.fetchall():
-                    pos_words.append(dict(r))
-                    
+                # All domains
+                rows = _query_words("", [], count)
+                for r in rows:
+                    selected_words.append(r)
+                    used_ids.add(r["id"])
             elif is_pure_neutral:
-                # 2. Basic / Neutral exclusively (including NULL fallback)
-                cursor.execute("""
-                    SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
-                    FROM ngsl_words
-                    WHERE usage_count = 0 AND pos_type = ? AND (domain_coca = 'Basic / Neutral' OR domain_coca IS NULL)
-                    ORDER BY RANDOM()
-                    LIMIT ?
-                """, (pos, total_needed))
-                for r in cursor.fetchall():
-                    pos_words.append(dict(r))
-                    
+                # Basic / Neutral
+                rows = _query_words("AND (domain_coca = 'Basic / Neutral' OR domain_coca IS NULL)", [], count)
+                for r in rows:
+                    selected_words.append(r)
+                    used_ids.add(r["id"])
             else:
-                # 3. Specialized Domain: 50% Target Domain + 50% Joker Blend
-                # Part A: Pull from Target Domain
-                cursor.execute("""
-                    SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
-                    FROM ngsl_words
-                    WHERE usage_count = 0 AND pos_type = ? AND domain_coca = ?
-                    ORDER BY RANDOM()
-                    LIMIT ?
-                """, (pos, use_domain, target_quota))
-                target_rows = [dict(r) for r in cursor.fetchall()]
-                pos_words.extend(target_rows)
-                
-                # Part B: Check for domain shortage & log
+                # Specialized domain with optional Joker blend
+                if blend_joker:
+                    target_quota = count // 2
+                    joker_quota = count - target_quota
+                else:
+                    target_quota = count
+                    joker_quota = 0
+
+                # 1. Pull from target domain
+                target_rows = _query_words("AND domain_coca = ?", [use_domain], target_quota)
+                for r in target_rows:
+                    selected_words.append(r)
+                    used_ids.add(r["id"])
+
+                # 2. Check shortage & pull Joker
                 shortage = target_quota - len(target_rows)
-                if shortage > 0:
-                    logger.info(
-                        f"[Auto-Fill Notice] Domain '{use_domain}' short by {shortage} for POS '{pos}'. "
-                        f"Auto-filling from Joker (Basic / Neutral) pool."
-                    )
-                    print(f"ℹ️ [Auto-Fill] Domain '{use_domain}' was short by {shortage} {pos}(s); filled from Joker pool.")
-                
-                # Part C: Pull Joker words (base quota + shortage)
                 needed_joker = joker_quota + shortage
-                existing_ids = [w["id"] for w in selected_words] + [w["id"] for w in pos_words]
-                id_clause = f"AND id NOT IN ({','.join('?' * len(existing_ids))})" if existing_ids else ""
-                params = [pos] + existing_ids + [needed_joker] if existing_ids else [pos, needed_joker]
-                
-                cursor.execute(f"""
-                    SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
-                    FROM ngsl_words
-                    WHERE usage_count = 0 AND pos_type = ? AND (domain_coca = 'Basic / Neutral' OR domain_coca IS NULL) {id_clause}
-                    ORDER BY RANDOM()
-                    LIMIT ?
-                """, params)
-                joker_rows = [dict(r) for r in cursor.fetchall()]
-                pos_words.extend(joker_rows)
+                if needed_joker > 0:
+                    joker_rows = _query_words("AND (domain_coca = 'Basic / Neutral' OR domain_coca IS NULL)", [], needed_joker)
+                    for r in joker_rows:
+                        selected_words.append(r)
+                        used_ids.add(r["id"])
 
-            # Part D: Graceful universal top-up if still short of total_needed for this POS
-            if len(pos_words) < total_needed:
-                needed_more = total_needed - len(pos_words)
-                existing_ids = [w["id"] for w in selected_words] + [w["id"] for w in pos_words]
-                id_clause = f"AND id NOT IN ({','.join('?' * len(existing_ids))})" if existing_ids else ""
-                params = [pos] + existing_ids + [needed_more] if existing_ids else [pos, needed_more]
-                cursor.execute(f"""
-                    SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
-                    FROM ngsl_words
-                    WHERE usage_count = 0 AND pos_type = ? {id_clause}
-                    ORDER BY RANDOM()
-                    LIMIT ?
-                """, params)
-                for r in cursor.fetchall():
-                    pos_words.append(dict(r))
+                    # If Joker was short, compensate back from target domain
+                    joker_shortage = needed_joker - len(joker_rows)
+                    if joker_shortage > 0:
+                        extra_target = _query_words("AND domain_coca = ?", [use_domain], joker_shortage)
+                        for r in extra_target:
+                            selected_words.append(r)
+                            used_ids.add(r["id"])
 
-            selected_words.extend(pos_words)
+        # Draw Nouns, Verbs, Modifiers
+        _draw_pos("Noun", target_nouns, is_modifier=False)
+        _draw_pos("Verb", target_verbs, is_modifier=False)
+        _draw_pos("Modifier", target_modifiers, is_modifier=True)
 
-        # Final safety check: if total words < 20 across all POS, fill with any unused words
+        # Safety fill up to 20 words strictly within authorized domains
         if len(selected_words) < 20:
-            existing_ids = [w["id"] for w in selected_words]
-            needed = 20 - len(selected_words)
-            id_clause = f"WHERE usage_count = 0 AND id NOT IN ({','.join('?' * len(existing_ids))})" if existing_ids else "WHERE usage_count = 0"
-            params = existing_ids + [needed] if existing_ids else [needed]
-            cursor.execute(f"""
+            still_needed = 20 - len(selected_words)
+            id_clause = f"AND id NOT IN ({','.join('?' * len(used_ids))})" if used_ids else ""
+            id_params = list(used_ids) if used_ids else []
+
+            if use_domain is None:
+                dom_clause = ""
+                dom_params = []
+            elif is_pure_neutral:
+                dom_clause = "AND (domain_coca = 'Basic / Neutral' OR domain_coca IS NULL)"
+                dom_params = []
+            elif blend_joker:
+                dom_clause = "AND (domain_coca = ? OR domain_coca = 'Basic / Neutral' OR domain_coca IS NULL)"
+                dom_params = [use_domain]
+            else:
+                dom_clause = "AND domain_coca = ?"
+                dom_params = [use_domain]
+
+            q_fill = f"""
                 SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
                 FROM ngsl_words
-                {id_clause}
+                WHERE usage_count = 0 {dom_clause} {id_clause}
                 ORDER BY RANDOM()
                 LIMIT ?
-            """, params)
+            """
+            cursor.execute(q_fill, dom_params + id_params + [still_needed])
             for r in cursor.fetchall():
                 selected_words.append(dict(r))
+                used_ids.add(r["id"])
 
     return selected_words
 
@@ -415,135 +555,155 @@ def pull_candidate_pool_for_thematic_curation(
     domain: Optional[str] = None,
     blend_joker: bool = True,
     db_path: Path = DB_PATH
-) -> Dict[str, List[Dict[str, Any]]]:
+) -> Dict[str, Any]:
     """
-    Randomly select candidate pool of unused words (usage_count = 0) for thematic AI curation.
-    When a specialized domain is chosen and blend_joker=True, provides a balanced 50/50 pool of domain candidates
-    plus diverse, randomized Joker candidates to ensure maximum lyrical chemistry and variability.
-    When blend_joker=False, attempts to pull 100% of candidates from the domain.
+    Select candidate pool of unused words (usage_count = 0) for thematic AI curation.
+    - Dynamically calculates target quotas so songs adapt to available inventory without cross-domain leakage.
+    - Incorporates Adverbs (non-exempt Other) alongside/in place of Adjectives when depleted.
+    - Strictly restricts candidate selection to authorized domain(s) (Domain + Joker if blend_joker=True).
+    - Returns candidate pool dict with "Noun", "Verb", "Adjective", "Modifier", and "quotas".
     """
-    candidate_targets = [
-        ("Noun", nouns_limit),
-        ("Verb", verbs_limit),
-        ("Adjective", adjs_limit)
-    ]
-    pool: Dict[str, List[Dict[str, Any]]] = {
-        "Noun": [],
-        "Verb": [],
-        "Adjective": []
-    }
+    quotas = calculate_domain_pos_quotas(domain, blend_joker=blend_joker, db_path=db_path, total_words=20)
     use_domain = domain if (domain and domain != "All Domains" and "الكل" not in domain and "All" not in domain) else None
     is_pure_neutral = (use_domain == "Basic / Neutral")
 
-    min_required_targets = {
-        "Noun": 10,
-        "Verb": 6,
-        "Adjective": 4
+    pool: Dict[str, Any] = {
+        "Noun": [],
+        "Verb": [],
+        "Adjective": [],
+        "Modifier": [],
+        "quotas": quotas
     }
 
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
-        
-        for pos, count in candidate_targets:
-            min_needed = min_required_targets[pos]
 
+        def _pull_candidates_for_pos(pos: str, count: int) -> List[Dict[str, Any]]:
+            if count <= 0:
+                return []
             if use_domain is None:
-                # All domains: randomized pool
-                cursor.execute(
-                    """
+                cursor.execute("""
                     SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
                     FROM ngsl_words
                     WHERE usage_count = 0 AND pos_type = ?
                     ORDER BY RANDOM()
                     LIMIT ?
-                    """,
-                    (pos, count)
-                )
-                for r in cursor.fetchall():
-                    pool[pos].append(dict(r))
-
+                """, (pos, count))
+                return [dict(r) for r in cursor.fetchall()]
             elif is_pure_neutral:
-                # Basic / Neutral exclusively (including NULL fallback)
-                cursor.execute(
-                    """
+                cursor.execute("""
                     SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
                     FROM ngsl_words
                     WHERE usage_count = 0 AND pos_type = ? AND (domain_coca = 'Basic / Neutral' OR domain_coca IS NULL)
                     ORDER BY RANDOM()
                     LIMIT ?
-                    """,
-                    (pos, count)
-                )
-                for r in cursor.fetchall():
-                    pool[pos].append(dict(r))
-
+                """, (pos, count))
+                return [dict(r) for r in cursor.fetchall()]
             else:
-                # Specialized Domain: 50/50 or 100% pure domain
                 if blend_joker:
                     target_share = count // 2
                     joker_share = count - target_share
                 else:
                     target_share = count
                     joker_share = 0
-                
-                # Part 1: Domain candidates
-                cursor.execute(
-                    """
+
+                cursor.execute("""
                     SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
                     FROM ngsl_words
                     WHERE usage_count = 0 AND pos_type = ? AND domain_coca = ?
                     ORDER BY RANDOM()
                     LIMIT ?
-                    """,
-                    (pos, use_domain, target_share)
-                )
+                """, (pos, use_domain, target_share))
                 target_rows = [dict(r) for r in cursor.fetchall()]
-                pool[pos].extend(target_rows)
-                
-                # Only compensate from Joker if target domain candidates fall below needed share
-                if blend_joker:
-                    domain_shortage = max(0, target_share - len(target_rows))
-                    needed_joker = joker_share + domain_shortage
-                else:
-                    # For 100% pure domain, only fallback to Joker if domain has fewer than min_needed
-                    needed_joker = max(0, min_needed - len(target_rows))
-                
+
+                shortage = max(0, target_share - len(target_rows))
+                needed_joker = joker_share + shortage if blend_joker else 0
+
+                joker_rows = []
                 if needed_joker > 0:
-                    existing_ids = [w["id"] for w in pool[pos]]
+                    existing_ids = [w["id"] for w in target_rows]
                     id_clause = f"AND id NOT IN ({','.join('?' * len(existing_ids))})" if existing_ids else ""
                     params = [pos] + existing_ids + [needed_joker] if existing_ids else [pos, needed_joker]
-                    
-                    cursor.execute(
-                        f"""
+                    cursor.execute(f"""
                         SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
                         FROM ngsl_words
                         WHERE usage_count = 0 AND pos_type = ? AND (domain_coca = 'Basic / Neutral' OR domain_coca IS NULL) {id_clause}
                         ORDER BY RANDOM()
                         LIMIT ?
-                        """,
-                        params
-                    )
+                    """, params)
                     joker_rows = [dict(r) for r in cursor.fetchall()]
-                    pool[pos].extend(joker_rows)
 
-            # Emergency universal top-up ONLY if total candidates for this POS fall below min_needed (10 N, 6 V, 4 A)
-            if len(pool[pos]) < min_needed:
-                existing_ids = [w["id"] for w in pool[pos]]
-                needed = min_needed - len(pool[pos])
-                id_clause = f"AND id NOT IN ({','.join('?' * len(existing_ids))})" if existing_ids else ""
-                params = [pos] + existing_ids + [needed] if existing_ids else [pos, needed]
-                cursor.execute(
-                    f"""
+                return target_rows + joker_rows
+
+        # 1. Nouns
+        pool["Noun"] = _pull_candidates_for_pos("Noun", nouns_limit)
+
+        # 2. Verbs
+        pool["Verb"] = _pull_candidates_for_pos("Verb", verbs_limit)
+
+        # 3. Modifiers (Adjectives + non-exempt Adverbs)
+        adj_candidates = _pull_candidates_for_pos("Adjective", adjs_limit)
+        modifier_candidates = list(adj_candidates)
+
+        adv_needed = adjs_limit - len(modifier_candidates)
+        if adv_needed > 0:
+            existing_ids = [w["id"] for w in modifier_candidates]
+            id_clause = f"AND id NOT IN ({','.join('?' * len(existing_ids))})" if existing_ids else ""
+            exempt_placeholders = ",".join("?" * len(CORE_EXEMPT_WORDS))
+
+            if use_domain is None:
+                cursor.execute(f"""
                     SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
                     FROM ngsl_words
-                    WHERE usage_count = 0 AND pos_type = ? {id_clause}
+                    WHERE usage_count = 0 AND pos_type = 'Other' AND LOWER(word) NOT IN ({exempt_placeholders}) {id_clause}
                     ORDER BY RANDOM()
                     LIMIT ?
-                    """,
-                    params
-                )
-                for r in cursor.fetchall():
-                    pool[pos].append(dict(r))
+                """, list(CORE_EXEMPT_WORDS) + existing_ids + [adv_needed] if existing_ids else list(CORE_EXEMPT_WORDS) + [adv_needed])
+                modifier_candidates.extend([dict(r) for r in cursor.fetchall()])
+
+            elif is_pure_neutral:
+                cursor.execute(f"""
+                    SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
+                    FROM ngsl_words
+                    WHERE usage_count = 0 AND pos_type = 'Other' AND LOWER(word) NOT IN ({exempt_placeholders}) 
+                      AND (domain_coca = 'Basic / Neutral' OR domain_coca IS NULL) {id_clause}
+                    ORDER BY RANDOM()
+                    LIMIT ?
+                """, list(CORE_EXEMPT_WORDS) + existing_ids + [adv_needed] if existing_ids else list(CORE_EXEMPT_WORDS) + [adv_needed])
+                modifier_candidates.extend([dict(r) for r in cursor.fetchall()])
+
+            else:
+                target_share = adv_needed // 2 if blend_joker else adv_needed
+                joker_share = adv_needed - target_share if blend_joker else 0
+
+                cursor.execute(f"""
+                    SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
+                    FROM ngsl_words
+                    WHERE usage_count = 0 AND pos_type = 'Other' AND LOWER(word) NOT IN ({exempt_placeholders})
+                      AND domain_coca = ? {id_clause}
+                    ORDER BY RANDOM()
+                    LIMIT ?
+                """, list(CORE_EXEMPT_WORDS) + [use_domain] + existing_ids + [target_share] if existing_ids else list(CORE_EXEMPT_WORDS) + [use_domain, target_share])
+                target_advs = [dict(r) for r in cursor.fetchall()]
+                modifier_candidates.extend(target_advs)
+
+                shortage = max(0, target_share - len(target_advs))
+                needed_joker = joker_share + shortage if blend_joker else 0
+                if needed_joker > 0:
+                    curr_existing = [w["id"] for w in modifier_candidates]
+                    curr_id_clause = f"AND id NOT IN ({','.join('?' * len(curr_existing))})" if curr_existing else ""
+                    cursor.execute(f"""
+                        SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
+                        FROM ngsl_words
+                        WHERE usage_count = 0 AND pos_type = 'Other' AND LOWER(word) NOT IN ({exempt_placeholders})
+                          AND (domain_coca = 'Basic / Neutral' OR domain_coca IS NULL) {curr_id_clause}
+                        ORDER BY RANDOM()
+                        LIMIT ?
+                    """, list(CORE_EXEMPT_WORDS) + curr_existing + [needed_joker] if curr_existing else list(CORE_EXEMPT_WORDS) + [needed_joker])
+                    modifier_candidates.extend([dict(r) for r in cursor.fetchall()])
+
+        pool["Adjective"] = modifier_candidates
+        pool["Modifier"] = modifier_candidates
 
     return pool
 
@@ -552,17 +712,28 @@ def build_curated_batch_from_words(
     selected_nouns: List[str],
     selected_verbs: List[str],
     selected_adjs: List[str],
-    candidate_pool: Dict[str, List[Dict[str, Any]]]
+    candidate_pool: Dict[str, Any],
+    target_counts: Optional[Dict[str, int]] = None
 ) -> List[Dict[str, Any]]:
-    """Map selected word strings back to full SQLite record dicts, ensuring 10 Nouns, 6 Verbs, 4 Adjectives."""
+    """
+    Map selected word strings back to full SQLite record dicts based on target quotas.
+    Guarantees a full 20-word batch strictly drawn from candidate pool candidates.
+    """
+    if target_counts is None:
+        target_counts = candidate_pool.get("quotas", {"Noun": 10, "Verb": 6, "Modifier": 4})
+
+    t_nouns = target_counts.get("Noun", 10)
+    t_verbs = target_counts.get("Verb", 6)
+    t_modifiers = target_counts.get("Modifier", target_counts.get("Adjective", 4))
+
     final_batch: List[Dict[str, Any]] = []
     used_ids: Set[int] = set()
 
-    def process_pos(selected_words: List[str], pos: str, target_count: int):
-        candidates = candidate_pool.get(pos, [])
+    def process_pos(selected_words: List[str], pool_key: str, target_count: int):
+        candidates = candidate_pool.get(pool_key, [])
         word_map = {c["word"].lower().strip(): c for c in candidates}
         added_count = 0
-        
+
         for w in selected_words:
             w_clean = w.lower().strip()
             if w_clean in word_map:
@@ -579,9 +750,17 @@ def build_curated_batch_from_words(
                     used_ids.add(item["id"])
                     added_count += 1
 
-    process_pos(selected_nouns, "Noun", 10)
-    process_pos(selected_verbs, "Verb", 6)
-    process_pos(selected_adjs, "Adjective", 4)
+    process_pos(selected_nouns, "Noun", t_nouns)
+    process_pos(selected_verbs, "Verb", t_verbs)
+    process_pos(selected_adjs, "Modifier" if "Modifier" in candidate_pool else "Adjective", t_modifiers)
+
+    # Safety guarantee: if total words < 20 across all categories, top up from remaining candidates in pool
+    if len(final_batch) < 20:
+        for cat in ["Verb", "Modifier", "Adjective", "Noun"]:
+            for item in candidate_pool.get(cat, []):
+                if item["id"] not in used_ids and len(final_batch) < 20:
+                    final_batch.append(item)
+                    used_ids.add(item["id"])
 
     return final_batch
 
@@ -599,54 +778,64 @@ def _fetch_swap_candidate(
     placeholders = ",".join("?" * len(allocated_ids)) if allocated_ids else "0"
     base_exclude = f"id NOT IN ({placeholders})" if allocated_ids else "1=1"
 
+    # POS query condition: handle Modifier/Other if pos_type in ('Other', 'Adjective')
+    if pos_type in ("Other", "Adjective"):
+        exempt_placeholders = ",".join("?" * len(CORE_EXEMPT_WORDS))
+        pos_condition = f"(pos_type = 'Adjective' OR (pos_type = 'Other' AND LOWER(word) NOT IN ({exempt_placeholders})))"
+        pos_params = list(CORE_EXEMPT_WORDS)
+    else:
+        pos_condition = "pos_type = ?"
+        pos_params = [pos_type]
+
     # 1. Try target domain first if specified
     if use_domain is not None:
         if is_pure_neutral:
             dom_sql = "AND (domain_coca = 'Basic / Neutral' OR domain_coca IS NULL)"
-            params = [pos_type] + list(allocated_ids) if allocated_ids else [pos_type]
+            params = pos_params + (list(allocated_ids) if allocated_ids else [])
         else:
             dom_sql = "AND domain_coca = ?"
-            params = [pos_type] + list(allocated_ids) + [use_domain] if allocated_ids else [pos_type, use_domain]
+            params = pos_params + [use_domain] + (list(allocated_ids) if allocated_ids else [])
 
         query = f"""
             SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
             FROM ngsl_words
-            WHERE usage_count = 0 AND pos_type = ? AND {base_exclude} {dom_sql}
+            WHERE usage_count = 0 AND {pos_condition} {dom_sql} AND {base_exclude}
             ORDER BY RANDOM()
             LIMIT 1
         """
         cursor.execute(query, params)
         row = cursor.fetchone()
         if row:
-            return {
-                "id": row["id"],
-                "word": row["word"],
-                "lemma_family": row["lemma_family"],
-                "pos_type": row["pos_type"],
-                "usage_count": row["usage_count"],
-                "domain": row["domain"]
-            }
+            return dict(row)
 
-    # 2. Fallback to any domain (if no domain specified or target domain pool exhausted for this POS)
+        # 2. Try Joker (Basic / Neutral) before falling back to any domain
+        if not is_pure_neutral:
+            joker_sql = "AND (domain_coca = 'Basic / Neutral' OR domain_coca IS NULL)"
+            joker_params = pos_params + (list(allocated_ids) if allocated_ids else [])
+            cursor.execute(f"""
+                SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
+                FROM ngsl_words
+                WHERE usage_count = 0 AND {pos_condition} {joker_sql} AND {base_exclude}
+                ORDER BY RANDOM()
+                LIMIT 1
+            """, joker_params)
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+
+    # 3. Fallback to any domain only if no domain specified or completely exhausted
     fallback_query = f"""
         SELECT id, word, lemma_family, pos_type, usage_count, COALESCE(domain_coca, 'Basic / Neutral') as domain
         FROM ngsl_words
-        WHERE usage_count = 0 AND pos_type = ? AND {base_exclude}
+        WHERE usage_count = 0 AND {pos_condition} AND {base_exclude}
         ORDER BY RANDOM()
         LIMIT 1
     """
-    params = [pos_type] + list(allocated_ids) if allocated_ids else [pos_type]
+    params = pos_params + list(allocated_ids) if allocated_ids else pos_params
     cursor.execute(fallback_query, params)
     row = cursor.fetchone()
     if row:
-        return {
-            "id": row["id"],
-            "word": row["word"],
-            "lemma_family": row["lemma_family"],
-            "pos_type": row["pos_type"],
-            "usage_count": row["usage_count"],
-            "domain": row["domain"]
-        }
+        return dict(row)
 
     return None
 

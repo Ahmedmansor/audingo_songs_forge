@@ -41,7 +41,9 @@ class RefinementVisibilityTests(unittest.TestCase):
         app = self.setup_state(draft="").run()
         self.assertFalse(app.exception)
         self.assertEqual(len(app.metric), 0)
-        self.assertFalse(any("Copy manual refine" in item.label for item in app.get("popover")))
+        popovers = app.get("popover")
+        labels = [getattr(p, "label", getattr(getattr(p, "proto", None), "popover", None) and p.proto.popover.label or "") for p in popovers]
+        self.assertFalse(any("Copy manual refine" in lbl for lbl in labels))
 
     def test_edit_and_clear_hide_results_and_survive_new_session(self):
         app = self.setup_state().run()
