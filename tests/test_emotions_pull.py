@@ -157,13 +157,15 @@ class TestEmotionsPull(unittest.TestCase):
         self.assertEqual(len(batch), 20, "Must pull exactly 20 words")
         for w in batch:
             self.assertEqual(w["domain"], "Emotions & Relationships", f"Non-emotions word: {w['word']} from {w['domain']}")
+        self.assertEqual(sum(w['pos_type'] == 'Other' for w in batch), 4)
+        self.assertEqual(sum(w['pos_type'] == 'Verb' for w in batch), 16)
 
     def test_depleted_joker_stays_in_domain_and_rebalances(self):
         with closing(sqlite3.connect(self.test_db)) as conn, conn:
             conn.execute("UPDATE ngsl_words SET usage_count=1 WHERE domain_coca='Basic / Neutral'")
         batch = pull_20_words('Emotions & Relationships', db_path=self.test_db)
         self.assertEqual(len(batch), 20)
-        self.assertEqual(sum(w['pos_type'] == 'Other' for w in batch), 2)
+        self.assertEqual(sum(w['pos_type'] == 'Other' for w in batch), 4)
         self.assertEqual({w['domain'] for w in batch}, {'Emotions & Relationships'})
 
     def test_small_candidate_limits_still_supply_required_sources(self):
@@ -177,6 +179,32 @@ class TestEmotionsPull(unittest.TestCase):
                 self.assertEqual(sum(w['domain'] == source and
                     ('Modifier' if w['pos_type'] in ('Adjective', 'Other') else w['pos_type']) == key
                     for w in batch), count)
+
+    def test_smart_pull_without_joker_keeps_four_modifiers(self):
+        pool = pull_candidate_pool_for_thematic_curation(domain='Emotions & Relationships',
+            blend_joker=False, db_path=self.test_db)
+        self.assertEqual(pool['quotas']['Modifier'], 4)
+        batch = build_curated_batch_from_words([], [], [], pool)
+        self.assertEqual(len(batch), 20)
+        self.assertEqual(len({w['id'] for w in batch}), 20)
+        self.assertEqual(sum(w['pos_type'] == 'Other' for w in batch), 4)
+        self.assertEqual({w['domain'] for w in batch}, {'Emotions & Relationships'})
+
+    def test_actual_modifier_shortage_does_not_import_joker_words(self):
+        with closing(sqlite3.connect(self.test_db)) as conn, conn:
+            conn.execute("UPDATE ngsl_words SET usage_count=1 WHERE domain_coca='Emotions & Relationships' "
+                         "AND pos_type='Other' AND id NOT IN "
+                         "(SELECT id FROM ngsl_words WHERE domain_coca='Emotions & Relationships' AND pos_type='Other' LIMIT 2)")
+        for smart in (False, True):
+            if smart:
+                pool = pull_candidate_pool_for_thematic_curation(domain='Emotions & Relationships',
+                    blend_joker=False, db_path=self.test_db)
+                batch = build_curated_batch_from_words([], [], [], pool)
+            else:
+                batch = pull_20_words('Emotions & Relationships', blend_joker=False, db_path=self.test_db)
+            self.assertEqual(len(batch), 20)
+            self.assertEqual(sum(w['pos_type'] == 'Other' for w in batch), 2)
+            self.assertEqual({w['domain'] for w in batch}, {'Emotions & Relationships'})
 
 
 if __name__ == "__main__":

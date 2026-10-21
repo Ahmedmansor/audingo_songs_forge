@@ -338,6 +338,10 @@ def calculate_domain_pos_quotas(
     else:
         desired_modifiers = min(5, remaining_slots)
 
+    # Switching Joker off changes allowed sources, not the minimum modifier quota.
+    # Keep four modifier slots when inventory and batch size permit; only an actual
+    # shortage may reduce this floor. Larger inventory-derived shares still apply.
+    desired_modifiers = max(desired_modifiers, min(4, remaining_slots))
     target_modifiers = min(desired_modifiers, avail_modifiers)
 
     # Remaining slots allocated to Verbs

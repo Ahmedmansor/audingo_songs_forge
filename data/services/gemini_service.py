@@ -206,7 +206,7 @@ def analyze_vocabulary_mood(
 ) -> Dict[str, Any]:
     """
     Send the 20 words to Gemini to get mood breakdown, genre, structure, and domain-anchored story concept.
-    Uses CRITIC_FALLBACK_CHAIN to prioritize top-tier models (3.7-flash, 3.8-flash) for deep, high-IQ narrative concepts.
+    Uses the strict quality chain: 3.8 Flash, then 3.7 Flash, then 3.6 Flash.
     If existing_concept is provided, Gemini analyzes musical direction anchored directly in that established story.
     """
     from data.services.fallback_engine import generate_with_fallback, CRITIC_FALLBACK_CHAIN
@@ -840,7 +840,7 @@ def audit_words_against_story(words: List[str], story_concept: str, domain: str 
     Audit 20 target vocabulary words against a story/creative concept.
     Flags words that feel forced, overly technical, or out of context for natural everyday dialogue,
     while exempting basic/neutral words and respecting domain-appropriate vocabulary.
-    Uses ROUTINE_STUDIO_CHAIN to preserve top models for the final lyric critic.
+    Uses the same strict 3.8 -> 3.7 -> 3.6 quality chain as thematic selection and criticism.
     """
     from data.services.fallback_engine import generate_with_fallback, CRITIC_FALLBACK_CHAIN
 

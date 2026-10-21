@@ -32,7 +32,10 @@ For a 20-word batch, round `20 * 64 / 313` to 4 modifiers, with 16 verb-bucket w
 | Emotions | 9 | 1 | 10 |
 | Basic / Neutral | 7 | 3 | 10 |
 
-This is an inventory-derived starting point, not a permanent quota. Recompute after approvals.
+This is an inventory-derived starting point, not a permanent quota. Keep a floor of 4 modifiers per
+20-word batch when eligible inventory and remaining slots permit, even with Joker disabled. For the current
+Emotions-only inventory this means 16 verb-bucket words + 4 modifiers, all from Emotions. A genuine shortage
+can lower the count; never import Basic or another domain when blending is disabled. Recompute after approvals.
 If nouns return to the eligible inventory, allocate available nouns first, then balance remaining slots.
 If one source runs short, compensate only from the other authorized source.
 Smart curation receives source/POS constraints; the final batch enforces them and contains unique words.

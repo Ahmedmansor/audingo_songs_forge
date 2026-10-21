@@ -266,7 +266,7 @@ def render_tab_studio():
 
         col_batch_info, col_batch_actions = st.columns([1.25, 1.15], vertical_alignment="center")
         with col_batch_info:
-            other_pill = f'<span style="background: var(--studio-neutral-bg); color: var(--studio-neutral-ink); font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid var(--studio-line);">⚪ {others_count} Other</span>' if others_count else ''
+            other_pill = f'<span title="تشمل هذه المجموعة ظروفًا وحروف جر وربط وكلمات وظيفية أخرى؛ ليست كلها ظروفًا." style="background: var(--studio-neutral-bg); color: var(--studio-neutral-ink); font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid var(--studio-line);">⚪ {others_count} ظروف / أدوات</span>' if others_count else ''
             st.markdown(
                 f"""
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 2px;">
@@ -429,6 +429,7 @@ def render_tab_studio():
             col_target = cols[idx % 4]
             with col_target:
                 pos = word_item["pos_type"]
+                pos_label = "ظرف / أداة" if pos == "Other" else pos
                 badge_class = "badge-noun" if pos == "Noun" else ("badge-verb" if pos == "Verb" else "badge-adj")
                 word_text = word_item["word"]
 
@@ -484,7 +485,7 @@ def render_tab_studio():
                                 <span style="color: var(--studio-ink) !important; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
                                     <strong style="color: var(--studio-ink) !important; font-size: {font_size}; letter-spacing: -0.01em;">{idx+1}. {word_text}</strong>
                                 </span>
-                                <span class="{badge_class}" style="margin: 0; flex-shrink: 0; font-size: 0.75rem; padding: 2px 7px;">{pos}</span>
+                                <span class="{badge_class}" style="margin: 0; flex-shrink: 0; font-size: 0.75rem; padding: 2px 7px;">{pos_label}</span>
                             </div>
                             {reason_html}
                         </div>

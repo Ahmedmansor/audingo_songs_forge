@@ -67,6 +67,23 @@ class WorkflowSyncTests(unittest.TestCase):
         self.assertEqual(len(app.session_state["target_batch"]), 20)
         return app
 
+    def test_function_words_label_preserves_the_stored_pos_and_batch(self):
+        with get_connection(self.path) as conn:
+            conn.execute("INSERT INTO ngsl_words (word,lemma_family,pos_type,domain_coca) "
+                         "VALUES ('firmly','firmly','Other','Basic / Neutral')")
+        word = db.get_all_ngsl_words().query("word == 'firmly'").iloc[0].to_dict()
+        app = AppTest.from_string(SCRIPT, default_timeout=20)
+        app.session_state['target_batch'] = [word]
+        app.run()
+        self.assertFalse(app.exception)
+        html = '\n'.join(item.value for item in app.markdown)
+        self.assertIn('1 ظروف / أدوات', html)
+        self.assertIn('ظرف / أداة', html)
+        self.assertIn('var(--studio-neutral-bg)', html)
+        self.assertIn('var(--studio-neutral-ink)', html)
+        self.assertEqual(app.session_state['target_batch'][0]['pos_type'], 'Other')
+        self.assertEqual(app.session_state['target_batch'][0]['word'], 'firmly')
+
     def test_selection_music_critic_swap_clear_and_refresh(self):
         app = self.selected_app()
         genre = next(item for item in app.selectbox if item.label == "Genre (Closed List)")
