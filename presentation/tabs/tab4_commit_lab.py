@@ -3,7 +3,6 @@ tab3_commit_lab.py — Tab 3: Commit Lab (Review, Lyrics Text Pipeline & Word Ap
 """
 
 import streamlit as st
-import streamlit.components.v1 as components
 import db
 import pipeline
 import prompt_builder
@@ -105,7 +104,7 @@ def render_tab_commit_lab():
             """,
             unsafe_allow_html=True
         )
-        components.html(
+        st.iframe(
             """
             <script>
             setTimeout(() => {
@@ -123,8 +122,8 @@ def render_tab_commit_lab():
             }, 100);
             </script>
             """,
-            height=0,
-            width=0
+            height=1,
+            width="stretch"
         )
     
     st.session_state.raw_lyrics_input = st.text_area(

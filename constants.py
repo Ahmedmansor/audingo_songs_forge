@@ -3,7 +3,6 @@ constants.py — Fixed lists and configurations for Audingo Songs Forge.
 """
 
 import logging
-import random
 logger = logging.getLogger(__name__)
 
 # Fixed list of music genres — curated for educational songwriting where
@@ -897,57 +896,8 @@ def get_category_profile(domain: str) -> dict:
 
 
 def sample_domain_creative_sparks(domain: str) -> dict:
-    """
-    Samples a balanced, cohesive set of creative sparks tailored strictly to the specified domain:
-    - 2-3 settings
-    - 1-2 conflicts
-    - 1 time of day
-    - 1 character setup (weighted)
-    - 1 narrative arc & ending flavor (weighted)
-    - 2-3 authentic sensory props
-    """
-    profile = get_category_profile(domain)
-    settings = profile.get("story_settings_examples", [])
-    conflicts = profile.get("story_conflict_archetypes", [])
-    props = profile.get("props", [])
-    times = profile.get("times", [])
-    char_setups = profile.get("character_setups", [])
-    arcs = profile.get("arcs", [])
-
-    sampled_settings = random.sample(settings, min(3, len(settings))) if settings else []
-    sampled_conflicts = random.sample(conflicts, min(2, len(conflicts))) if conflicts else []
-    sampled_props = random.sample(props, min(3, len(props))) if props else []
-    sampled_time = random.choice(times) if times else "An authentic time of day matching the scene"
-
-    if char_setups:
-        weights = [c.get("weight", 1) for c in char_setups]
-        sampled_char = random.choices(char_setups, weights=weights, k=1)[0]
-    else:
-        sampled_char = {
-            "type": "duo_dialogue",
-            "label": "Two people in direct conversation",
-            "instruction": "Two clearly identified characters talk face to face."
-        }
-
-    if arcs:
-        weights = [a.get("weight", 1) for a in arcs]
-        sampled_arc = random.choices(arcs, weights=weights, k=1)[0]
-    else:
-        sampled_arc = {
-            "name": "Classic Resolution",
-            "arc": "Problem -> turning point -> quiet determination",
-            "ending_flavor": "Characters find a way forward together."
-        }
-
-    return {
-        "domain": domain,
-        "sampled_settings": sampled_settings,
-        "sampled_conflicts": sampled_conflicts,
-        "time": sampled_time,
-        "character_setup": sampled_char,
-        "arc": sampled_arc,
-        "props": sampled_props,
-    }
+    """Compatibility metadata: story details now emerge from the words, never a preset menu."""
+    return {"domain": domain, "mode": "open"}
 
 
 # Startup verification to guarantee all UI domains map to a profile

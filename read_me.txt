@@ -1,9 +1,16 @@
+=== تشغيل البرنامج مباشرة (بنقرة واحدة) ===
+- اضغط مرتين على أيقونة: Audingo Songs Forge على سطح المكتب (Desktop).
+أو اضغط مرتين على ملف launch_app.bat داخل المجلد.
+
+
+=== التشغيل اليدوي من الـ Terminal ===
 .\venv\Scripts\activate  
 open the venv
 
 
 streamlit run app.py 
 run the app
+
 
 
 .\venv\Scripts\python.exe inspect_db.py

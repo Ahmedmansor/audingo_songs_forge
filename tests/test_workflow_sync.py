@@ -121,6 +121,53 @@ class WorkflowSyncTests(unittest.TestCase):
         self.assertEqual(restored.session_state["target_batch"], [])
         self.assertFalse(db.load_refinement_state().get("critic_only_report"))
 
+    def test_analysis_failure_preserves_story_batch_music_and_editable_ui(self):
+        app = self.selected_app()
+        story = "Neighbors disagree over a blocked entrance."
+        app.session_state['custom_concept'] = story
+        app.session_state['selected_genre'] = 'Jazz / Bossa Nova'
+        app.run()
+        before = app.session_state['target_batch']
+        with patch('gemini_client.analyze_vocabulary_mood', return_value={
+            'success': False, 'error': '503 UNAVAILABLE', 'creative_concept': 'Wrong fallback',
+            'genre': 'Pop', 'mood_breakdown': {}}):
+            self.button(app, 'Run Gemini Analysis').click().run()
+        self.assertFalse(app.exception)
+        self.assertTrue(app.error)
+        self.assertEqual(app.session_state['custom_concept'], story)
+        self.assertEqual(app.session_state['selected_genre'], 'Jazz / Bossa Nova')
+        self.assertEqual(app.session_state['target_batch'], before)
+        self.assertTrue(any('Story / Creative Concept' in item.label for item in app.text_area))
+        self.assertFalse(any('Analyzed using' in item.value for item in app.success))
+
+    def test_smart_pull_failure_never_builds_or_replaces_batch(self):
+        app = self.selected_app()
+        before = app.session_state['target_batch']
+        script = SCRIPT + "\nfrom presentation.components.dialogs import execute_studio_action\nexecute_studio_action('smart_pull')\n"
+        failed = AppTest.from_string(script, default_timeout=20)
+        failed.session_state['target_batch'] = before
+        failed.session_state['custom_concept'] = 'My existing story.'
+        with patch('gemini_client.curate_thematic_vocabulary_batch', return_value={
+            'success': False, 'error': '503 UNAVAILABLE'}), patch('db.build_curated_batch_from_words') as build:
+            failed.run()
+        self.assertFalse(failed.exception)
+        self.assertTrue(failed.error)
+        build.assert_not_called()
+        self.assertEqual(failed.session_state['target_batch'], before)
+        self.assertEqual(failed.session_state['custom_concept'], 'My existing story.')
+
+    def test_legacy_sparks_are_not_shown_and_story_stays_editable(self):
+        app = self.selected_app()
+        app.session_state['curated_creative_sparks'] = {
+            'time': '6:00 AM corner bakery opening', 'arc': {'name': 'The Honest Return'}}
+        app.session_state['custom_concept'] = 'A story I edited myself.'
+        app.run()
+        self.assertFalse(app.exception)
+        captions = ' '.join(item.value for item in app.caption)
+        self.assertNotIn('The Honest Return', captions)
+        self.assertNotIn('6:00 AM', captions)
+        self.assertEqual(app.session_state['custom_concept'], 'A story I edited myself.')
+
     def test_edited_commit_lyrics_requires_new_analysis(self):
         app = self.selected_app()
         app.text_area(key="commit_lyrics").set_value("Can you give me a hand?").run()

@@ -13,7 +13,6 @@ import base64
 from html import escape
 from typing import Dict, Any, List, Optional
 import streamlit as st
-import streamlit.components.v1 as components
 from constants import DOMAINS, DOMAIN_CONFIG
 from presentation.components.identity import icon_svg
 from presentation.theme import palette
@@ -172,7 +171,7 @@ def render_audio_notification(sound_id: str = "critic_complete"):
     </body>
     </html>
     """
-    components.html(html_code, height=0)
+    st.iframe(html_code, height=1)
 
 
 def render_copy_words_toolbar(words: List[str]):
@@ -389,7 +388,7 @@ def render_copy_words_toolbar(words: List[str]):
     </body>
     </html>
     """
-    components.html(html_code, height=44, scrolling=False)
+    st.iframe(html_code, height=44)
 
 
 def render_simple_copy_button(
@@ -531,7 +530,7 @@ def render_simple_copy_button(
     </body>
     </html>
     """
-    components.html(html_code, height=36, scrolling=False)
+    st.iframe(html_code, height=36)
 
 
 def render_library_lyrics_copy_toolbar(
@@ -758,7 +757,7 @@ def render_library_lyrics_copy_toolbar(
     </body>
     </html>
     """
-    components.html(html_code, height=44, scrolling=False)
+    st.iframe(html_code, height=44)
 
 
 def render_floating_audit_prompt_fab(target_words: Optional[List[str]] = None):
@@ -900,7 +899,7 @@ def render_floating_audit_prompt_fab(target_words: Optional[List[str]] = None):
     </body>
     </html>
     """
-    components.html(html_code, height=0, scrolling=False)
+    st.iframe(html_code, height=1)
 
 
 def render_floating_library_song_fab(
@@ -1107,7 +1106,7 @@ def render_floating_library_song_fab(
     </body>
     </html>
     """
-    components.html(html_code, height=0, scrolling=False)
+    st.iframe(html_code, height=1)
 
 
 def render_domain_breakdown_section(

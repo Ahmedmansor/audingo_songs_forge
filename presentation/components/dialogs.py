@@ -162,6 +162,11 @@ def execute_studio_action(action: str):
                 },
             )
 
+            if not curation_res.get("success"):
+                st.error("تعذّر الانتقاء الذكي بعد محاولات Gemini. الدفعة والقصة الحالية محفوظتان؛ حاول مرة أخرى.")
+                st.caption(curation_res.get("error", "Gemini did not return a valid story."))
+                return
+
             curated_batch = db.build_curated_batch_from_words(
                 selected_nouns=curation_res.get("selected_nouns", []),
                 selected_verbs=curation_res.get("selected_verbs", []),

@@ -47,6 +47,42 @@ class DynamicStoryTests(unittest.TestCase):
                 self.assertNotIn('Suggested Time of Day:', prompt)
                 self.assertNotIn('Narrative Arc & Resolution Tone:', prompt)
 
+    def test_legacy_sparks_and_profile_plots_never_constrain_new_stories(self):
+        legacy = {"sampled_settings": ["LEGACY_SETTING"], "sampled_conflicts": ["LEGACY_CONFLICT"],
+                  "time": "6:00 AM corner bakery opening", "props": ["LEGACY_PROP"],
+                  "arc": {"name": "The Honest Return"}}
+        response = json.dumps({"creative_concept": "Neighbors disagree over a blocked entrance."})
+        for domain in DOMAINS + ['All Domains']:
+            with self.subTest(domain=domain), patch(
+                'data.services.gemini_service.get_recent_story_concepts', return_value=[]
+            ), patch('data.services.fallback_engine.generate_with_fallback', return_value=(response, 0)) as generate:
+                prompt = build_analysis_prompt(['door'], domain, sparks=legacy)
+                result = curate_thematic_vocabulary_batch(['door'], [], [], domain_focus=domain, sparks=legacy)
+                self.assertTrue(result['success'])
+                self.assertEqual(result['creative_sparks'], {'domain': domain, 'mode': 'open'})
+                for built in (prompt, generate.call_args.kwargs['prompt']):
+                    for old in ('LEGACY_', 'The Honest Return', '6:00 AM corner bakery',
+                                'DOMAIN DIRECTIVE & REGISTER GUIDANCE', 'SAMPLE CONFLICT ARCHETYPES',
+                                'DO NOT drift into generic street arguments', 'clinical trials'):
+                        self.assertNotIn(old, built)
+
+    def test_failure_and_empty_response_do_not_fabricate_a_story_or_batch(self):
+        for raw in (None, '{}', '{"creative_concept": "   "}'):
+            with self.subTest(raw=raw), patch(
+                'data.services.gemini_service.get_recent_story_concepts', return_value=[]
+            ), patch('data.services.fallback_engine.generate_with_fallback',
+                     side_effect=RuntimeError('503 UNAVAILABLE') if raw is None else None,
+                     return_value=(raw, 0)):
+                result = analyze_vocabulary_mood(['door'], 'Street & Daily Life')
+                self.assertFalse(result['success'])
+                self.assertEqual(result['creative_concept'], '')
+                result = curate_thematic_vocabulary_batch(['door'], ['wait'], ['normally'],
+                                                          domain_focus='Street & Daily Life')
+                self.assertFalse(result['success'])
+                self.assertEqual(result['creative_concept'], '')
+                self.assertEqual(result['selected_nouns'], [])
+                self.assertEqual(result['selected_verbs'], [])
+
     def test_existing_story_and_lyric_ending_are_preserved(self):
         concept = 'A daughter refuses to return home. Her father does not accept her choice.'
         with patch('data.services.gemini_service.get_recent_story_concepts', return_value=[concept]):

@@ -80,22 +80,6 @@ def build_analysis_prompt(
     structures_str = "\n".join(f"- {s}" for s in SONG_STRUCTURES)
     moods_str = "\n".join(f"- {m}" for m in MOOD_CATEGORIES)
 
-    profile = get_category_profile(domain)
-    if sparks is None:
-        sparks = sample_domain_creative_sparks(domain)
-
-    settings_bullets = (
-        "\n".join(f"  * {s}" for s in sparks.get("sampled_settings", []))
-        if sparks.get("sampled_settings")
-        else f"  * {profile.get('setting', 'Authentic real-world situations')}"
-    )
-    conflicts_bullets = (
-        "\n".join(f"  * {c}" for c in sparks.get("sampled_conflicts", []))
-        if sparks.get("sampled_conflicts")
-        else "  * A realistic human challenge or decision"
-    )
-    directive = profile.get("domain_directive", "")
-
     if existing_concept and existing_concept.strip():
         concept_block = f"""EXISTING APPROVED STORY SCENARIO:
 "{existing_concept.strip()}"
@@ -124,7 +108,7 @@ In "creative_concept", construct a rich, highly specific 3-4 sentence narrative 
 - STRICT PROHIBITIONS:
   * NO CLOCK-WATCHING OPENINGS: Never begin the story concept or song lyrics with digital clock readings or alarm announcements (e.g. "It's 5:45 AM", "At 8:30 in the morning"). Start directly in media res with concrete human action, direct spoken words, or sensory atmosphere.
   * NO VOCABULARY CRAMMING (ABSOLUTE ZERO WORD-SALAD): Do NOT attempt to cram, shoehorn, or force the 20 target words into this 3-4 sentence concept text! Doing so creates an absurd, robotic, unreadable "incantation" or vocabulary exam paragraph. The concept summary is merely the theatrical logline / stage setting (characters, situation, emotional stakes). The 20 words will be distributed naturally throughout the full song lyrics later by the lyricist, NOT jammed here. Write the concept in pure, effortless, organic human English.
-  * NO verbatim copying: Do NOT copy-paste the suggested props, times, or example sentences word-for-word. They are sparks of inspiration to show the vibe — invent a fresh, original scenario whose physical details emerge naturally from your 20 target words.
+  * Invent a fresh scenario whose physical details emerge naturally from the target words and human event, without a preset menu of props, times or arcs.
   * NO vague one-liners like "Someone faces challenges in life and finds hope".
   * NO corporate textbook clichés or abstract surreal fantasies.
   * Make the scenario so vivid and specific that any songwriter instantly sees the entire scene unfold like a movie scene."""
@@ -151,8 +135,8 @@ CRITICAL PRINCIPLE 1: TARGET WORDS LEAD THE STORY (WORDS FIRST, SCENARIO SECOND)
 - The story scenario MUST naturally provide a real-life situation where characters would speak these words during authentic conversation.
 - ABSOLUTELY DO NOT CRAM OR FORCE TARGET WORDS INTO THE CONCEPT SUMMARY: You are defining the movie pitch / stage setting (characters, situation, emotional stakes), NOT writing an ESL test paragraph. Writing a paragraph that packs 10-15 target words together results in an unnatural, robotic "incantation". Keep the concept summary clean, human, and cinematic. The words will be placed naturally into the full lyrics later.
 - NEVER bend, distort, or force target words into an unnatural or mismatched setting.
-- The thematic domain '{domain}' and the sampled creative sparks below are catalysts to inspire a concrete, vivid scene — choose a storyline where these 20 words fit like a glove.
-- THINK OUTSIDE THE BOX & PIVOT FREELY: If the 20 words suggest an unexpected, original real-life scenario within '{domain}' that differs from the suggested sparks, FOLLOW THE WORDS! Never trap yourself in the suggestions. Think outside the box and invent fresh events, settings, and conflicts that give these specific words their most natural, powerful home.
+- Let the words and human stakes determine the situation within '{domain}'; no preset story details.
+- THINK OUTSIDE THE BOX & PIVOT FREELY: If the 20 words suggest an unexpected, original real-life scenario within '{domain}' FOLLOW THE WORDS! Think outside the box and invent fresh events, settings, and conflicts that give these specific words their most natural, powerful home.
 
 EMOTIONAL AND CONTEXTUAL FIT:
 - Choose the actual emotional tone of this situation, including positive, negative or mixed feelings.
@@ -171,15 +155,6 @@ CRITICAL DIRECTIVE 3: DIVERSE GENRE MATCHING (BREAK THE ACOUSTIC / INDIE-POP MON
 ACTIVE CATEGORY DOMAIN: "{domain}"
 
 Follow the FINAL STORY AUTHORITY below.
-
-SAMPLE SETTINGS (INSPIRATION SPRINGBOARDS):
-{settings_bullets}
-
-SAMPLE CONFLICT ARCHETYPES:
-{conflicts_bullets}
-
-DOMAIN-SPECIFIC VOCABULARY & DIALOGUE DIRECTIVE (optional inspiration; DYNAMIC STORY DESIGN takes precedence over legacy plot/ending suggestions):
-{directive}
 
 {concept_block}
 
@@ -211,8 +186,8 @@ def analyze_vocabulary_mood(
     """
     from data.services.fallback_engine import generate_with_fallback, CRITIC_FALLBACK_CHAIN
 
-    if sparks is None:
-        sparks = sample_domain_creative_sparks(domain)
+    # Ignore legacy saved sparks: preserve the user story, not randomly sampled constraints.
+    sparks = sample_domain_creative_sparks(domain)
 
     prompt = build_analysis_prompt(words, domain=domain, sparks=sparks, existing_concept=existing_concept)
 
@@ -226,6 +201,9 @@ def analyze_vocabulary_mood(
         )
 
         data = json.loads(raw)
+        concept = data.get("creative_concept") or data.get("theme_description") or existing_concept
+        if not isinstance(concept, str) or not concept.strip():
+            raise ValueError("Gemini returned no valid story concept.")
         model_name = CRITIC_FALLBACK_CHAIN[model_idx]
 
         genre = data.get("genre", GENRES[0])
@@ -244,7 +222,7 @@ def analyze_vocabulary_mood(
             "mood_breakdown": mood_breakdown,
             "genre": genre,
             "song_structure": structure,
-            "creative_concept": data.get("creative_concept", "") or (existing_concept or ""),
+            "creative_concept": concept.strip(),
             "creative_sparks": sparks,
         }
     except Exception as exc:
@@ -256,10 +234,7 @@ def analyze_vocabulary_mood(
             "mood_breakdown": {},
             "genre": GENRES[0],
             "song_structure": SONG_STRUCTURES[0],
-            "creative_concept": (
-                existing_concept.strip() if (existing_concept and existing_concept.strip()) else
-                get_category_profile(domain).get("default_story", f"A deeply human story exploring honest vulnerability and authentic connection in {domain}.")
-            ),
+            "creative_concept": (existing_concept or "").strip(),
             "creative_sparks": sparks,
         }
 
@@ -509,101 +484,20 @@ def curate_thematic_vocabulary_batch(
     domain_quotas: Optional[Dict[str, Any]] = None,
     candidate_domains: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
-    from google.genai import types
-
     nouns_str = ", ".join(candidate_nouns) if candidate_nouns else "None available (0 Nouns target for this song)"
     verbs_str = ", ".join(candidate_verbs) if candidate_verbs else "None"
     adjs_str = ", ".join(candidate_adjs) if candidate_adjs else "None"
 
-    is_specialized = bool(
-        domain_focus
-        and domain_focus != "All Domains"
-        and "الكل" not in domain_focus
-        and "All" not in domain_focus
-    )
-
-    effective_domain = domain_focus if is_specialized else "Basic / Neutral"
-    if sparks is None:
-        sparks = sample_domain_creative_sparks(effective_domain)
-
-    domain_instruction = ""
-    scenario_instruction = ""
-    practicality_guidance = ""
-
-    if is_specialized:
-        profile = get_category_profile(domain_focus)
-        settings_examples = sparks.get("sampled_settings", [])
-        settings_bullets = (
-            "\n".join(f"  * {s}" for s in settings_examples)
-            if settings_examples
-            else f"  * {profile.get('setting', 'Real-world situations in this domain')}"
-        )
-        conflicts = sparks.get("sampled_conflicts", [])
-        conflicts_bullets = (
-            "\n".join(f"  * {c}" for c in conflicts)
-            if conflicts
-            else "  * A realistic human challenge or decision in this field"
-        )
-        directive = profile.get("domain_directive", "")
-
-        if domain_focus == "Basic / Neutral":
-            drift_rule = "- Ground the scenario in authentic everyday life, conversations, and human experiences (embracing both daily warmth and poignant moments of grief, sadness, or quiet goodbyes). Avoid abstract fantasies or overly academic lectures. CREATIVE EXPANSION: Draw from the full landscape of varied human environments across different times of day."
-            scenario_instruction = f"""1. SCENARIO FIRST (Anchor the Scene in Everyday Life — INVENT, DO NOT COPY):
-   - First, scan the candidate words to discover a concrete, relatable everyday human scenario that connects the highest quality candidates together.
-   - FULL EMOTIONAL PALETTE (EMBRACE SADNESS & POIGNANCY): Embrace sad, poignant, melancholic, or heartbreaking everyday moments (e.g. parting ways, hospital clinics, coping with grief, quiet loneliness) just as naturally as daily routines. Sadness is an authentic pillar of everyday human experience.
-   - CREATIVE EXPANSION: Explore diverse settings across morning, afternoon, evening, and night — busy morning markets, school pickup lines, sunlit garages, dinner tables, clinics, and highway drives.
-   - Use the representative settings, conflict archetypes, and creative sparks below as creative inspiration, but NEVER copy them mechanically! Invent a fresh, believable situation tailored specifically to the words in front of you.
-   - Anchor the scene with specific human characters facing a real situation together in natural spoken English."""
-            practicality_guidance = f"""- Select words that are foundational, high-utility, and natural in real-life spoken American English.
-   - Because these words represent everyday communication, look for natural conversational synergy between them across spoken dialogue, questions, and reactions in both upbeat and poignant emotional contexts.
-   - REJECT only words that are archaic, dictionary-definition-only, or impossible to use naturally in conversation without forcing unnatural phrasing or broken rhymes ("من غير ما نحشر كلمة بالعافية")."""
-        elif domain_focus == "Emotions & Relationships":
-            drift_rule = "- Focus strictly on deeply felt, authentic human connections, emotional crossroads, relationships, family bonds, or poignant solo reflections. Avoid generic office jargon, academic lectures, or trivial domestic chores."
-            scenario_instruction = f"""1. SCENARIO FIRST (Anchor the Scene in Real Human Connection — INVENT, DO NOT COPY):
-   - First, scan the candidate words to discover a concrete, relatable human scenario within '{domain_focus}' that connects the highest quality candidates together.
-   - FULL EMOTIONAL PALETTE (EMBRACE SADNESS, BITTERSWEET TRUTH & SURPRISE): Do not force a neat, happy, tidy resolution on every song! Authentic human relationships experience real grief, painful goodbyes, unfixable distance, and unexpected emotional revelations. Let sadness, longing, and bittersweet truth breathe with dignity and emotional power.
-   - STRICT NO-CLOCK OPENING RULE: The scenario and song lyrics must NEVER begin with clock-watching or digital alarm announcements (e.g. 'It is 5:45 AM', '8:30 on the clock'). Begin directly in media res with direct spoken words, physical interaction, sensory atmosphere, or immediate emotional crossroads.
-   - DIVERSE RELATIONSHIP DYNAMICS: Explore relationships beyond romantic tropes (estranged siblings, parent and adult child, childhood friends reuniting after years, a solo narrator coping with absence).
-   - Anchor the scene with specific human characters facing a real situation together in natural spoken English."""
-            practicality_guidance = f"""- Select words that are emotionally authentic, high-utility, and natural in real-life spoken American English.
-   - Emotional weight comes from honest, understated spoken lines that real human beings say when vulnerable — not melodramatic greeting-card poetry.
-   - REJECT only words that are archaic, dictionary-definition-only, or impossible to use naturally in conversation without forcing unnatural phrasing or broken rhymes ("من غير ما نحشر كلمة بالعافية")."""
-        else:
-            drift_rule = "- DO NOT drift into generic street arguments, domestic chores, or unrelated casual tropes."
-            scenario_instruction = f"""1. SCENARIO FIRST (Anchor the Scene in {domain_focus}):
-   - First, scan the candidate words to discover a concrete, relatable human scenario within '{domain_focus}' that connects the highest quality candidates together.
-   - Ground the scene in authentic settings and conflict archetypes like those specified above (e.g. lab pressures, code bugs, clinical trials, academic defenses, specialized teamwork, or organizational decisions).
-   - Anchor the scene with specific human collaborators facing a real situation together. Avoid vague, detached, or generic storylines."""
-            practicality_guidance = f"""- Select words that are useful, frequent, and natural in real-life spoken American English within the '{domain_focus}' context.
-   - In specialized professional or academic domains, educated spoken dialogue (lab, collegiate, or tech dialogue) is the intended standard. Do NOT reject words merely because they sound educated, technical, or specialized (e.g. analysis, database, connect, progress, storage, input, specialist). Native speakers use these words constantly in these environments!
-   - REJECT only words that are archaic, dictionary-definition-only, or impossible to use naturally in conversation without forcing unnatural phrasing or broken rhymes ("من غير ما نحشر كلمة بالعافية")."""
-
-        domain_instruction = f"""
-PRIMARY THEMATIC DOMAIN FOCUS: {domain_focus}
-- The user specifically requested a vocabulary batch and story grounded in the '{domain_focus}' domain.
-- The curated theme, story concept, and 20 words MUST be firmly situated in this world.
-{drift_rule}
-
-DOMAIN DIRECTIVE & REGISTER GUIDANCE (DYNAMIC STORY DESIGN takes precedence over legacy plot/ending suggestions):
-{directive}
-
-REPRESENTATIVE REAL-WORLD SETTINGS (Use as inspiration for infinite creative diversity; do NOT repeat blindly):
-{settings_bullets}
-
-AUTHENTIC CONFLICT & SCENARIO ARCHETYPES:
-{conflicts_bullets}
-"""
-    else:
-        domain_instruction = """
-PRIMARY THEMATIC FOCUS:
-- Everyday human life, relatable situations, and authentic spoken communication.
-"""
-        scenario_instruction = """1. SCENARIO FIRST (Anchor the Scene):
-   - First, scan the candidate words to discover a concrete, relatable, everyday human scenario that connects the highest quality candidates together (e.g. resolving a misunderstanding with a friend, an overdue late-night conversation, a big career or personal decision, family life).
-   - Anchor the scene with specific human characters facing a real situation together."""
-
-        practicality_guidance = """- Select words that are useful, frequent, and natural in real-life spoken American English.
-   - REJECT words that are hyper-technical, archaic, or awkward to use in a song without forcing weird rhymes or distorted word order ("من غير ما نحشر كلمة بالعافية")."""
+    effective_domain = domain_focus or "All Domains"
+    sparks = sample_domain_creative_sparks(effective_domain)
+    domain_instruction = f"ACTIVE CATEGORY DOMAIN: {effective_domain}. Follow DYNAMIC STORY DESIGN."
+    scenario_instruction = """1. SCENARIO FIRST:
+   - Discover a concrete human event suggested by the candidate words within the selected domain.
+   - Choose the people, setting, conflict and outcome freely to fit this event.
+   - No preset time, prop, relationship, narrative arc or ending. Preserve natural spoken English."""
+    practicality_guidance = f"""- Select useful words natural in spoken American English within '{effective_domain}'.
+   - Match register to the people and situation; educated speech is valid in professional or academic scenes.
+   - Basic / Neutral words are welcome in every domain. Never force a word or an unnatural meaning."""
 
     if domain_focus == "Basic / Neutral":
         balance_guidance = """4. PURE BASIC / NEUTRAL HARMONY:
@@ -710,6 +604,8 @@ Return a valid JSON object with the following exact schema:
         data = json.loads(raw)
         model_name = CRITIC_FALLBACK_CHAIN[model_idx]
         concept = data.get("creative_concept") or data.get("theme_description", "")
+        if not isinstance(concept, str) or not concept.strip():
+            raise ValueError("Gemini returned no valid story concept.")
 
         genre = data.get("genre", GENRES[0])
         if genre not in GENRES:
@@ -743,17 +639,15 @@ Return a valid JSON object with the following exact schema:
         }
     except Exception as exc:
         logger.warning("Thematic curation failed: %s", exc)
-        profile_def = get_category_profile(domain_focus)
-        fallback_story = profile_def.get("default_story", "A deeply human story exploring honest vulnerability and authentic connection.")
         return {
             "success": False,
             "error": str(exc),
-            "selected_nouns": candidate_nouns[:target_nouns],
-            "selected_verbs": candidate_verbs[:target_verbs],
-            "selected_adjectives": candidate_adjs[:target_modifiers],
+            "selected_nouns": [],
+            "selected_verbs": [],
+            "selected_adjectives": [],
             "theme_name": f"{domain_focus} & Everyday Stories",
-            "theme_description": fallback_story,
-            "creative_concept": fallback_story,
+            "theme_description": "",
+            "creative_concept": "",
             "creative_sparks": sparks,
             "genre": GENRES[0],
             "song_structure": SONG_STRUCTURES[0],

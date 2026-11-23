@@ -16,7 +16,7 @@ db.init_db()
 # Page configuration
 st.set_page_config(
     page_title="Audingo Songs Forge | NGSL Studio",
-    page_icon=":material/graphic_eq:",
+    page_icon="assets/audingo_logo.png",
     layout="wide",
     initial_sidebar_state="auto"
 )
