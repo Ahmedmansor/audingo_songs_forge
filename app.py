@@ -32,6 +32,7 @@ from presentation.tabs.tab2_studio import render_tab_studio
 from presentation.tabs.tab3_refinement import render_tab_refinement
 from presentation.tabs.tab4_commit_lab import render_tab_commit_lab
 from presentation.tabs.tab5_library import render_tab_library
+from presentation.tabs.tab6_suno_rights import render_tab_suno_rights
 
 # 1. Apply UI theme & styles
 render_appearance_switch()
@@ -52,12 +53,13 @@ st.html(f"""<header class="studio-hero">
 </header>""")
 
 # 5. Primary feature tabs: keep widget state across the complete workflow.
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     ":material/menu_book: Dictionary",
     ":material/tune: Studio",
     ":material/auto_awesome: Refinement",
     ":material/fact_check: Commit Lab",
     ":material/library_music: Library",
+    ":material/verified: Suno Rights",
 ])
 
 with tab1:
@@ -74,3 +76,6 @@ with tab4:
 
 with tab5:
     render_tab_library()
+
+with tab6:
+    render_tab_suno_rights()

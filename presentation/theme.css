@@ -247,4 +247,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     background: rgba(148, 163, 184, 0.6);
 }
 
+/* Suno Rights Tracker */
+.suno-rights-progress-wrapper {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--studio-line);
+}
+.suno-rights-version-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.76rem;
+    font-weight: 600;
+}
+
+
 
