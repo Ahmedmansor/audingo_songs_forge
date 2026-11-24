@@ -101,10 +101,15 @@ def set_song_all_tracks(song: Dict[str, Any], secured: bool) -> Dict[str, Any]:
     return status
 
 
-def get_audio_file_path(folder: str, local_file: str) -> Optional[str]:
-    candidate = os.path.join(LOCAL_AUDIO_BASE, folder, local_file)
-    if os.path.exists(candidate):
-        return candidate
+def get_audio_file_path(folder: Optional[str], local_file: Optional[str]) -> Optional[str]:
+    if not folder or not local_file:
+        return None
+    try:
+        candidate = os.path.join(LOCAL_AUDIO_BASE, str(folder), str(local_file))
+        if os.path.exists(candidate):
+            return candidate
+    except Exception:
+        return None
     return None
 
 
