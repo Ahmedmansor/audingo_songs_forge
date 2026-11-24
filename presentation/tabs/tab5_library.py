@@ -440,32 +440,41 @@ def render_tab_library():
     suno_badge = ' <span style="background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.35); padding: 1px 7px; border-radius: 10px; font-size: 0.74rem; font-weight: 700; display: inline-flex; align-items: center; gap: 3px; vertical-align: middle; margin-left: 6px;">🎵 Suno Done</span>' if row.get("is_suno_completed") else ""
     song_title_escaped = escape(row['title'])
     st.html(f'''<article class="library-song-card" id="library-song-hero-card">
-<div class="library-song-heading"><span class="library-song-mark">{icon_svg()}</span><div>
-<div class="studio-eyebrow">SONG {int(row['row_num']):02d} / AUDINGO</div>
-<div class="library-title-row">
-<h3>{song_title_escaped}{suno_badge}</h3>
-<button class="library-copy-title-btn" type="button" title="Copy song title (نسخ عنوان الأغنية)" data-title="{song_title_escaped}" onclick="(function(btn){{
-    const t = btn.getAttribute('data-title');
-    const lbl = btn.querySelector('.lib-copy-lbl');
-    function success(){{
+<div class="library-song-heading">
+  <div class="library-song-identity">
+    <span class="library-song-mark">{icon_svg()}</span>
+    <div class="library-song-meta">
+      <div class="studio-eyebrow">SONG {int(row['row_num']):02d} / AUDINGO</div>
+      <div class="library-title-row">
+        <h3>{song_title_escaped}</h3>
+        {suno_badge}
+      </div>
+      <p>{escape(row.get('genre') or 'Your original song')} · {escape(str(date))} · Cairo</p>
+    </div>
+  </div>
+  <div class="library-song-actions">
+    <button class="library-copy-title-btn" type="button" title="Copy song title (نسخ عنوان الأغنية)" data-title="{song_title_escaped}" onclick="(function(btn){{
+      const t = btn.getAttribute('data-title');
+      const lbl = btn.querySelector('.lib-copy-lbl');
+      function success(){{
         btn.classList.add('copied');
         if (lbl) lbl.textContent = 'Copied!';
         setTimeout(function(){{
-            btn.classList.remove('copied');
-            if (lbl) lbl.textContent = 'Copy';
+          btn.classList.remove('copied');
+          if (lbl) lbl.textContent = 'Copy title';
         }}, 1800);
-    }}
-    if (navigator.clipboard && navigator.clipboard.writeText) {{
+      }}
+      if (navigator.clipboard && navigator.clipboard.writeText) {{
         navigator.clipboard.writeText(t).then(success).catch(function(){{
-            const ta = document.createElement('textarea');
-            ta.value = t;
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-            success();
+          const ta = document.createElement('textarea');
+          ta.value = t;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          success();
         }});
-    }} else {{
+      }} else {{
         const ta = document.createElement('textarea');
         ta.value = t;
         document.body.appendChild(ta);
@@ -473,20 +482,21 @@ def render_tab_library():
         document.execCommand('copy');
         document.body.removeChild(ta);
         success();
-    }}
-}})(this)">
-<svg class="copy-icon" viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-</svg>
-<svg class="check-icon" viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
-<polyline points="20 6 9 17 4 12"></polyline>
-</svg>
-<span class="lib-copy-lbl">Copy</span>
-</button>
+      }}
+    }})(this)">
+      <svg class="copy-icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </svg>
+      <svg class="check-icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+      <span class="lib-copy-lbl">Copy title</span>
+    </button>
+  </div>
 </div>
-<p>{escape(row.get('genre') or 'Your original song')} · {escape(str(date))} · Cairo</p>
-</div></div><div class="library-song-stats">{stats}</div></article>''')
+<div class="library-song-stats">{stats}</div>
+</article>''')
     render_floating_library_song_fab(
         song_id=selected,
         row_num=int(row["row_num"]),
