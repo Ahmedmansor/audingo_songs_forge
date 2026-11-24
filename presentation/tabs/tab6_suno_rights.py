@@ -204,6 +204,7 @@ def _render_song_inspector(songs: List[Dict[str, Any]], status: Dict[str, Any]):
     total_v = len(versions)
 
     # Header Card for Selected Song
+    song_name_escaped = escape(s_name)
     if s_count == total_v:
         badge_html = f'<span style="background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.35); padding: 3px 12px; border-radius: 9999px; font-size: 0.82rem; font-weight: 700;">✅ Full Rights Secured ({s_count}/{total_v})</span>'
     elif s_count > 0:
@@ -215,7 +216,49 @@ def _render_song_inspector(songs: List[Dict[str, Any]], status: Dict[str, Any]):
 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
   <div>
     <div class="studio-eyebrow">SONG #{s_num} / AUDINGO QUOTA CHECK</div>
-    <h3 style="margin: 2px 0 0; color: var(--studio-ink); font-size: 1.45rem;">{escape(s_name)}</h3>
+    <div style="display: flex; align-items: center; gap: 10px; margin-top: 4px;">
+      <h3 style="margin: 0; color: var(--studio-ink); font-size: 1.45rem;">{song_name_escaped}</h3>
+      <button class="library-copy-title-btn" type="button" title="نسخ عنوان الأغنية فقط ({song_name_escaped}) للبحث في سونو" data-title="{song_name_escaped}" onclick="(function(btn){{
+        const t = btn.getAttribute('data-title');
+        const lbl = btn.querySelector('.lib-copy-lbl');
+        function success(){{
+          btn.classList.add('copied');
+          if (lbl) lbl.textContent = 'Copied!';
+          setTimeout(function(){{
+            btn.classList.remove('copied');
+            if (lbl) lbl.textContent = 'Copy title';
+          }}, 1800);
+        }}
+        if (navigator.clipboard && navigator.clipboard.writeText) {{
+          navigator.clipboard.writeText(t).then(success).catch(function(){{
+            const ta = document.createElement('textarea');
+            ta.value = t;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            success();
+          }});
+        }} else {{
+          const ta = document.createElement('textarea');
+          ta.value = t;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          success();
+        }}
+      }})(this)">
+        <svg class="copy-icon" viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <svg class="check-icon" viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span class="lib-copy-lbl">Copy title</span>
+      </button>
+    </div>
   </div>
   <div>{badge_html}</div>
 </div>
@@ -267,8 +310,7 @@ def _render_song_inspector(songs: List[Dict[str, Any]], status: Dict[str, Any]):
             )
 
         with c_copy:
-            title_escaped = escape(v_title)
-            st.html(f'''<button class="library-copy-title-btn" type="button" title="نسخ اسم الإصدار للبحث عنه في سونو" data-title="{title_escaped}" onclick="(function(btn){{
+            st.html(f'''<button class="library-copy-title-btn" type="button" title="نسخ عنوان الأغنية فقط ({song_name_escaped}) للبحث في سونو - طابق التوقيت ⏱️ {dur_str}" data-title="{song_name_escaped}" onclick="(function(btn){{
                 const t = btn.getAttribute('data-title');
                 const lbl = btn.querySelector('.lib-copy-lbl');
                 function success(){{
@@ -276,7 +318,7 @@ def _render_song_inspector(songs: List[Dict[str, Any]], status: Dict[str, Any]):
                     if (lbl) lbl.textContent = 'Copied!';
                     setTimeout(function(){{
                         btn.classList.remove('copied');
-                        if (lbl) lbl.textContent = 'Copy for Suno';
+                        if (lbl) lbl.textContent = 'Copy title';
                     }}, 1800);
                 }}
                 if (navigator.clipboard && navigator.clipboard.writeText) {{
@@ -306,7 +348,7 @@ def _render_song_inspector(songs: List[Dict[str, Any]], status: Dict[str, Any]):
                 <svg class="check-icon" viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
-                <span class="lib-copy-lbl">Copy for Suno</span>
+                <span class="lib-copy-lbl">Copy title</span>
             </button>''')
 
         with c_audio:
