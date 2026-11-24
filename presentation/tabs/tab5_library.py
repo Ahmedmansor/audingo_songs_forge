@@ -381,12 +381,54 @@ def render_tab_library():
     if "library_selected_song" not in st.session_state or st.session_state["library_selected_song"] not in options_list:
         st.session_state["library_selected_song"] = options_list[0]
 
-    selected = st.selectbox(
-        "Open a song",
-        options=options_list,
-        format_func=_format_song_option,
-        key="library_selected_song",
-    )
+    curr_selected = st.session_state["library_selected_song"]
+    try:
+        curr_idx = options_list.index(curr_selected)
+    except ValueError:
+        curr_idx = 0
+        st.session_state["library_selected_song"] = options_list[0]
+
+    def _go_prev_song():
+        c_song = st.session_state.get("library_selected_song")
+        idx = options_list.index(c_song) if c_song in options_list else 0
+        if idx > 0:
+            st.session_state["library_selected_song"] = options_list[idx - 1]
+
+    def _go_next_song():
+        c_song = st.session_state.get("library_selected_song")
+        idx = options_list.index(c_song) if c_song in options_list else 0
+        if idx < len(options_list) - 1:
+            st.session_state["library_selected_song"] = options_list[idx + 1]
+
+    c_prev, c_sel, c_next = st.columns([0.8, 8.4, 0.8], vertical_alignment="bottom")
+    with c_prev:
+        st.button(
+            "",
+            icon=":material/arrow_back:",
+            key="btn_lib_prev_song",
+            on_click=_go_prev_song,
+            disabled=(curr_idx <= 0),
+            help="Previous song (الأغنية السابقة)",
+            width="stretch",
+        )
+    with c_sel:
+        selected = st.selectbox(
+            "Open a song",
+            options=options_list,
+            format_func=_format_song_option,
+            key="library_selected_song",
+        )
+    with c_next:
+        st.button(
+            "",
+            icon=":material/arrow_forward:",
+            key="btn_lib_next_song",
+            on_click=_go_next_song,
+            disabled=(curr_idx >= len(options_list) - 1),
+            help="Next song (الأغنية التالية)",
+            width="stretch",
+        )
+
     row = records[selected]
     counts = [len(_words(row.get(field))) for field in ("target_words", "bonus_words", "reused_words", "extra_words")]
     date = format_cairo_display_time(row["created_at"])
@@ -396,10 +438,54 @@ def render_tab_library():
     tones = ("total", "authenticity", "target", "bonus", "reused", "extra")
     stats = ''.join(f'<div class="library-stat-{tone}"><b>{escape(str(value))}</b><span>{label}</span></div>' for tone, (value, label) in zip(tones, metrics))
     suno_badge = ' <span style="background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.35); padding: 1px 7px; border-radius: 10px; font-size: 0.74rem; font-weight: 700; display: inline-flex; align-items: center; gap: 3px; vertical-align: middle; margin-left: 6px;">🎵 Suno Done</span>' if row.get("is_suno_completed") else ""
+    song_title_escaped = escape(row['title'])
     st.html(f'''<article class="library-song-card" id="library-song-hero-card">
 <div class="library-song-heading"><span class="library-song-mark">{icon_svg()}</span><div>
 <div class="studio-eyebrow">SONG {int(row['row_num']):02d} / AUDINGO</div>
-<h3>{escape(row['title'])}{suno_badge}</h3><p>{escape(row.get('genre') or 'Your original song')} · {escape(str(date))} · Cairo</p>
+<div class="library-title-row">
+<h3>{song_title_escaped}{suno_badge}</h3>
+<button class="library-copy-title-btn" type="button" title="Copy song title (نسخ عنوان الأغنية)" data-title="{song_title_escaped}" onclick="(function(btn){{
+    const t = btn.getAttribute('data-title');
+    const lbl = btn.querySelector('.lib-copy-lbl');
+    function success(){{
+        btn.classList.add('copied');
+        if (lbl) lbl.textContent = 'Copied!';
+        setTimeout(function(){{
+            btn.classList.remove('copied');
+            if (lbl) lbl.textContent = 'Copy';
+        }}, 1800);
+    }}
+    if (navigator.clipboard && navigator.clipboard.writeText) {{
+        navigator.clipboard.writeText(t).then(success).catch(function(){{
+            const ta = document.createElement('textarea');
+            ta.value = t;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            success();
+        }});
+    }} else {{
+        const ta = document.createElement('textarea');
+        ta.value = t;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        success();
+    }}
+}})(this)">
+<svg class="copy-icon" viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+</svg>
+<svg class="check-icon" viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<polyline points="20 6 9 17 4 12"></polyline>
+</svg>
+<span class="lib-copy-lbl">Copy</span>
+</button>
+</div>
+<p>{escape(row.get('genre') or 'Your original song')} · {escape(str(date))} · Cairo</p>
 </div></div><div class="library-song-stats">{stats}</div></article>''')
     render_floating_library_song_fab(
         song_id=selected,

@@ -89,6 +89,57 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .library-song-mark img { width: 32px; height: 32px; }
 .library-song-heading .studio-eyebrow { font-size: .68rem; margin-bottom: 6px; }
 .library-song-heading h3 { margin: 0; padding: 0; font-size: clamp(1.35rem, 2vw, 1.9rem); line-height: 1.3; overflow-wrap: anywhere; color: var(--studio-ink); }
+.library-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.library-title-row h3 { margin: 0; padding: 0; font-size: clamp(1.35rem, 2vw, 1.9rem); line-height: 1.3; overflow-wrap: anywhere; color: var(--studio-ink); }
+.library-copy-title-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--studio-surface-raised, rgba(255, 255, 255, 0.05));
+    border: 1px solid var(--studio-line, rgba(255, 255, 255, 0.12));
+    color: var(--studio-muted, #94a3b8);
+    padding: 3px 9px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    user-select: none;
+    line-height: 1.4;
+}
+.library-copy-title-btn:hover {
+    background: var(--studio-tint, rgba(99, 102, 241, 0.12));
+    border-color: var(--studio-blue, #6366f1);
+    color: var(--studio-blue, #6366f1);
+    transform: translateY(-1px);
+}
+.library-copy-title-btn:active {
+    transform: translateY(0);
+}
+.library-copy-title-btn .check-icon { display: none; }
+.library-copy-title-btn.copied {
+    background: rgba(16, 185, 129, 0.14) !important;
+    border-color: rgba(16, 185, 129, 0.45) !important;
+    color: #10B981 !important;
+}
+.library-copy-title-btn.copied .copy-icon { display: none; }
+.library-copy-title-btn.copied .check-icon { display: inline-block; }
+.st-key-btn_lib_prev_song button,
+.st-key-btn_lib_next_song button {
+    height: 42px;
+    border-radius: 12px;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+.st-key-btn_lib_prev_song button:hover:not(:disabled),
+.st-key-btn_lib_next_song button:hover:not(:disabled) {
+    border-color: var(--studio-blue);
+    color: var(--studio-blue);
+    background: var(--studio-tint);
+}
 .library-song-heading p { font-size: .83rem; color: var(--studio-muted); margin: 6px 0 0; }
 .library-song-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; border-top: 1px solid var(--studio-line); margin-top: 20px; padding-top: 16px; }
 .library-song-stats b { font-size: 1.35rem; font-weight: 600; color: var(--studio-ink); font-variant-numeric: tabular-nums; }
