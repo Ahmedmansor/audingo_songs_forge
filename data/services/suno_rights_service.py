@@ -6,6 +6,7 @@ Manages manifest loading, status persistence, metrics calculation, and reporting
 import json
 import os
 import datetime
+import functools
 from typing import Dict, Any, List, Optional
 
 PRIMARY_MANIFEST_PATH = os.path.join(
@@ -23,6 +24,7 @@ DOWNLOADS_STATUS_PATH = r"C:\Users\ahmedMansour\Downloads\Suno-Audingo\suno_righ
 LOCAL_AUDIO_BASE = r"C:\Users\ahmedMansour\Downloads\Suno-Audingo"
 
 
+@functools.lru_cache(maxsize=1)
 def get_manifest_path() -> Optional[str]:
     for p in (PRIMARY_MANIFEST_PATH, DOWNLOADS_MANIFEST_PATH):
         if os.path.exists(p):
@@ -30,6 +32,7 @@ def get_manifest_path() -> Optional[str]:
     return None
 
 
+@functools.lru_cache(maxsize=1)
 def load_manifest() -> Dict[str, Any]:
     path = get_manifest_path()
     if not path:

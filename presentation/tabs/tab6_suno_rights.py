@@ -2,6 +2,8 @@
 tab6_suno_rights.py — Suno Monthly Quota & Commercial Rights Tracker.
 Allows tracking and verifying which generated songs and versions have been unlocked/downloaded
 from the monthly quota to guarantee full commercial ownership.
+
+Optimized for ultra-fast, zero-lag performance using focused Song Inspector and on-demand audio rendering.
 """
 
 import json
@@ -36,7 +38,6 @@ def _on_toggle_track(track_title: str):
 def _mark_song_all(song: Dict[str, Any], secured: bool):
     set_song_all_tracks(song, secured)
     st.session_state["suno_rights_status"] = load_rights_status()
-    # Also update any active checkbox keys in session_state
     for v in song.get("versions", []):
         t = v.get("title")
         if t:
@@ -44,13 +45,13 @@ def _mark_song_all(song: Dict[str, Any], secured: bool):
 
 
 def render_tab_suno_rights():
-    """Render the Suno Quota & Commercial Rights Tracker tab."""
+    """Render the high-performance Suno Quota & Commercial Rights Tracker tab."""
     _init_rights_state()
     manifest = load_manifest()
     songs = manifest.get("songs", [])
 
     if not songs:
-        st.warning("لم يتم العثور على ملف `suno_library_manifest.json`. يرجى التأكد من تشغيل السكربت لتوليد المانيفست أولاً.")
+        st.warning("لم يتم العثور على ملف `suno_library_manifest.json`. يرجى التأكد من مسار المانيفست أولاً.")
         return
 
     status = st.session_state["suno_rights_status"]
@@ -96,72 +97,21 @@ def render_tab_suno_rights():
 </div>
 </article>''')
 
-    # 2. Controls, Search, and Filters
-    c_search, c_filter, c_view = st.columns([4.5, 3.5, 2], vertical_alignment="bottom")
+    # 2. View Mode Selector
+    view_mode = st.segmented_control(
+        "نظام العرض",
+        options=["فحص أغنية محددة (Song Inspector)", "دليل كل الأغاني (Directory Overview)"],
+        default="فحص أغنية محددة (Song Inspector)",
+        key="suno_rights_view_mode",
+        width="stretch",
+    )
 
-    with c_search:
-        search_query = st.text_input(
-            "بحث في الأغاني أو الإصدارات",
-            placeholder="ابحث برقم الأغنية أو اسمها (مثل: 133, Signed, We Pulled, 58)...",
-            key="rights_search_query",
-        ).strip().lower()
-
-    with c_filter:
-        filter_mode = st.segmented_control(
-            "تصفية الحالة",
-            options=["الكل", "متبقي فقط", "مكتمل فقط"],
-            default="الكل",
-            key="rights_filter_mode",
-            width="stretch"
-        )
-
-    with c_view:
-        view_mode = st.segmented_control(
-            "طريقة العرض",
-            options=["حسب الأغنية", "قائمة الإصدارات"],
-            default="حسب الأغنية",
-            key="rights_view_mode",
-            width="stretch"
-        )
-
-    # Filter logic
-    filtered_songs = []
-    for s in songs:
-        s_num = str(s.get("number", "")).lower()
-        s_name = str(s.get("name", "")).lower()
-        versions = s.get("versions", [])
-
-        # Match search query
-        song_matches_search = (
-            not search_query
-            or search_query in s_num
-            or search_query in s_name
-            or any(search_query in str(v.get("title", "")).lower() for v in versions)
-        )
-        if not song_matches_search:
-            continue
-
-        # Match filter mode
-        s_secured_count = sum(1 for v in versions if status.get(v.get("title", ""), {}).get("secured"))
-        has_pending = s_secured_count < len(versions)
-        has_secured = s_secured_count > 0
-
-        if filter_mode == "متبقي فقط" and not has_pending:
-            continue
-        if filter_mode == "مكتمل فقط" and not has_secured:
-            continue
-
-        filtered_songs.append(s)
-
-    st.caption(f"عرض **{len(filtered_songs)}** أغنية من أصل {len(songs)}")
-
-    # 3. Render Content Based on View Mode
-    if view_mode == "حسب الأغنية":
-        _render_grouped_view(filtered_songs, status, search_query, filter_mode)
+    if view_mode == "فحص أغنية محددة (Song Inspector)":
+        _render_song_inspector(songs, status)
     else:
-        _render_flat_tracks_view(filtered_songs, status, search_query, filter_mode)
+        _render_directory_overview(songs, status)
 
-    # 4. Export / Backup Toolbar
+    # 3. Export / Backup Toolbar
     st.divider()
     c_exp1, c_exp2 = st.columns([3, 7], vertical_alignment="center")
     with c_exp1:
@@ -177,176 +127,143 @@ def render_tab_suno_rights():
         st.caption("يتم حفظ جميع التغييرات تلقائياً وبشكل فوري في ملف `suno_rights_status.json` على جهازك.")
 
 
-def _render_grouped_view(songs: List[Dict[str, Any]], status: Dict[str, Any], search_query: str, filter_mode: str):
-    """Render songs grouped in expandable cards with version lists and batch actions."""
-    for s in songs:
+def _render_song_inspector(songs: List[Dict[str, Any]], status: Dict[str, Any]):
+    """Focused, instant view showing 1 song at a time with Prev/Next arrows."""
+    song_map = {str(s.get("number")): s for s in songs}
+    song_keys = list(song_map.keys())
+
+    if "rights_inspector_song" not in st.session_state or st.session_state["rights_inspector_song"] not in song_keys:
+        st.session_state["rights_inspector_song"] = song_keys[0]
+
+    curr_key = st.session_state["rights_inspector_song"]
+    try:
+        curr_idx = song_keys.index(curr_key)
+    except ValueError:
+        curr_idx = 0
+        st.session_state["rights_inspector_song"] = song_keys[0]
+
+    def _go_prev():
+        c_k = st.session_state.get("rights_inspector_song")
+        idx = song_keys.index(c_k) if c_k in song_keys else 0
+        if idx > 0:
+            st.session_state["rights_inspector_song"] = song_keys[idx - 1]
+
+    def _go_next():
+        c_k = st.session_state.get("rights_inspector_song")
+        idx = song_keys.index(c_k) if c_k in song_keys else 0
+        if idx < len(song_keys) - 1:
+            st.session_state["rights_inspector_song"] = song_keys[idx + 1]
+
+    def _format_option(k: str) -> str:
+        s = song_map.get(k, {})
         s_num = s.get("number", "")
         s_name = s.get("name", "")
-        folder = s.get("folder", "")
         versions = s.get("versions", [])
-
         s_count = sum(1 for v in versions if status.get(v.get("title", ""), {}).get("secured"))
         total_v = len(versions)
+        status_flag = "✅ مكتمل" if s_count == total_v else (f"⏳ {s_count}/{total_v}" if s_count > 0 else f"⭕ 0/{total_v}")
+        return f"#{s_num} • {s_name}  ·  ({status_flag})"
 
-        # Song header badge
-        if s_count == total_v:
-            badge = "✅ حقوق كاملة (مكتمل)"
-            border_style = "border-left: 4px solid #10B981;"
-        elif s_count > 0:
-            badge = f"⏳ جاري الفتح ({s_count}/{total_v})"
-            border_style = "border-left: 4px solid #0066CC;"
-        else:
-            badge = f"⭕ متبقي بالكامل (0/{total_v})"
-            border_style = "border-left: 4px solid #F59E0B;"
+    c_prev, c_sel, c_next = st.columns([0.8, 8.4, 0.8], vertical_alignment="bottom")
+    with c_prev:
+        st.button(
+            "",
+            icon=":material/arrow_back:",
+            key="btn_rights_prev_song",
+            on_click=_go_prev,
+            disabled=(curr_idx <= 0),
+            help="Previous song (الأغنية السابقة)",
+            width="stretch",
+        )
+    with c_sel:
+        selected_song_num = st.selectbox(
+            "اختر أغنية لفحص إصداراتها",
+            options=song_keys,
+            format_func=_format_option,
+            key="rights_inspector_song",
+        )
+    with c_next:
+        st.button(
+            "",
+            icon=":material/arrow_forward:",
+            key="btn_rights_next_song",
+            on_click=_go_next,
+            disabled=(curr_idx >= len(song_keys) - 1),
+            help="Next song (الأغنية التالية)",
+            width="stretch",
+        )
 
-        expander_title = f"#{s_num} • {s_name}  ·  ({s_count}/{total_v} تم فتحهم)  ·  {badge}"
+    # Render Active Song Details
+    selected_song = song_map[selected_song_num]
+    s_num = selected_song.get("number", "")
+    s_name = selected_song.get("name", "")
+    folder = selected_song.get("folder", "")
+    versions = selected_song.get("versions", [])
 
-        with st.expander(expander_title, expanded=(s_count < total_v and len(songs) <= 5)):
-            # Batch action buttons
-            c_actions1, c_actions2, c_spacer = st.columns([2.5, 2.5, 5])
-            with c_actions1:
-                if st.button(
-                    "✓ تحديد كل النسخ كـ مفتوحة",
-                    key=f"btn_sec_all_{s_num}",
-                    width="stretch",
-                    disabled=(s_count == total_v),
-                    help=f"فتح حقوق جميع الـ {total_v} إصدارات لهذه الأغنية بضغطة واحدة"
-                ):
-                    _mark_song_all(s, True)
-                    st.rerun()
+    s_count = sum(1 for v in versions if status.get(v.get("title", ""), {}).get("secured"))
+    total_v = len(versions)
 
-            with c_actions2:
-                if st.button(
-                    "✕ إلغاء تحديد الكل",
-                    key=f"btn_unsec_all_{s_num}",
-                    width="stretch",
-                    disabled=(s_count == 0),
-                    help="إلغاء تحديد كل الإصدارات لهذه الأغنية"
-                ):
-                    _mark_song_all(s, False)
-                    st.rerun()
+    # Header Card for Selected Song
+    if s_count == total_v:
+        badge_html = f'<span style="background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.35); padding: 3px 12px; border-radius: 9999px; font-size: 0.82rem; font-weight: 700;">✅ Full Rights Secured ({s_count}/{total_v})</span>'
+    elif s_count > 0:
+        badge_html = f'<span style="background: rgba(0, 102, 204, 0.15); color: #0066CC; border: 1px solid rgba(0, 102, 204, 0.35); padding: 3px 12px; border-radius: 9999px; font-size: 0.82rem; font-weight: 700;">⏳ In Progress ({s_count}/{total_v} Secured)</span>'
+    else:
+        badge_html = f'<span style="background: rgba(245, 158, 11, 0.15); color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.35); padding: 3px 12px; border-radius: 9999px; font-size: 0.82rem; font-weight: 700;">⭕ Pending All ({total_v} versions)</span>'
 
-            st.write("")
+    st.html(f'''<div style="background: var(--studio-surface); border: 1px solid var(--studio-line); border-radius: 16px; padding: 18px 22px; margin: 14px 0;">
+<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+  <div>
+    <div class="studio-eyebrow">SONG #{s_num} / AUDINGO QUOTA CHECK</div>
+    <h3 style="margin: 2px 0 0; color: var(--studio-ink); font-size: 1.45rem;">{escape(s_name)}</h3>
+  </div>
+  <div>{badge_html}</div>
+</div>
+</div>''')
 
-            # Render versions
-            for v in versions:
-                v_title = v.get("title", "")
-                v_ver = v.get("version", "")
-                dur_str = v.get("suno_duration_str", "")
-                local_f = v.get("local_file", "")
-                is_secured = bool(status.get(v_title, {}).get("secured"))
+    # Batch Actions for this song
+    c_btn1, c_btn2, c_sp = st.columns([2.5, 2.5, 5])
+    with c_btn1:
+        if st.button(
+            "✓ تحديد كل النسخ كـ مفتوحة",
+            key=f"btn_mark_all_{s_num}",
+            width="stretch",
+            disabled=(s_count == total_v),
+            help=f"فتح حقوق جميع الـ {total_v} إصدارات لهذه الأغنية بضغطة واحدة",
+        ):
+            _mark_song_all(selected_song, True)
+            st.rerun()
+    with c_btn2:
+        if st.button(
+            "✕ إلغاء تحديد الكل",
+            key=f"btn_unmark_all_{s_num}",
+            width="stretch",
+            disabled=(s_count == 0),
+            help="إلغاء تحديد كل الإصدارات لهذه الأغنية",
+        ):
+            _mark_song_all(selected_song, False)
+            st.rerun()
 
-                # Filter condition inside song if active
-                if filter_mode == "متبقي فقط" and is_secured:
-                    continue
-                if filter_mode == "مكتمل فقط" and not is_secured:
-                    continue
+    st.write("")
 
-                c_chk, c_copy, c_audio = st.columns([6, 2, 2], vertical_alignment="center")
+    # Versions List for this song
+    for v in versions:
+        v_title = str(v.get("title") or "")
+        dur_str = str(v.get("suno_duration_str") or "--:--")
+        local_f = v.get("local_file")
+        is_secured = bool(status.get(v_title, {}).get("secured"))
 
-                with c_chk:
-                    chk_key = f"chk_rights_{v_title}"
-                    st.checkbox(
-                        f"**{v_title}**  ·  ⏱️ {dur_str}",
-                        value=is_secured,
-                        key=chk_key,
-                        on_change=_on_toggle_track,
-                        args=(v_title,),
-                        help="اضغط هنا لتأكيد أنك قمت بفتح/تحميل هذه النسخة من كوتا سونو وضمان حقوقها",
-                    )
-
-                with c_copy:
-                    title_escaped = escape(v_title)
-                    st.html(f'''<button class="library-copy-title-btn" type="button" title="نسخ اسم الإصدار للبحث عنه في سونو" data-title="{title_escaped}" onclick="(function(btn){{
-                        const t = btn.getAttribute('data-title');
-                        const lbl = btn.querySelector('.lib-copy-lbl');
-                        function success(){{
-                            btn.classList.add('copied');
-                            if (lbl) lbl.textContent = 'Copied!';
-                            setTimeout(function(){{
-                                btn.classList.remove('copied');
-                                if (lbl) lbl.textContent = 'Copy for Suno';
-                            }}, 1800);
-                        }}
-                        if (navigator.clipboard && navigator.clipboard.writeText) {{
-                            navigator.clipboard.writeText(t).then(success).catch(function(){{
-                                const ta = document.createElement('textarea');
-                                ta.value = t;
-                                document.body.appendChild(ta);
-                                ta.select();
-                                document.execCommand('copy');
-                                document.body.removeChild(ta);
-                                success();
-                            }});
-                        }} else {{
-                            const ta = document.createElement('textarea');
-                            ta.value = t;
-                            document.body.appendChild(ta);
-                            ta.select();
-                            document.execCommand('copy');
-                            document.body.removeChild(ta);
-                            success();
-                        }}
-                    }})(this)">
-                        <svg class="copy-icon" viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                        </svg>
-                        <svg class="check-icon" viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                        <span class="lib-copy-lbl">Copy for Suno</span>
-                    </button>''')
-
-                with c_audio:
-                    audio_path = get_audio_file_path(folder, local_f)
-                    if audio_path:
-                        with st.popover("🎧 استماع", width="stretch"):
-                            st.caption(f"تشغيل: {v_title}")
-                            st.audio(audio_path)
-                    else:
-                        st.caption("الملف غير متوفر محلياً")
-
-
-def _render_flat_tracks_view(songs: List[Dict[str, Any]], status: Dict[str, Any], search_query: str, filter_mode: str):
-    """Render a flat, linear track list across all matching songs for quick batch review."""
-    flat_tracks = []
-    for s in songs:
-        folder = s.get("folder", "")
-        for v in s.get("versions", []):
-            v_title = v.get("title", "")
-            is_secured = bool(status.get(v_title, {}).get("secured"))
-
-            if filter_mode == "متبقي فقط" and is_secured:
-                continue
-            if filter_mode == "مكتمل فقط" and not is_secured:
-                continue
-            if search_query and search_query not in v_title.lower() and search_query not in s.get("name", "").lower():
-                continue
-
-            flat_tracks.append((s, v, folder, is_secured))
-
-    st.caption(f"إجمالي الإصدارات المعروضة: **{len(flat_tracks)}** إصدار")
-
-    if not flat_tracks:
-        st.info("لا توجد إصدارات مطابقة للتصفية الحالية.")
-        return
-
-    for s, v, folder, is_secured in flat_tracks:
-        v_title = v.get("title", "")
-        dur_str = v.get("suno_duration_str", "")
-        local_f = v.get("local_file", "")
-
-        c_chk, c_copy, c_audio = st.columns([6, 2, 2], vertical_alignment="center")
+        c_chk, c_copy, c_audio = st.columns([5.5, 2.5, 2], vertical_alignment="center")
 
         with c_chk:
             chk_key = f"chk_rights_{v_title}"
             st.checkbox(
-                f"**{v_title}**  ·  ⏱️ {dur_str}  ·  ({s.get('name')})",
+                f"**{v_title}**  ·  ⏱️ {dur_str}",
                 value=is_secured,
                 key=chk_key,
                 on_change=_on_toggle_track,
                 args=(v_title,),
+                help="حدد لتأكيد فتحك لهذه النسخة من كوتا سونو وضمان حقوقها",
             )
 
         with c_copy:
@@ -399,4 +316,92 @@ def _render_flat_tracks_view(songs: List[Dict[str, Any]], status: Dict[str, Any]
                     st.caption(f"تشغيل: {v_title}")
                     st.audio(audio_path)
             else:
-                st.caption("غير متوفر")
+                st.caption("—")
+
+
+def _render_directory_overview(songs: List[Dict[str, Any]], status: Dict[str, Any]):
+    """Lightweight, fast directory view of all 133 songs with search and pagination."""
+    c_search, c_filter = st.columns([6, 4], vertical_alignment="bottom")
+    with c_search:
+        q = st.text_input(
+            "بحث في الأغاني",
+            placeholder="ابحث برقم الأغنية أو اسمها (مثل: 133, Signed, 58)...",
+            key="rights_dir_search",
+        ).strip().lower()
+
+    with c_filter:
+        f_mode = st.segmented_control(
+            "تصفية الحالة",
+            options=["الكل", "متبقي فقط", "مكتمل فقط"],
+            default="الكل",
+            key="rights_dir_filter",
+            width="stretch",
+        )
+
+    matched_songs = []
+    for s in songs:
+        s_num = str(s.get("number", "")).lower()
+        s_name = str(s.get("name", "")).lower()
+        versions = s.get("versions", [])
+
+        if q and q not in s_num and q not in s_name:
+            continue
+
+        s_count = sum(1 for v in versions if status.get(v.get("title", ""), {}).get("secured"))
+        total_v = len(versions)
+
+        if f_mode == "متبقي فقط" and s_count == total_v:
+            continue
+        if f_mode == "مكتمل فقط" and s_count == 0:
+            continue
+
+        matched_songs.append((s, s_count, total_v))
+
+    st.caption(f"تم العثور على **{len(matched_songs)}** أغنية")
+
+    if not matched_songs:
+        st.info("لا توجد نتائج مطابقة لبحثك.")
+        return
+
+    # Pagination: 15 songs per page
+    PAGE_SIZE = 15
+    total_pages = max(1, (len(matched_songs) + PAGE_SIZE - 1) // PAGE_SIZE)
+    curr_page = 1
+    if total_pages > 1:
+        c_p1, c_p2 = st.columns([3, 7], vertical_alignment="center")
+        with c_p1:
+            curr_page = st.number_input(f"الصفحة (من {total_pages})", min_value=1, max_value=total_pages, value=1, step=1, key="rights_dir_page")
+        with c_p2:
+            st.caption(f"عرض الأغاني من {(curr_page-1)*PAGE_SIZE + 1} إلى {min(curr_page*PAGE_SIZE, len(matched_songs))}")
+
+    start_idx = (curr_page - 1) * PAGE_SIZE
+    page_songs = matched_songs[start_idx : start_idx + PAGE_SIZE]
+
+    # Compact directory list
+    for s, s_count, total_v in page_songs:
+        s_num = s.get("number", "")
+        s_name = s.get("name", "")
+        pct = round(s_count / total_v * 100) if total_v > 0 else 0
+
+        c_info, c_stat, c_act = st.columns([5, 3, 2], vertical_alignment="center")
+
+        with c_info:
+            st.markdown(f"**#{s_num} • {s_name}**")
+            st.caption(f"{total_v} إصدارات")
+
+        with c_stat:
+            if s_count == total_v:
+                st.markdown(f"<span style='color: #10B981; font-weight: 700;'>✅ مكتمل ({s_count}/{total_v})</span>", unsafe_allow_html=True)
+            elif s_count > 0:
+                st.markdown(f"<span style='color: #0066CC; font-weight: 700;'>⏳ {s_count}/{total_v} ({pct}%)</span>", unsafe_allow_html=True)
+            else:
+                st.markdown(f"<span style='color: #F59E0B; font-weight: 700;'>⭕ 0/{total_v} متبقي</span>", unsafe_allow_html=True)
+
+        with c_act:
+            def _select_song_to_inspect(num=s_num):
+                st.session_state["rights_inspector_song"] = str(num)
+                st.session_state["suno_rights_view_mode"] = "فحص أغنية محددة (Song Inspector)"
+
+            st.button("فحص الأغنية 🔎", key=f"btn_open_song_{s_num}", on_click=_select_song_to_inspect, width="stretch")
+
+        st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.05);'>", unsafe_allow_html=True)
